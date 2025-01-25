@@ -1,0 +1,16 @@
+[package]
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+name = "appearance"
+publish.workspace = true
+version = "0.1.0"
+
+[dependencies]
+appearance-profiling.workspace = true
+
+anyhow.workspace = true
+env_logger.workspace = true
+log.workspace = true
+puffin.workspace = true
