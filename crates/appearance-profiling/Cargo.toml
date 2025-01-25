@@ -1,0 +1,16 @@
+[package]
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+name = "appearance-profiling"
+publish.workspace = true
+version = "0.1.0"
+
+[dependencies]
+parking_lot.workspace = true
+puffin.workspace = true
+superluminal-perf = { workspace = true, optional = true }
+
+[features]
+superluminal = ["dep:superluminal-perf"]
