@@ -8,6 +8,8 @@ struct AppearanceStatic {
 
 impl AppearanceStatic {
     fn init(_app_name: &str) -> &'static Self {
+        appearance_profiling::profile_function!();
+
         APPEARANCE_STATIC.get_or_init(|| {
             env_logger::builder()
                 .filter_level(log::LevelFilter::Info)
