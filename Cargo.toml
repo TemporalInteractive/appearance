@@ -11,59 +11,40 @@ version = "0.1.0"
 appearance = { version = "0.1.0", path = "crates/appearance" }
 
 appearance-build = { version = "0.1.0", path = "crates/appearance-build" }
+appearance-input = { version = "0.1.0", path = "crates/appearance-input" }
 appearance-profiling = { version = "0.1.0", path = "crates/appearance-profiling", features = ["superluminal"] }
+appearance-render-loop = { version = "0.1.0", path = "crates/appearance-render-loop" }
+appearance-wgpu = { version = "0.1.0", path = "crates/appearance-wgpu" }
 
 anyhow = { version = "1.0.94", default-features = false, features = ["std"] }
-# async-fs = { version = "2.1.2", default-features = true }
-# bitflags = { version = "2.6.0", default-features = false }
-# bytecheck = { version = "0.8.0", default-features = false }
-# bytemuck = { version = "1.13", default-features = false, features = ["derive", "extern_crate_alloc", "min_const_generics"] }
-# cfg-if = { version = "1.0.0", default-features = false }
-# console_error_panic_hook = { version = "0.1.7", default-features = true }
-# console_log = { version = "1.0.0", default-features = true }
-# ctor = { version = "0.2.9", default-features = false }
+bytemuck = { version = "1.13", default-features = false, features = ["derive", "extern_crate_alloc", "min_const_generics"] }
 # egui = { version = "0.30.0", default-features = true, features = ["bytemuck"] }
 # egui_extras = { version = "0.30.0", default-features = true }
 # egui_plot = { version = "0.30.0", default-features = false }
 # egui-winit = { version = "0.30.0", default-features = false, features = ["webbrowser"] }
 env_logger = { version = "0.11.5", default-features = false }
-# fern = { version = "0.7.1", default-features = true }
-# flate2 = { version = "1.0.28", default-features = true }
-# flume = { version = "0.11.0", default-features = false, features = ["async"]}
-# futures = { version = "0.3.30", default-features = false, features = ["executor", "thread-pool"] }
-# getrandom = { version = "0.2", features = ["js"] }
-glam = { version = "0.29.2", default-features = false }
+futures = { version = "0.3.30", default-features = false, features = ["executor", "thread-pool"] }
+glam = { version = "0.29.2", default-features = false, features = ["std"] }
 # gltf = { version = "1.0.0", default-features = true, features = ["KHR_materials_emissive_strength", "KHR_materials_ior", "KHR_materials_transmission"] }
-# half = { version = "2.4.0", default-features = false, features = ["num-traits", "bytemuck"] }
 # image = { version = "0.25.5", default-features = false, features = ["png", "jpeg", "bmp"] }
-# lazy_static = { version = "1.4.0", default-features = false }
 log = { version = "0.4.20", default-features = false }
-# more-asserts = { version = "0.3.1", default-features = true }
 parking_lot = { version = "0.12.3", default-features = false }
-# pollster = { version = "0.4.0", default-features = false, features = ["macro"] }
 puffin = { version = "0.19.0", default-features = false, features = ["web"] }
 # puffin_egui = { git = "https://github.com/TemporalInteractive/puffin.git", default-features = true }
 # rayon = { version = "1.8.1", default-features = false }
-# rkyv = { version = "0.8.9", default-features = false, features = ["size_64", "std", "validation"] }
-# rmpv = { version = "1.0.1", default-features = false, features = ["with-serde"] }
-# rmp-serde = { version = "1.1.2", default-features = false }
-# serde = { version = "1.0.216", default-features = false, features = ["derive", "rc", "std"] }
-# serde_json = { version = "1.0.114", default-features = false, features = ["std"] }
-# shaderc = { version = "0.8", default-features = false }
-# specs = { version = "0.20.0", default-features = true }
 superluminal-perf = { version = "0.3.0", default-features = false }
-# thiserror = { version = "2.0.7", default-features = true }
-# type-map = { version = "0.5.0", default-features = false }
-# uuid = { version = "1.7.0", default-features = false, features = ["v4", "fast-rng"] }
-# winit = { version = "0.30.5", default-features = false, features = ["rwh_06"] }
-# wgpu = { version = "23.0.1", default-features = false, features = ["dx12", "metal", "webgpu", "wgsl"] }
-# xshell = { version = "0.2.7", default-features = true }
+uuid = { version = "1.12.1", default-features = false, features = ["std", "v4"]}
+winit = { version = "0.30.5", default-features = false, features = ["rwh_06"] }
+wgpu = { version = "23.0.1", default-features = false, features = ["wgsl"] }
 
 [workspace]
 members = [
     "apps/render-node",
     "apps/render-host",
     "crates/appearance-build",
-    "crates/appearance-profiling"
+    "crates/appearance-input",
+    "crates/appearance-profiling",
+    "crates/appearance-render-loop",
+    "crates/appearance-wgpu",
 ]
 resolver = "2"
