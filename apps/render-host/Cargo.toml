@@ -1,0 +1,17 @@
+[package]
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+name = "render-host"
+publish.workspace = true
+version = "0.1.0"
+
+[dependencies]
+appearance.workspace = true
+
+anyhow.workspace = true
+log.workspace = true
+
+[build-dependencies]
+appearance-build.workspace = true
