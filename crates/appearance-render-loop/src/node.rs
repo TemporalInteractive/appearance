@@ -31,7 +31,7 @@ pub trait NodeRenderer: Send {
     fn render(&mut self, width: u32, height: u32, scissor: NodeScissor) -> Vec<u8>;
 }
 
-#[derive(bytemuck::NoUninit, Clone, Copy)]
+#[derive(bytemuck::NoUninit, Clone, Copy, Debug)]
 #[repr(u32)]
 pub enum NodeMessageType {
     Connect,
@@ -40,14 +40,16 @@ pub enum NodeMessageType {
     RenderFinished,
 }
 
-impl From<u32> for NodeMessageType {
-    fn from(value: u32) -> Self {
+impl TryFrom<u32> for NodeMessageType {
+    type Error = anyhow::Error;
+
+    fn try_from(value: u32) -> Result<Self> {
         match value {
-            0 => NodeMessageType::Connect,
-            1 => NodeMessageType::Disconnect,
-            2 => NodeMessageType::RenderStarted,
-            3 => NodeMessageType::RenderFinished,
-            _ => panic!(),
+            0 => Ok(NodeMessageType::Connect),
+            1 => Ok(NodeMessageType::Disconnect),
+            2 => Ok(NodeMessageType::RenderStarted),
+            3 => Ok(NodeMessageType::RenderFinished),
+            _ => Err(anyhow::Error::msg("Nope")),
         }
     }
 }
@@ -67,8 +69,8 @@ impl NodeMessage {
         }
     }
 
-    pub fn ty(&self) -> NodeMessageType {
-        self.ty.into()
+    pub fn ty(&self) -> Result<NodeMessageType> {
+        self.ty.try_into()
     }
 
     // pub fn node_id(&self) -> Uuid {
@@ -84,25 +86,25 @@ struct NodeState<T: NodeRenderer> {
     renderer: T,
 }
 
-impl<T: NodeRenderer> NodeState<T> {
-    fn tcp_client_write_all(&mut self, bytes: &[u8]) {
-        if self.tcp_client.is_none() {
-            if let Ok(tcp_client) = TcpStream::connect(&self.host_addr) {
-                log::info!("Tcp connected");
-                self.tcp_client = Some(tcp_client);
-            }
-        }
+// impl<T: NodeRenderer> NodeState<T> {
+//     fn tcp_client_write_all(&mut self, bytes: &[u8]) {
+//         if self.tcp_client.is_none() {
+//             if let Ok(tcp_client) = TcpStream::connect(&self.host_addr) {
+//                 log::info!("Tcp connected");
+//                 self.tcp_client = Some(tcp_client);
+//             }
+//         }
 
-        if let Some(tcp_client) = &mut self.tcp_client {
-            if tcp_client.write_all(bytes).is_err() {
-                log::info!("Tcp disconnected");
-                self.tcp_client = None;
-            } else {
-                log::info!("Tcp write all succes");
-            }
-        }
-    }
-}
+//         if let Some(tcp_client) = &mut self.tcp_client {
+//             if tcp_client.write_all(bytes).is_err() {
+//                 log::info!("Tcp disconnected");
+//                 self.tcp_client = None;
+//             } else {
+//                 log::info!("Tcp write all succes");
+//             }
+//         }
+//     }
+// }
 
 pub struct Node<T: NodeRenderer> {
     host_addr: String,
@@ -156,6 +158,12 @@ impl<T: NodeRenderer + 'static> Node<T> {
                     let message = NodeMessage::new(NodeMessageType::RenderFinished);
                     let mut message_bytes = bytemuck::bytes_of(&message).to_vec();
                     message_bytes.append(&mut pixels);
+
+                    let node_message = *bytemuck::from_bytes::<NodeMessage>(
+                        &message_bytes[0..std::mem::size_of::<NodeMessage>()],
+                    );
+                    log::info!("{:?}", node_message.ty());
+
                     tcp_stream.write_all(&message_bytes)?;
                 }
             }

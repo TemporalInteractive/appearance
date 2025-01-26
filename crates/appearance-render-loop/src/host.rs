@@ -115,37 +115,37 @@ impl Host {
                     &buf[0..std::mem::size_of::<NodeMessage>()],
                 );
 
-                match node_message.ty() {
-                    NodeMessageType::RenderFinished => {
-                        node.state = NodeState::Finished;
+                if let Ok(NodeMessageType::RenderFinished) = node_message.ty() {
+                    node.state = NodeState::Finished;
 
-                        // Place rendered pixels in the correct place
-                        if let Some(scissor) = &node.pending_scissors {
-                            let num_pixels = (scissor.scissor_x[1] - scissor.scissor_x[0])
-                                * (scissor.scissor_y[1] - scissor.scissor_y[0]);
+                    // Place rendered pixels in the correct place
+                    if let Some(scissor) = &node.pending_scissors {
+                        let num_pixels = (scissor.scissor_x[1] - scissor.scissor_x[0])
+                            * (scissor.scissor_y[1] - scissor.scissor_y[0]);
 
-                            let node_pixels =
-                                &buf[std::mem::size_of::<NodeMessage>()..num_pixels as usize];
+                        let node_pixels = &buf[std::mem::size_of::<NodeMessage>()
+                            ..((num_pixels as usize) * 4 + std::mem::size_of::<NodeMessage>())];
 
-                            if let Ok(mut pixels) = pixels.lock() {
-                                for x in scissor.scissor_x[0]..scissor.scissor_x[1] {
-                                    for y in scissor.scissor_y[0]..scissor.scissor_y[1] {
-                                        let pixel_id = (y * width + x) as usize;
-                                        let node_pixel_id = ((y - scissor.scissor_y[0])
-                                            * (scissor.scissor_x[1] - scissor.scissor_x[0])
-                                            + (x - scissor.scissor_x[0]))
-                                            as usize;
+                        if let Ok(mut pixels) = pixels.lock() {
+                            for x in scissor.scissor_x[0]..scissor.scissor_x[1] {
+                                for y in scissor.scissor_y[0]..scissor.scissor_y[1] {
+                                    let pixel_id = (y * width + x) as usize;
+                                    let node_pixel_id = ((y - scissor.scissor_y[0])
+                                        * (scissor.scissor_x[1] - scissor.scissor_x[0])
+                                        + (x - scissor.scissor_x[0]))
+                                        as usize;
 
-                                        for i in 0..4 {
-                                            pixels[pixel_id * 4 + i] =
-                                                node_pixels[node_pixel_id * 4 + i];
-                                        }
+                                    for i in 0..4 {
+                                        let node_pixel_channel = node_pixels[node_pixel_id * 4 + i];
+                                        pixels[pixel_id * 4 + i] = node_pixel_channel;
                                     }
                                 }
                             }
                         }
                     }
-                    _ => {}
+                    log::info!("good readback!");
+                } else {
+                    log::warn!("CORRUPT READBACK!");
                 }
             }
         }
