@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use crate::host::{HostMessage, HostMessageType};
 
-#[derive(bytemuck::NoUninit, bytemuck::AnyBitPattern, Clone, Copy, Default)]
+#[derive(bytemuck::NoUninit, bytemuck::AnyBitPattern, Clone, Copy, Default, Debug)]
 #[repr(C)]
 pub struct NodeScissor {
     pub scissor_x: [u32; 2],
@@ -56,14 +56,14 @@ impl From<u32> for NodeMessageType {
 #[repr(C)]
 pub struct NodeMessage {
     ty: u32,
-    node_id: [u8; 16],
+    //node_id: [u8; 16],
 }
 
 impl NodeMessage {
-    fn new(ty: NodeMessageType, node_id: Uuid) -> Self {
+    fn new(ty: NodeMessageType) -> Self {
         Self {
             ty: ty as u32,
-            node_id: node_id.to_bytes_le(),
+            //node_id: node_id.to_bytes_le(),
         }
     }
 
@@ -71,9 +71,9 @@ impl NodeMessage {
         self.ty.into()
     }
 
-    pub fn node_id(&self) -> Uuid {
-        Uuid::from_bytes(self.node_id)
-    }
+    // pub fn node_id(&self) -> Uuid {
+    //     Uuid::from_bytes(self.node_id)
+    // }
 }
 
 struct NodeState<T: NodeRenderer> {
@@ -105,60 +105,67 @@ impl<T: NodeRenderer> NodeState<T> {
 }
 
 pub struct Node<T: NodeRenderer> {
-    id: Uuid,
-    tcp_listener: TcpListener,
-    state: Arc<Mutex<NodeState<T>>>,
+    host_addr: String,
+    node_addr: String,
+    tcp_stream: Option<TcpStream>,
+
+    renderer: T,
+    //id: Uuid,
+
+    //tcp_listener: TcpListener,
+    //state: Arc<Mutex<NodeState<T>>>,
 }
 
 impl<T: NodeRenderer + 'static> Node<T> {
     pub fn new(renderer: T, host_addr: &str, node_addr: &str) -> Result<Self> {
-        let id = Uuid::new_v4();
+        //let id = Uuid::new_v4();
 
-        let tcp_listener = TcpListener::bind(node_addr)?;
+        //let tcp_stream = TcpStream::connect(node_addr)?;
 
-        let state = Arc::new(Mutex::new(NodeState {
-            id,
-            host_addr: host_addr.to_owned(),
-            node_addr: node_addr.to_owned(),
-            tcp_client: None,
-            renderer,
-        }));
+        // let state = Arc::new(Mutex::new(NodeState {
+        //     id,
+        //     host_addr: host_addr.to_owned(),
+        //     node_addr: node_addr.to_owned(),
+        //     tcp_client: None,
+        //     renderer,
+        // }));
 
         Ok(Self {
-            id,
-            tcp_listener,
-            state,
+            host_addr: host_addr.to_owned(),
+            node_addr: node_addr.to_owned(),
+            tcp_stream: None,
+            renderer,
         })
     }
 
-    fn handle_message(state: Arc<Mutex<NodeState<T>>>, host_message: HostMessage) -> Result<()> {
+    fn handle_message(&mut self, host_message: HostMessage) -> Result<()> {
         match host_message.ty() {
             HostMessageType::StartRender => {
-                log::info!("Node started Render!");
+                log::info!("StartRender");
 
-                if let Ok(mut state) = state.lock() {
-                    let message = NodeMessage::new(NodeMessageType::RenderStarted, state.id);
-                    state.tcp_client_write_all(bytemuck::bytes_of(&message));
+                if let Some(tcp_stream) = &mut self.tcp_stream {
+                    let message = NodeMessage::new(NodeMessageType::RenderStarted);
+                    tcp_stream.write_all(bytemuck::bytes_of(&message))?;
 
-                    let mut pixels = state.renderer.render(
+                    let mut pixels = self.renderer.render(
                         host_message.width,
                         host_message.height,
                         host_message.scissor,
                     );
 
-                    let message = NodeMessage::new(NodeMessageType::RenderFinished, state.id);
+                    let message = NodeMessage::new(NodeMessageType::RenderFinished);
                     let mut message_bytes = bytemuck::bytes_of(&message).to_vec();
                     message_bytes.append(&mut pixels);
-                    state.tcp_client_write_all(&message_bytes);
+                    tcp_stream.write_all(&message_bytes)?;
                 }
             }
             HostMessageType::Ping => {
-                log::info!("Node got Pinged!");
+                log::info!("Ping");
 
                 // Notify host of this nodes existance
-                if let Ok(mut state) = state.lock() {
-                    let message = NodeMessage::new(NodeMessageType::Connect, state.id);
-                    state.tcp_client_write_all(bytemuck::bytes_of(&message));
+                if let Some(tcp_stream) = &mut self.tcp_stream {
+                    let message = NodeMessage::new(NodeMessageType::Connect);
+                    tcp_stream.write_all(bytemuck::bytes_of(&message))?;
                 }
             }
         }
@@ -166,39 +173,71 @@ impl<T: NodeRenderer + 'static> Node<T> {
         Ok(())
     }
 
-    pub fn run(self) {
-        log::info!("Node started running!");
+    fn disconnect(&mut self) {
+        log::info!("Disconnected");
+        self.tcp_stream = None;
+    }
 
-        for stream in self.tcp_listener.incoming() {
-            log::info!("Node got a message!");
+    pub fn run(mut self) {
+        log::info!("Started running");
 
-            match stream {
-                Ok(mut stream) => {
-                    let mut buf = vec![0u8; std::mem::size_of::<HostMessage>()];
-                    if let Ok(_len) = stream.read(buf.as_mut()) {
-                        let host_message = *bytemuck::from_bytes::<HostMessage>(buf.as_ref());
-                        let state = self.state.clone();
+        let mut buf = vec![0u8; std::mem::size_of::<HostMessage>()];
 
-                        thread::spawn(move || Self::handle_message(state, host_message).unwrap());
-                    }
-                }
-                Err(_) => {
-                    panic!("Node listener panicked!");
-                    return;
+        loop {
+            // Try to connect to host if not connected yet
+            if self.tcp_stream.is_none() {
+                if let Ok(tcp_stream) = TcpStream::connect(&self.host_addr) {
+                    log::info!("Connected");
+                    self.tcp_stream = Some(tcp_stream);
                 }
             }
+
+            if let Some(tcp_stream) = &mut self.tcp_stream {
+                if let Ok(_len) = tcp_stream.read(buf.as_mut()) {
+                    let host_message = *bytemuck::from_bytes::<HostMessage>(buf.as_ref());
+
+                    log::info!("Received message: {:?}", host_message);
+                    if self.handle_message(host_message).is_err() {
+                        self.disconnect();
+                    }
+                } else {
+                    self.disconnect();
+                }
+            }
+
+            thread::yield_now();
         }
+
+        // for stream in self.tcp_listener.incoming() {
+        //     log::info!("Node got a message!");
+
+        //     match stream {
+        //         Ok(mut stream) => {
+        //             let mut buf = vec![0u8; std::mem::size_of::<HostMessage>()];
+        //             if let Ok(_len) = stream.read(buf.as_mut()) {
+        //                 let host_message = *bytemuck::from_bytes::<HostMessage>(buf.as_ref());
+        //                 let state = self.state.clone();
+
+        //                 thread::spawn(move || Self::handle_message(state, host_message).unwrap());
+        //             }
+        //         }
+        //         Err(_) => {
+        //             panic!("Node listener panicked!");
+        //             return;
+        //         }
+        //     }
+        // }
     }
 }
 
 impl<T: NodeRenderer> Drop for Node<T> {
     fn drop(&mut self) {
-        let message = NodeMessage::new(NodeMessageType::Disconnect, self.id);
+        //let message = NodeMessage::new(NodeMessageType::Disconnect, self.id);
 
-        log::info!("DROP");
-        self.state
-            .lock()
-            .unwrap()
-            .tcp_client_write_all(bytemuck::bytes_of(&message));
+        // log::info!("DROP");
+        // self.state
+        //     .lock()
+        //     .unwrap()
+        //     .tcp_client_write_all(bytemuck::bytes_of(&message));
     }
 }
