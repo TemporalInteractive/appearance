@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use crate::host::{HostMessage, HostMessageType};
 
-#[derive(bytemuck::NoUninit, bytemuck::AnyBitPattern, Clone, Copy)]
+#[derive(bytemuck::NoUninit, bytemuck::AnyBitPattern, Clone, Copy, Default)]
 #[repr(C)]
 pub struct NodeScissor {
     pub scissor_x: [u32; 2],
@@ -78,8 +78,30 @@ impl NodeMessage {
 
 struct NodeState<T: NodeRenderer> {
     id: Uuid,
-    tcp_client: TcpStream,
+    host_addr: String,
+    node_addr: String,
+    tcp_client: Option<TcpStream>,
     renderer: T,
+}
+
+impl<T: NodeRenderer> NodeState<T> {
+    fn tcp_client_write_all(&mut self, bytes: &[u8]) {
+        if self.tcp_client.is_none() {
+            if let Ok(tcp_client) = TcpStream::connect(&self.host_addr) {
+                log::info!("Tcp connected");
+                self.tcp_client = Some(tcp_client);
+            }
+        }
+
+        if let Some(tcp_client) = &mut self.tcp_client {
+            if tcp_client.write_all(bytes).is_err() {
+                log::info!("Tcp disconnected");
+                self.tcp_client = None;
+            } else {
+                log::info!("Tcp write all succes");
+            }
+        }
+    }
 }
 
 pub struct Node<T: NodeRenderer> {
@@ -89,18 +111,16 @@ pub struct Node<T: NodeRenderer> {
 }
 
 impl<T: NodeRenderer + 'static> Node<T> {
-    pub fn new(renderer: T, addr: &str) -> Result<Self> {
+    pub fn new(renderer: T, host_addr: &str, node_addr: &str) -> Result<Self> {
         let id = Uuid::new_v4();
 
-        let mut tcp_client = TcpStream::connect(addr)?;
-        let tcp_listener = TcpListener::bind(addr)?;
-
-        let message = NodeMessage::new(NodeMessageType::Connect, id);
-        tcp_client.write_all(bytemuck::bytes_of(&message))?;
+        let tcp_listener = TcpListener::bind(node_addr)?;
 
         let state = Arc::new(Mutex::new(NodeState {
             id,
-            tcp_client,
+            host_addr: host_addr.to_owned(),
+            node_addr: node_addr.to_owned(),
+            tcp_client: None,
             renderer,
         }));
 
@@ -112,11 +132,13 @@ impl<T: NodeRenderer + 'static> Node<T> {
     }
 
     fn handle_message(state: Arc<Mutex<NodeState<T>>>, host_message: HostMessage) -> Result<()> {
-        match host_message.ty.into() {
+        match host_message.ty() {
             HostMessageType::StartRender => {
+                log::info!("Node started Render!");
+
                 if let Ok(mut state) = state.lock() {
                     let message = NodeMessage::new(NodeMessageType::RenderStarted, state.id);
-                    state.tcp_client.write_all(bytemuck::bytes_of(&message))?;
+                    state.tcp_client_write_all(bytemuck::bytes_of(&message));
 
                     let mut pixels = state.renderer.render(
                         host_message.width,
@@ -127,7 +149,16 @@ impl<T: NodeRenderer + 'static> Node<T> {
                     let message = NodeMessage::new(NodeMessageType::RenderFinished, state.id);
                     let mut message_bytes = bytemuck::bytes_of(&message).to_vec();
                     message_bytes.append(&mut pixels);
-                    state.tcp_client.write_all(&message_bytes)?;
+                    state.tcp_client_write_all(&message_bytes);
+                }
+            }
+            HostMessageType::Ping => {
+                log::info!("Node got Pinged!");
+
+                // Notify host of this nodes existance
+                if let Ok(mut state) = state.lock() {
+                    let message = NodeMessage::new(NodeMessageType::Connect, state.id);
+                    state.tcp_client_write_all(bytemuck::bytes_of(&message));
                 }
             }
         }
@@ -136,7 +167,11 @@ impl<T: NodeRenderer + 'static> Node<T> {
     }
 
     pub fn run(self) {
+        log::info!("Node started running!");
+
         for stream in self.tcp_listener.incoming() {
+            log::info!("Node got a message!");
+
             match stream {
                 Ok(mut stream) => {
                     let mut buf = vec![0u8; std::mem::size_of::<HostMessage>()];
@@ -148,14 +183,9 @@ impl<T: NodeRenderer + 'static> Node<T> {
                     }
                 }
                 Err(_) => {
+                    panic!("Node listener panicked!");
                     return;
                 }
-            }
-
-            // Notify host of this nodes existance each time a message is received
-            if let Ok(mut state) = self.state.lock() {
-                let message = NodeMessage::new(NodeMessageType::Connect, self.id);
-                let _ = state.tcp_client.write_all(bytemuck::bytes_of(&message));
             }
         }
     }
@@ -165,11 +195,10 @@ impl<T: NodeRenderer> Drop for Node<T> {
     fn drop(&mut self) {
         let message = NodeMessage::new(NodeMessageType::Disconnect, self.id);
 
-        let _ = self
-            .state
+        log::info!("DROP");
+        self.state
             .lock()
             .unwrap()
-            .tcp_client
-            .write_all(bytemuck::bytes_of(&message));
+            .tcp_client_write_all(bytemuck::bytes_of(&message));
     }
 }

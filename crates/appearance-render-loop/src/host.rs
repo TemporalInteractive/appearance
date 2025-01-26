@@ -1,7 +1,7 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     io::{Read, Write},
-    net::{TcpListener, TcpStream, UdpSocket},
+    net::{TcpListener, TcpStream},
     sync::{Arc, Mutex},
     thread,
 };
@@ -15,31 +15,37 @@ use crate::node::{NodeMessage, NodeMessageType, NodeScissor};
 #[repr(u32)]
 pub enum HostMessageType {
     StartRender,
+    Ping,
 }
 
 impl From<u32> for HostMessageType {
     fn from(value: u32) -> Self {
         match value {
             0 => HostMessageType::StartRender,
-            _ => panic!(),
+            1 => HostMessageType::Ping,
+            _ => panic!("{} cannot be converted into a HostMessageType", value),
         }
     }
 }
 
-#[derive(bytemuck::NoUninit, bytemuck::AnyBitPattern, Clone, Copy)]
+#[derive(bytemuck::NoUninit, bytemuck::AnyBitPattern, Clone, Copy, Default)]
 #[repr(C)]
 pub struct HostMessage {
-    pub ty: u32,
-    node_id: [u8; 16],
+    ty: u32,
+    //node_id: [u8; 16],
     pub width: u32,
     pub height: u32,
     pub scissor: NodeScissor,
 }
 
 impl HostMessage {
-    pub fn node_id(&self) -> Uuid {
-        Uuid::from_bytes(self.node_id)
+    pub fn ty(&self) -> HostMessageType {
+        self.ty.into()
     }
+
+    // pub fn node_id(&self) -> Uuid {
+    //     Uuid::from_bytes(self.node_id)
+    // }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -49,9 +55,10 @@ enum NodeState {
 }
 
 pub struct Host {
-    addr: String,
-    tcp_client: TcpStream,
-    udp_client: UdpSocket,
+    host_addr: String,
+    node_addr: String,
+
+    tcp_client: Option<TcpStream>,
     nodes: Arc<Mutex<HashMap<Uuid, NodeState>>>,
 
     pending_scissors: Arc<Mutex<HashMap<Uuid, NodeScissor>>>,
@@ -62,27 +69,30 @@ pub struct Host {
 }
 
 impl Host {
-    pub fn new(addr: String, width: u32, height: u32) -> Result<Self> {
-        let tcp_client = TcpStream::connect(&addr)?;
-
-        let udp_client = UdpSocket::bind(&addr)?;
-
+    pub fn new(host_addr: String, node_addr: String, width: u32, height: u32) -> Result<Self> {
         let pending_scissors = Arc::new(Mutex::new(HashMap::new()));
         let pixels = Arc::new(Mutex::new(vec![0; (width * height * 4) as usize]));
 
         let nodes = Arc::new(Mutex::new(HashMap::new()));
-        let addrr = addr.clone();
+        let host_addrr = host_addr.clone();
         let nodess = nodes.clone();
         let pixelss = pixels.clone();
         let pending_scissorss = pending_scissors.clone();
         thread::spawn(move || {
-            Self::listen(addrr, width, height, pixelss, nodess, pending_scissorss)
+            Self::listen(
+                host_addrr,
+                width,
+                height,
+                pixelss,
+                nodess,
+                pending_scissorss,
+            )
         });
 
         Ok(Self {
-            addr,
-            tcp_client,
-            udp_client,
+            host_addr,
+            node_addr,
+            tcp_client: None,
             nodes,
             pending_scissors,
 
@@ -94,14 +104,14 @@ impl Host {
 
     // Listen for node behaviour, nodes will keep sending connect messages each time they receive any global message from the host (like StartRender)
     fn listen(
-        addr: String,
+        host_addr: String,
         width: u32,
         height: u32,
         pixels: Arc<Mutex<Vec<u8>>>,
         nodes: Arc<Mutex<HashMap<Uuid, NodeState>>>,
         pending_scissors: Arc<Mutex<HashMap<Uuid, NodeScissor>>>,
     ) -> Result<()> {
-        let tcp_listener = TcpListener::bind(addr)?;
+        let tcp_listener = TcpListener::bind(host_addr)?;
 
         // TODO: maybe derive this size a bit more elegantly
         let mut buf = vec![0u8; std::mem::size_of::<NodeMessage>() + (4 * width * height) as usize];
@@ -178,6 +188,7 @@ impl Host {
                     }
                 }
                 Err(_) => {
+                    panic!("DAMN");
                     break;
                 }
             }
@@ -186,10 +197,34 @@ impl Host {
         Ok(())
     }
 
+    fn tcp_client_write_all(&mut self, bytes: &[u8]) {
+        if self.tcp_client.is_none() {
+            if let Ok(tcp_client) = TcpStream::connect(&self.node_addr) {
+                log::info!("Connected tcp client.");
+                self.tcp_client = Some(tcp_client);
+            }
+        }
+
+        if let Some(tcp_client) = &mut self.tcp_client {
+            //tcp_client.write_all(bytes).unwrap();
+            if tcp_client.write_all(bytes).is_err() {
+                log::info!("Tcp client lost.");
+                self.tcp_client = None;
+            }
+        }
+    }
+
     pub fn render<F: Fn(&[u8])>(&mut self, result_callback: F) -> Result<()> {
+        // Always ping any node out there to make sure they connect
+        let mut host_messages = vec![HostMessage {
+            ty: HostMessageType::Ping as u32,
+            ..Default::default()
+        }];
+
         if let Ok(mut pending_scissors) = self.pending_scissors.lock() {
             // Notify all nodes to start rendering
             if let Ok(mut nodes) = self.nodes.lock() {
+                log::info!("Rendering with {} nodes...", nodes.len());
                 for (node_id, node_state) in nodes.iter_mut() {
                     // TODO: cut screen based on number of nodes
                     let scissor = NodeScissor {
@@ -200,16 +235,20 @@ impl Host {
 
                     let message = HostMessage {
                         ty: HostMessageType::StartRender as u32,
-                        node_id: node_id.to_bytes_le(),
+                        //node_id: node_id.to_bytes_le(),
                         width: self.width,
                         height: self.height,
                         scissor,
                     };
-                    self.tcp_client.write_all(bytemuck::bytes_of(&message))?;
+                    host_messages.push(message);
 
                     *node_state = NodeState::Rendering;
                 }
             }
+        }
+
+        for message in host_messages {
+            self.tcp_client_write_all(bytemuck::bytes_of(&message));
         }
 
         // Blocking while waiting for all nodes to finish rendering

@@ -46,7 +46,13 @@ impl RenderLoop for HostRenderLoop {
         _queue: &wgpu::Queue,
         _window: Arc<Window>,
     ) -> Self {
-        let host = Host::new("127.0.0.1:34234".to_owned(), config.width, config.height).unwrap();
+        let host = Host::new(
+            "127.0.0.1:34234".to_owned(),
+            "127.0.0.1:34235".to_owned(),
+            config.width,
+            config.height,
+        )
+        .unwrap();
 
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("texture"),
@@ -89,12 +95,9 @@ impl RenderLoop for HostRenderLoop {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba8Unorm,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING
-                | wgpu::TextureUsages::STORAGE_BINDING
-                | wgpu::TextureUsages::COPY_DST,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
-        todo!()
     }
 
     fn window_event(&mut self, _event: winit::event::WindowEvent) {}

@@ -5,6 +5,7 @@ struct Renderer;
 
 impl NodeRenderer for Renderer {
     fn render(&mut self, _width: u32, _height: u32, scissor: NodeScissor) -> Vec<u8> {
+        log::info!("Node Render!");
         vec![128; (scissor.width() * scissor.height() * 4) as usize]
     }
 }
@@ -12,6 +13,6 @@ impl NodeRenderer for Renderer {
 pub fn internal_main() {
     let _appearance = Appearance::new("Render Node");
 
-    let node = Node::new(Renderer, "127.0.0.1:34234").unwrap();
+    let node = Node::new(Renderer, "127.0.0.1:34234", "127.0.0.1:34235").unwrap();
     node.run();
 }
