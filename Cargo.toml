@@ -14,6 +14,7 @@ appearance-build = { version = "0.1.0", path = "crates/appearance-build" }
 appearance-input = { version = "0.1.0", path = "crates/appearance-input" }
 appearance-profiling = { version = "0.1.0", path = "crates/appearance-profiling", features = ["superluminal"] }
 appearance-render-loop = { version = "0.1.0", path = "crates/appearance-render-loop" }
+appearance-time = { version = "0.1.0", path = "crates/appearance-time" }
 appearance-wgpu = { version = "0.1.0", path = "crates/appearance-wgpu" }
 
 anyhow = { version = "1.0.94", default-features = false, features = ["std"] }
@@ -45,6 +46,7 @@ members = [
     "crates/appearance-input",
     "crates/appearance-profiling",
     "crates/appearance-render-loop",
+    "crates/appearance-time",
     "crates/appearance-wgpu",
 ]
 resolver = "2"

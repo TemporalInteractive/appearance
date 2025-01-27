@@ -8,11 +8,11 @@ publish.workspace = true
 version = "0.1.0"
 
 [dependencies]
+appearance-time.workspace = true
 appearance-wgpu.workspace = true
 
 anyhow.workspace = true
 bytemuck.workspace = true
 futures.workspace = true
 log.workspace = true
-uuid.workspace = true
 winit.workspace = true
