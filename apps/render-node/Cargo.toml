@@ -10,6 +10,7 @@ version = "0.1.0"
 [dependencies]
 appearance.workspace = true
 
+anyhow.workspace = true
 glam.workspace = true
 log.workspace = true
 

@@ -4,6 +4,7 @@ use appearance_wgpu::{wgpu, Context, Surface};
 use futures::executor::block_on;
 use winit::{
     application::ApplicationHandler,
+    dpi::PhysicalSize,
     error::EventLoopError,
     event::WindowEvent,
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
@@ -97,22 +98,39 @@ impl<R: RenderLoop> RenderLoopState<R> {
     }
 }
 
-pub struct RenderLoopHandler<R: RenderLoop> {
-    state: Option<RenderLoopState<R>>,
-    frame_idx: u32,
+#[derive(Debug, Clone)]
+pub struct RenderLoopWindowDesc {
+    pub title: String,
+    pub width: u32,
+    pub height: u32,
+    pub resizeable: bool,
+    pub maximized: bool,
 }
 
-impl<R: RenderLoop> Default for RenderLoopHandler<R> {
+impl Default for RenderLoopWindowDesc {
     fn default() -> Self {
-        Self::new()
+        Self {
+            title: "Appearance".to_owned(),
+            width: 1920,
+            height: 1080,
+            resizeable: true,
+            maximized: false,
+        }
     }
 }
 
+pub struct RenderLoopHandler<R: RenderLoop> {
+    state: Option<RenderLoopState<R>>,
+    frame_idx: u32,
+    window_desc: RenderLoopWindowDesc,
+}
+
 impl<R: RenderLoop> RenderLoopHandler<R> {
-    pub fn new() -> Self {
+    pub fn new(window_desc: &RenderLoopWindowDesc) -> Self {
         Self {
             state: None,
             frame_idx: 0,
+            window_desc: window_desc.to_owned(),
         }
     }
 
@@ -132,8 +150,13 @@ impl<R: RenderLoop> ApplicationHandler for RenderLoopHandler<R> {
         };
 
         let window_attributes = Window::default_attributes()
-            .with_title("Appearance")
-            .with_maximized(true);
+            .with_title(&self.window_desc.title)
+            .with_resizable(self.window_desc.resizeable)
+            .with_inner_size(PhysicalSize::new(
+                self.window_desc.width,
+                self.window_desc.height,
+            ))
+            .with_maximized(self.window_desc.maximized);
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
 
         self.state = Some(block_on(RenderLoopState::<R>::from_window(surface, window)));

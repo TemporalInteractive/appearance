@@ -1,33 +1,21 @@
+use anyhow::Result;
 use std::sync::Arc;
 
 use appearance::appearance_render_loop::host::Host;
 use appearance::appearance_render_loop::winit::window::Window;
-use appearance::appearance_render_loop::{winit, RenderLoop, RenderLoopHandler};
+use appearance::appearance_render_loop::{
+    winit, RenderLoop, RenderLoopHandler, RenderLoopWindowDesc,
+};
+use appearance::appearance_time::Timer;
 use appearance::appearance_wgpu::helper_passes::blit_pass;
 use appearance::appearance_wgpu::wgpu::{self, Extent3d, Origin3d};
 use appearance::Appearance;
-
-// use anyhow::Error;
-// use std::fs::File;
-// use std::io::prelude::*;
-// use std::net::{TcpListener, TcpStream};
-// use std::thread;
-
-// fn handle_client(mut stream: TcpStream) -> Result<(), Error> {
-//     let buf: &mut [u8; 100] = &mut [0; 100];
-//     let mut file = File::create("foo")?;
-//     let len = stream.read(buf)?;
-//     let str = String::from_utf8(buf[0..len].to_vec());
-//     file.write_all(&buf[0..len])?;
-
-//     println!("wrote: {:?}", str);
-//     Ok(())
-// }
 
 pub struct HostRenderLoop {
     host: Host,
     texture: wgpu::Texture,
     swapchain_format: wgpu::TextureFormat,
+    timer: Timer,
 }
 
 impl RenderLoop for HostRenderLoop {
@@ -69,6 +57,7 @@ impl RenderLoop for HostRenderLoop {
             host,
             texture,
             swapchain_format: config.view_formats[0],
+            timer: Timer::new(),
         }
     }
 
@@ -97,6 +86,10 @@ impl RenderLoop for HostRenderLoop {
     fn window_event(&mut self, _event: winit::event::WindowEvent) {}
 
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
+        let elapsed_time = self.timer.elapsed();
+        self.timer.reset();
+        log::info!("FPS {}", 1.0 / elapsed_time);
+
         self.host
             .render(|pixels| {
                 queue.write_texture(
@@ -139,20 +132,16 @@ impl RenderLoop for HostRenderLoop {
     }
 }
 
-pub fn internal_main() {
+pub fn internal_main() -> Result<()> {
     let _ = Appearance::new("Render Host");
-    RenderLoopHandler::<HostRenderLoop>::new().run().unwrap();
+    RenderLoopHandler::<HostRenderLoop>::new(&RenderLoopWindowDesc {
+        title: "Render Host".to_owned(),
+        width: 720,
+        height: 512,
+        resizeable: false,
+        maximized: false,
+    })
+    .run()?;
 
-    // let listener = TcpListener::bind("127.0.0.1:34234").unwrap();
-
-    // for stream in listener.incoming() {
-    //     match stream {
-    //         Ok(stream) => {
-    //             thread::spawn(move || handle_client(stream));
-    //         }
-    //         Err(_) => {
-    //             break;
-    //         }
-    //     }
-    // }
+    Ok(())
 }

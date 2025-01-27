@@ -7,6 +7,13 @@ use std::{
 
 use anyhow::Result;
 
+fn vec_remove_multiple<T>(vec: &mut Vec<T>, indices: &mut [usize]) {
+    indices.sort();
+    for (j, i) in indices.iter().enumerate() {
+        vec.remove(i - j);
+    }
+}
+
 #[derive(bytemuck::NoUninit, Clone, Copy)]
 #[repr(u32)]
 pub enum HostMessageType {
@@ -103,7 +110,6 @@ impl Host {
                 if let Ok(mut pixels) = pixels.lock() {
                     if let Some(pending_rows) = &node.pending_rows {
                         let start_row = pending_rows[0];
-                        let end_row = pending_rows[1];
 
                         unsafe {
                             let dst_ptr = &mut pixels[(start_row * width * 4) as usize] as *mut u8;
@@ -113,30 +119,6 @@ impl Host {
                         }
                     }
                 }
-
-                // Place rendered pixels in the correct place
-                // if let Some(scissor) = &node.pending_scissors {
-                //     let num_pixels = (scissor.scissor_x[1] - scissor.scissor_x[0])
-                //         * (scissor.scissor_y[1] - scissor.scissor_y[0]);
-                //     let node_pixels = &buffered_pixels[0..(num_pixels * 4) as usize];
-
-                //     if let Ok(mut pixels) = pixels.lock() {
-                //         for x in scissor.scissor_x[0]..scissor.scissor_x[1] {
-                //             for y in scissor.scissor_y[0]..scissor.scissor_y[1] {
-                //                 let pixel_id = (y * width + x) as usize;
-                //                 let node_pixel_id = ((y - scissor.scissor_y[0])
-                //                     * (scissor.scissor_x[1] - scissor.scissor_x[0])
-                //                     + (x - scissor.scissor_x[0]))
-                //                     as usize;
-
-                //                 for i in 0..4 {
-                //                     let node_pixel_channel = node_pixels[node_pixel_id * 4 + i];
-                //                     pixels[pixel_id * 4 + i] = node_pixel_channel;
-                //                 }
-                //             }
-                //         }
-                //     }
-                // }
             }
         }
     }
@@ -164,7 +146,9 @@ impl Host {
     pub fn render<F: Fn(&[u8])>(&mut self, result_callback: F) -> Result<()> {
         // Notify all nodes to start rendering
         if let Ok(mut nodes) = self.nodes.lock() {
-            for node in nodes.iter_mut() {
+            let mut disconnected_node_indices = vec![];
+
+            for (i, node) in nodes.iter_mut().enumerate() {
                 if let Ok(mut node) = node.lock() {
                     // TODO: cut screen based on number of nodes
                     let assigned_rows = [0, self.height];
@@ -176,16 +160,21 @@ impl Host {
                         height: self.height,
                         assigned_rows,
                     };
-                    node.tcp_stream
+                    if node
+                        .tcp_stream
                         .write_all(bytemuck::bytes_of(&message))
-                        .unwrap(); // TODO: always carefully remove node if write fails (node probably disconnected)
+                        .is_err()
+                    {
+                        disconnected_node_indices.push(i);
+                    }
 
                     node.state = NodeState::Rendering;
                 }
             }
 
-            let mut join_handles = vec![];
+            vec_remove_multiple(&mut nodes, &mut disconnected_node_indices);
 
+            let mut join_handles = vec![];
             for node in nodes.iter() {
                 let cloned_node = node.clone();
                 let cloned_pixels = self.pixels.clone();

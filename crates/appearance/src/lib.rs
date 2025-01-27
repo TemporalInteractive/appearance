@@ -7,4 +7,5 @@ pub use appearance::Appearance;
 pub use appearance_input;
 pub use appearance_profiling;
 pub use appearance_render_loop;
+pub use appearance_time;
 pub use appearance_wgpu;

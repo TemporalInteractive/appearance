@@ -11,6 +11,7 @@ version = "0.1.0"
 appearance-input.workspace = true
 appearance-profiling.workspace = true
 appearance-render-loop.workspace = true
+appearance-time.workspace = true
 appearance-wgpu.workspace = true
 
 anyhow.workspace = true

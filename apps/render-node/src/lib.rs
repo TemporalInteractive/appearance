@@ -1,3 +1,4 @@
+use anyhow::Result;
 use appearance::appearance_render_loop::node::{Node, NodeRenderer};
 use appearance::Appearance;
 use glam::{Vec2, Vec3};
@@ -51,9 +52,11 @@ impl NodeRenderer for Renderer {
     }
 }
 
-pub fn internal_main() {
+pub fn internal_main() -> Result<()> {
     let _appearance = Appearance::new("Render Node");
 
-    let node = Node::new(Renderer::new(), "127.0.0.1:34234").unwrap();
+    let node = Node::new(Renderer::new(), "127.0.0.1:34234")?;
     node.run();
+
+    Ok(())
 }
