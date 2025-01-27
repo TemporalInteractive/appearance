@@ -3,16 +3,12 @@ authors.workspace = true
 edition.workspace = true
 homepage.workspace = true
 license.workspace = true
-name = "render-node"
+name = "appearance-input"
 publish.workspace = true
 version = "0.1.0"
 
 [dependencies]
-appearance.workspace = true
+appearance-profiling.workspace = true
 
-anyhow.workspace = true
 glam.workspace = true
-log.workspace = true
-
-[build-dependencies]
-appearance-build.workspace = true
+winit.workspace = true

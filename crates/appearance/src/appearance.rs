@@ -13,6 +13,9 @@ impl AppearanceStatic {
         APPEARANCE_STATIC.get_or_init(|| {
             env_logger::builder()
                 .filter_level(log::LevelFilter::Info)
+                .filter_module("wgpu_core", log::LevelFilter::Warn)
+                .filter_module("wgpu_hal", log::LevelFilter::Warn)
+                .filter_module("naga", log::LevelFilter::Warn)
                 .parse_default_env()
                 .init();
 

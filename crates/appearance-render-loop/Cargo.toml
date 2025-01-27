@@ -3,18 +3,16 @@ authors.workspace = true
 edition.workspace = true
 homepage.workspace = true
 license.workspace = true
-name = "appearance"
+name = "appearance-render-loop"
 publish.workspace = true
 version = "0.1.0"
 
 [dependencies]
-appearance-input.workspace = true
-appearance-profiling.workspace = true
-appearance-render-loop.workspace = true
 appearance-time.workspace = true
 appearance-wgpu.workspace = true
 
 anyhow.workspace = true
-env_logger.workspace = true
+bytemuck.workspace = true
+futures.workspace = true
 log.workspace = true
-puffin.workspace = true
+winit.workspace = true
