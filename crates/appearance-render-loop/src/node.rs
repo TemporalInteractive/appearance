@@ -31,52 +31,52 @@ pub trait NodeRenderer: Send {
     fn render(&mut self, width: u32, height: u32, scissor: NodeScissor) -> Vec<u8>;
 }
 
-#[derive(bytemuck::NoUninit, Clone, Copy, Debug)]
-#[repr(u32)]
-pub enum NodeMessageType {
-    Connect,
-    Disconnect,
-    RenderStarted,
-    RenderFinished,
-}
+// #[derive(bytemuck::NoUninit, Clone, Copy, Debug)]
+// #[repr(u32)]
+// pub enum NodeMessageType {
+//     Connect,
+//     Disconnect,
+//     RenderStarted,
+//     RenderFinished,
+// }
 
-impl TryFrom<u32> for NodeMessageType {
-    type Error = anyhow::Error;
+// impl TryFrom<u32> for NodeMessageType {
+//     type Error = anyhow::Error;
 
-    fn try_from(value: u32) -> Result<Self> {
-        match value {
-            0 => Ok(NodeMessageType::Connect),
-            1 => Ok(NodeMessageType::Disconnect),
-            2 => Ok(NodeMessageType::RenderStarted),
-            3 => Ok(NodeMessageType::RenderFinished),
-            _ => Err(anyhow::Error::msg("Nope")),
-        }
-    }
-}
+//     fn try_from(value: u32) -> Result<Self> {
+//         match value {
+//             0 => Ok(NodeMessageType::Connect),
+//             1 => Ok(NodeMessageType::Disconnect),
+//             2 => Ok(NodeMessageType::RenderStarted),
+//             3 => Ok(NodeMessageType::RenderFinished),
+//             _ => Err(anyhow::Error::msg("Nope")),
+//         }
+//     }
+// }
 
-#[derive(bytemuck::NoUninit, bytemuck::AnyBitPattern, Clone, Copy)]
-#[repr(C)]
-pub struct NodeMessage {
-    ty: u32,
-    //node_id: [u8; 16],
-}
+// #[derive(bytemuck::NoUninit, bytemuck::AnyBitPattern, Clone, Copy)]
+// #[repr(C)]
+// pub struct NodeMessage {
+//     ty: u32,
+//     //node_id: [u8; 16],
+// }
 
-impl NodeMessage {
-    fn new(ty: NodeMessageType) -> Self {
-        Self {
-            ty: ty as u32,
-            //node_id: node_id.to_bytes_le(),
-        }
-    }
+// impl NodeMessage {
+//     fn new(ty: NodeMessageType) -> Self {
+//         Self {
+//             ty: ty as u32,
+//             //node_id: node_id.to_bytes_le(),
+//         }
+//     }
 
-    pub fn ty(&self) -> Result<NodeMessageType> {
-        self.ty.try_into()
-    }
+//     pub fn ty(&self) -> Result<NodeMessageType> {
+//         self.ty.try_into()
+//     }
 
-    // pub fn node_id(&self) -> Uuid {
-    //     Uuid::from_bytes(self.node_id)
-    // }
-}
+//     // pub fn node_id(&self) -> Uuid {
+//     //     Uuid::from_bytes(self.node_id)
+//     // }
+// }
 
 struct NodeState<T: NodeRenderer> {
     id: Uuid,
@@ -146,35 +146,35 @@ impl<T: NodeRenderer + 'static> Node<T> {
                 log::info!("StartRender");
 
                 if let Some(tcp_stream) = &mut self.tcp_stream {
-                    let message = NodeMessage::new(NodeMessageType::RenderStarted);
-                    tcp_stream.write_all(bytemuck::bytes_of(&message))?;
+                    // let message = NodeMessage::new(NodeMessageType::RenderStarted);
+                    // tcp_stream.write_all(bytemuck::bytes_of(&message))?;
 
-                    let mut pixels = self.renderer.render(
+                    let pixels = self.renderer.render(
                         host_message.width,
                         host_message.height,
                         host_message.scissor,
                     );
 
-                    let message = NodeMessage::new(NodeMessageType::RenderFinished);
-                    let mut message_bytes = bytemuck::bytes_of(&message).to_vec();
-                    message_bytes.append(&mut pixels);
+                    // let message = NodeMessage::new(NodeMessageType::RenderFinished);
+                    // let mut message_bytes = bytemuck::bytes_of(&message).to_vec();
+                    // message_bytes.append(&mut pixels);
 
-                    let node_message = *bytemuck::from_bytes::<NodeMessage>(
-                        &message_bytes[0..std::mem::size_of::<NodeMessage>()],
-                    );
-                    log::info!("{:?}", node_message.ty());
+                    // let node_message = *bytemuck::from_bytes::<NodeMessage>(
+                    //     &message_bytes[0..std::mem::size_of::<NodeMessage>()],
+                    // );
+                    // log::info!("{:?}", node_message.ty());
 
-                    tcp_stream.write_all(&message_bytes)?;
+                    tcp_stream.write_all(&pixels)?;
                 }
             }
             HostMessageType::Ping => {
                 log::info!("Ping");
 
                 // Notify host of this nodes existance
-                if let Some(tcp_stream) = &mut self.tcp_stream {
-                    let message = NodeMessage::new(NodeMessageType::Connect);
-                    tcp_stream.write_all(bytemuck::bytes_of(&message))?;
-                }
+                // if let Some(tcp_stream) = &mut self.tcp_stream {
+                //     let message = NodeMessage::new(NodeMessageType::Connect);
+                //     tcp_stream.write_all(bytemuck::bytes_of(&message))?;
+                // }
             }
         }
 

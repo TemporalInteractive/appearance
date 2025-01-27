@@ -1,5 +1,4 @@
 use std::{
-    collections::HashMap,
     io::{Read, Write},
     net::{TcpListener, TcpStream},
     sync::{Arc, Mutex},
@@ -7,9 +6,8 @@ use std::{
 };
 
 use anyhow::Result;
-use uuid::Uuid;
 
-use crate::node::{NodeMessage, NodeMessageType, NodeScissor};
+use crate::node::NodeScissor;
 
 #[derive(bytemuck::NoUninit, Clone, Copy)]
 #[repr(u32)]
@@ -106,46 +104,34 @@ impl Host {
         pixels: Arc<Mutex<Vec<u8>>>,
         node: Arc<Mutex<ConnectedNode>>,
     ) {
-        // TODO: maybe derive this size a bit more elegantly
-        let mut buf = vec![0u8; std::mem::size_of::<NodeMessage>() + (4 * width * height) as usize];
+        let mut buffered_pixels = vec![0u8; (4 * width * height) as usize];
 
         if let Ok(mut node) = node.lock() {
-            if let Ok(_len) = node.tcp_stream.read(buf.as_mut()) {
-                let node_message = *bytemuck::from_bytes::<NodeMessage>(
-                    &buf[0..std::mem::size_of::<NodeMessage>()],
-                );
+            if let Ok(_len) = node.tcp_stream.read(buffered_pixels.as_mut()) {
+                node.state = NodeState::Finished;
 
-                if let Ok(NodeMessageType::RenderFinished) = node_message.ty() {
-                    node.state = NodeState::Finished;
+                // Place rendered pixels in the correct place
+                if let Some(scissor) = &node.pending_scissors {
+                    let num_pixels = (scissor.scissor_x[1] - scissor.scissor_x[0])
+                        * (scissor.scissor_y[1] - scissor.scissor_y[0]);
+                    let node_pixels = &buffered_pixels[0..(num_pixels * 4) as usize];
 
-                    // Place rendered pixels in the correct place
-                    if let Some(scissor) = &node.pending_scissors {
-                        let num_pixels = (scissor.scissor_x[1] - scissor.scissor_x[0])
-                            * (scissor.scissor_y[1] - scissor.scissor_y[0]);
+                    if let Ok(mut pixels) = pixels.lock() {
+                        for x in scissor.scissor_x[0]..scissor.scissor_x[1] {
+                            for y in scissor.scissor_y[0]..scissor.scissor_y[1] {
+                                let pixel_id = (y * width + x) as usize;
+                                let node_pixel_id = ((y - scissor.scissor_y[0])
+                                    * (scissor.scissor_x[1] - scissor.scissor_x[0])
+                                    + (x - scissor.scissor_x[0]))
+                                    as usize;
 
-                        let node_pixels = &buf[std::mem::size_of::<NodeMessage>()
-                            ..((num_pixels as usize) * 4 + std::mem::size_of::<NodeMessage>())];
-
-                        if let Ok(mut pixels) = pixels.lock() {
-                            for x in scissor.scissor_x[0]..scissor.scissor_x[1] {
-                                for y in scissor.scissor_y[0]..scissor.scissor_y[1] {
-                                    let pixel_id = (y * width + x) as usize;
-                                    let node_pixel_id = ((y - scissor.scissor_y[0])
-                                        * (scissor.scissor_x[1] - scissor.scissor_x[0])
-                                        + (x - scissor.scissor_x[0]))
-                                        as usize;
-
-                                    for i in 0..4 {
-                                        let node_pixel_channel = node_pixels[node_pixel_id * 4 + i];
-                                        pixels[pixel_id * 4 + i] = node_pixel_channel;
-                                    }
+                                for i in 0..4 {
+                                    let node_pixel_channel = node_pixels[node_pixel_id * 4 + i];
+                                    pixels[pixel_id * 4 + i] = node_pixel_channel;
                                 }
                             }
                         }
                     }
-                    log::info!("good readback!");
-                } else {
-                    log::warn!("CORRUPT READBACK!");
                 }
             }
         }
