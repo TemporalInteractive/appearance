@@ -7,8 +7,6 @@ use std::{
 
 use anyhow::Result;
 
-use crate::node::NodeScissor;
-
 #[derive(bytemuck::NoUninit, Clone, Copy)]
 #[repr(u32)]
 pub enum HostMessageType {
@@ -32,7 +30,7 @@ pub struct HostMessage {
     ty: u32,
     pub width: u32,
     pub height: u32,
-    pub scissor: NodeScissor,
+    pub assigned_rows: [u32; 2],
 }
 
 impl HostMessage {
@@ -50,7 +48,7 @@ enum NodeState {
 struct ConnectedNode {
     tcp_stream: TcpStream,
     state: NodeState,
-    pending_scissors: Option<NodeScissor>,
+    pending_rows: Option<[u32; 2]>,
 }
 
 impl ConnectedNode {
@@ -58,7 +56,7 @@ impl ConnectedNode {
         Arc::new(Mutex::new(Self {
             tcp_stream,
             state: NodeState::Finished,
-            pending_scissors: None,
+            pending_rows: None,
         }))
     }
 }
@@ -103,10 +101,16 @@ impl Host {
                 node.state = NodeState::Finished;
 
                 if let Ok(mut pixels) = pixels.lock() {
-                    unsafe {
-                        let dst_ptr = pixels.as_mut_ptr();
-                        let src_ptr = buffered_pixels.as_mut_ptr();
-                        std::ptr::copy_nonoverlapping(src_ptr, dst_ptr, len);
+                    if let Some(pending_rows) = &node.pending_rows {
+                        let start_row = pending_rows[0];
+                        let end_row = pending_rows[1];
+
+                        unsafe {
+                            let dst_ptr = &mut pixels[(start_row * width * 4) as usize] as *mut u8;
+                            let src_ptr =
+                                &mut buffered_pixels[(start_row * width * 4) as usize] as *mut u8;
+                            std::ptr::copy_nonoverlapping(src_ptr, dst_ptr, len);
+                        }
                     }
                 }
 
@@ -163,17 +167,14 @@ impl Host {
             for node in nodes.iter_mut() {
                 if let Ok(mut node) = node.lock() {
                     // TODO: cut screen based on number of nodes
-                    let scissor = NodeScissor {
-                        scissor_x: [0, self.width],
-                        scissor_y: [0, self.height],
-                    };
-                    node.pending_scissors = Some(scissor);
+                    let assigned_rows = [0, self.height];
+                    node.pending_rows = Some(assigned_rows);
 
                     let message = HostMessage {
                         ty: HostMessageType::StartRender as u32,
                         width: self.width,
                         height: self.height,
-                        scissor,
+                        assigned_rows,
                     };
                     node.tcp_stream
                         .write_all(bytemuck::bytes_of(&message))

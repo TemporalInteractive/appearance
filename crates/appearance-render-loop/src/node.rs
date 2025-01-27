@@ -6,27 +6,10 @@ use std::thread;
 
 use crate::host::{HostMessage, HostMessageType};
 
-#[derive(bytemuck::NoUninit, bytemuck::AnyBitPattern, Clone, Copy, Default, Debug)]
-#[repr(C)]
-pub struct NodeScissor {
-    pub scissor_x: [u32; 2],
-    pub scissor_y: [u32; 2],
-}
-
-impl NodeScissor {
-    pub fn width(&self) -> u32 {
-        self.scissor_x[1] - self.scissor_x[0]
-    }
-
-    pub fn height(&self) -> u32 {
-        self.scissor_y[1] - self.scissor_y[0]
-    }
-}
-
 pub trait NodeRenderer: Send {
     // TODO: world manipulation
 
-    fn render(&mut self, width: u32, height: u32, scissor: NodeScissor) -> &[u8];
+    fn render(&mut self, width: u32, height: u32, assigned_rows: [u32; 2]) -> &[u8];
 }
 
 pub struct Node<T: NodeRenderer> {
@@ -52,7 +35,7 @@ impl<T: NodeRenderer + 'static> Node<T> {
                     let pixels = self.renderer.render(
                         host_message.width,
                         host_message.height,
-                        host_message.scissor,
+                        host_message.assigned_rows,
                     );
 
                     tcp_stream.write_all(pixels)?;
