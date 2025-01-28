@@ -9,7 +9,9 @@ version = "0.1.0"
 
 [dependencies]
 appearance-camera.workspace = true
+appearance-profiling.workspace = true
 appearance-transform.workspace = true
 
 bytemuck.workspace = true
 glam.workspace = true
+specs.workspace = true
