@@ -4,6 +4,7 @@ mod appearance;
 pub use appearance::Appearance;
 
 // Reexport all crates
+pub use appearance_asset_database;
 pub use appearance_camera;
 pub use appearance_input;
 pub use appearance_profiling;

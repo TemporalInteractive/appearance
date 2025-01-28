@@ -10,6 +10,7 @@ version = "0.1.0"
 [workspace.dependencies]
 appearance = { version = "0.1.0", path = "crates/appearance" }
 
+appearance-asset-database = { version = "0.1.0", path = "crates/appearance-asset-database" }
 appearance-build = { version = "0.1.0", path = "crates/appearance-build" }
 appearance-camera = { version = "0.1.0", path = "crates/appearance-camera" }
 appearance-input = { version = "0.1.0", path = "crates/appearance-input" }
@@ -46,6 +47,7 @@ wgpu = { version = "23.0.1", default-features = false, features = ["wgsl"] }
 members = [
     "apps/render-node",
     "apps/render-host",
+    "crates/appearance-asset-database",
     "crates/appearance-build",
     "crates/appearance-camera",
     "crates/appearance-input",
