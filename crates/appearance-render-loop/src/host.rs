@@ -6,6 +6,7 @@ use std::{
 };
 
 use anyhow::Result;
+use appearance_world::visible_world_action::VisibleWorldAction;
 
 fn vec_remove_multiple<T>(vec: &mut Vec<T>, indices: &mut [usize]) {
     indices.sort();
@@ -18,14 +19,14 @@ fn vec_remove_multiple<T>(vec: &mut Vec<T>, indices: &mut [usize]) {
 #[repr(u32)]
 pub enum HostMessageType {
     StartRender,
-    Ping,
+    VisibleWorldAction,
 }
 
 impl From<u32> for HostMessageType {
     fn from(value: u32) -> Self {
         match value {
             0 => HostMessageType::StartRender,
-            1 => HostMessageType::Ping,
+            1 => HostMessageType::VisibleWorldAction,
             _ => panic!("{} cannot be converted into a HostMessageType", value),
         }
     }
@@ -38,6 +39,7 @@ pub struct HostMessage {
     pub width: u32,
     pub height: u32,
     pub assigned_rows: [u32; 2],
+    pub visible_world_action_ty: u32,
 }
 
 impl HostMessage {
@@ -147,6 +149,44 @@ impl Host {
         Ok(())
     }
 
+    pub fn send_visible_world_actions(&mut self, visible_world_actions: &[VisibleWorldAction]) {
+        if let Ok(mut nodes) = self.nodes.lock() {
+            let mut disconnected_node_indices = vec![];
+
+            for (i, node) in nodes.iter_mut().enumerate() {
+                if let Ok(mut node) = node.lock() {
+                    for visible_world_action in visible_world_actions {
+                        // Send message type, this way the node knows how to interpret the data package
+                        let message = HostMessage {
+                            ty: HostMessageType::VisibleWorldAction as u32,
+                            visible_world_action_ty: visible_world_action.ty,
+                            ..Default::default()
+                        };
+
+                        if node
+                            .tcp_stream
+                            .write_all(bytemuck::bytes_of(&message))
+                            .is_err()
+                        {
+                            disconnected_node_indices.push(i);
+                            continue;
+                        }
+
+                        if node
+                            .tcp_stream
+                            .write_all(visible_world_action.data.as_slice())
+                            .is_err()
+                        {
+                            disconnected_node_indices.push(i);
+                        }
+                    }
+                }
+            }
+
+            vec_remove_multiple(&mut nodes, &mut disconnected_node_indices);
+        }
+    }
+
     pub fn render<F: Fn(&[u8])>(&mut self, result_callback: F) {
         // Notify all nodes to start rendering
         if let Ok(mut nodes) = self.nodes.lock() {
@@ -190,6 +230,7 @@ impl Host {
                         width: self.width,
                         height: self.height,
                         assigned_rows,
+                        ..Default::default()
                     };
                     if node
                         .tcp_stream

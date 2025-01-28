@@ -2,6 +2,7 @@ use anyhow::Result;
 use appearance::appearance_camera::{Camera, CameraController};
 use appearance::appearance_input::InputHandler;
 use appearance::appearance_render_loop::winit::keyboard::KeyCode;
+use appearance::appearance_world::World;
 use std::sync::Arc;
 
 use appearance::appearance_render_loop::host::Host;
@@ -22,7 +23,7 @@ pub struct HostRenderLoop {
 
     input_handler: InputHandler,
     camera_controller: CameraController,
-    camera: Camera,
+    world: World,
 }
 
 impl RenderLoop for HostRenderLoop {
@@ -68,7 +69,7 @@ impl RenderLoop for HostRenderLoop {
 
             input_handler: InputHandler::new(),
             camera_controller: CameraController::new(),
-            camera: Camera::default(),
+            world: World::new(),
         }
     }
 
@@ -116,6 +117,15 @@ impl RenderLoop for HostRenderLoop {
             return true;
         }
 
+        self.world.camera_mut(|camera| {
+            camera.transform =
+                self.camera_controller
+                    .update(camera, &self.input_handler, 1.0 / 60.0);
+        });
+
+        self.host
+            .send_visible_world_actions(self.world.get_visible_world_actions());
+
         self.host.render(|pixels| {
             queue.write_texture(
                 wgpu::ImageCopyTexture {
@@ -155,6 +165,7 @@ impl RenderLoop for HostRenderLoop {
         queue.submit(Some(command_encoder.finish()));
 
         self.input_handler.update();
+        self.world.update();
 
         false
     }

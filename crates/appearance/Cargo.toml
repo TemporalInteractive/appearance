@@ -15,6 +15,7 @@ appearance-render-loop.workspace = true
 appearance-time.workspace = true
 appearance-transform.workspace = true
 appearance-wgpu.workspace = true
+appearance-world.workspace = true
 
 anyhow.workspace = true
 env_logger.workspace = true
