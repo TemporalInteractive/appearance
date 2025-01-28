@@ -43,6 +43,8 @@ impl Mesh {
         for normal in &mut self.vertex_normals {
             *normal = Vec3::ZERO;
         }
+        self.vertex_normals
+            .resize(self.vertex_positions.len(), Vec3::ZERO);
 
         for i in 0..(self.indices.len() / 3) {
             let p0 = self.vertex_positions[self.indices[i * 3] as usize].xyz();
@@ -115,6 +117,9 @@ impl Mesh {
             tan2[i2] += tdir;
             tan2[i3] += tdir;
         }
+
+        self.vertex_tangents
+            .resize(self.vertex_positions.len(), Vec4::ZERO);
 
         for i in 0..self.vertex_positions.len() {
             let n = self.vertex_normals[i];

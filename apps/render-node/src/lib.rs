@@ -1,5 +1,7 @@
 use anyhow::Result;
+use appearance::appearance_asset_database::AssetDatabase;
 use appearance::appearance_camera::Camera;
+use appearance::appearance_model::Model;
 use appearance::appearance_render_loop::node::{Node, NodeRenderer};
 use appearance::appearance_world::visible_world_action::VisibleWorldActionType;
 use appearance::Appearance;
@@ -16,6 +18,7 @@ struct Renderer {
     pixels: Vec<u8>,
     frame_idx: u32,
 
+    model_assets: AssetDatabase<Model>,
     camera: Camera,
     blas: Bvh,
 }
@@ -28,12 +31,17 @@ const VERTICES: &[Vec4] = &[
 
 impl Renderer {
     fn new() -> Self {
+        let mut model_assets = AssetDatabase::<Model>::new();
+        let duck = model_assets.get("assets/duck.glb").unwrap();
+        let duck_mesh = duck.root_nodes[0].children[0].mesh.as_ref().unwrap();
+
         let mut blas = Bvh::new();
-        blas.build(VERTICES);
+        blas.build_with_indices(&duck_mesh.vertex_positions, &duck_mesh.indices);
 
         Self {
             pixels: Vec::new(),
             frame_idx: 0,
+            model_assets,
             camera: Camera::default(),
             blas,
         }
@@ -49,7 +57,7 @@ impl Renderer {
 
         self.blas.intersect(&mut ray);
         if ray.hit.t != 1e30 {
-            Vec3::new(0.0, 1.0, 1.0)
+            Vec3::new(1.0, 1.0, 0.0)
         } else {
             let a = 0.5 * (ray.D.y() + 1.0);
             (1.0 - a) * Vec3::new(1.0, 1.0, 1.0) + a * Vec3::new(0.5, 0.7, 1.0)
