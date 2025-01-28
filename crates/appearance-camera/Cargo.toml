@@ -3,21 +3,15 @@ authors.workspace = true
 edition.workspace = true
 homepage.workspace = true
 license.workspace = true
-name = "appearance"
+name = "appearance-camera"
 publish.workspace = true
 version = "0.1.0"
 
 [dependencies]
-appearance-camera.workspace = true
 appearance-input.workspace = true
 appearance-profiling.workspace = true
-appearance-render-loop.workspace = true
-appearance-time.workspace = true
 appearance-transform.workspace = true
-appearance-wgpu.workspace = true
-appearance-world.workspace = true
 
-anyhow.workspace = true
-env_logger.workspace = true
 log.workspace = true
-puffin.workspace = true
+glam.workspace = true
+winit.workspace = true

@@ -25,20 +25,20 @@
             "name": "Host Release",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/target/debug/render-host.exe",
+            "program": "${workspaceFolder}/target/release/render-host.exe",
             "args": [
             ],
-            "cwd": "${workspaceFolder}/target/debug",
+            "cwd": "${workspaceFolder}/target/release",
             "preLaunchTask": "rust: cargo build -r"
         },
         {
             "name": "Node Release",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/target/debug/render-node.exe",
+            "program": "${workspaceFolder}/target/release/render-node.exe",
             "args": [
             ],
-            "cwd": "${workspaceFolder}/target/debug",
+            "cwd": "${workspaceFolder}/target/release",
             "preLaunchTask": "rust: cargo build -r"
         },
     ],

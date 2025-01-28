@@ -10,6 +10,7 @@ version = "0.1.0"
 [dependencies]
 appearance-time.workspace = true
 appearance-wgpu.workspace = true
+appearance-world.workspace = true
 
 anyhow.workspace = true
 bytemuck.workspace = true

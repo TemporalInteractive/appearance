@@ -1,4 +1,8 @@
 use anyhow::Result;
+use appearance::appearance_camera::CameraController;
+use appearance::appearance_input::InputHandler;
+use appearance::appearance_render_loop::winit::keyboard::KeyCode;
+use appearance::appearance_world::World;
 use std::sync::Arc;
 
 use appearance::appearance_render_loop::host::Host;
@@ -16,6 +20,10 @@ pub struct HostRenderLoop {
     texture: wgpu::Texture,
     swapchain_format: wgpu::TextureFormat,
     timer: Timer,
+
+    input_handler: InputHandler,
+    camera_controller: CameraController,
+    world: World,
 }
 
 impl RenderLoop for HostRenderLoop {
@@ -58,6 +66,10 @@ impl RenderLoop for HostRenderLoop {
             texture,
             swapchain_format: config.view_formats[0],
             timer: Timer::new(),
+
+            input_handler: InputHandler::new(),
+            camera_controller: CameraController::new(),
+            world: World::new(),
         }
     }
 
@@ -83,36 +95,58 @@ impl RenderLoop for HostRenderLoop {
         });
     }
 
-    fn window_event(&mut self, _event: winit::event::WindowEvent) {}
+    fn window_event(&mut self, event: winit::event::WindowEvent) {
+        self.input_handler.handle_window_input(&event);
+    }
 
-    fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
-        let elapsed_time = self.timer.elapsed();
+    fn device_event(&mut self, event: winit::event::DeviceEvent) {
+        self.input_handler.handle_device_input(&event);
+    }
+
+    fn render(
+        &mut self,
+        view: &wgpu::TextureView,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+    ) -> bool {
+        let delta_time = self.timer.elapsed();
         self.timer.reset();
-        log::info!("FPS {}", 1.0 / elapsed_time);
+        log::info!("FPS {}", 1.0 / delta_time);
+
+        if self.input_handler.key(KeyCode::Escape) {
+            return true;
+        }
+
+        self.world.camera_mut(|camera| {
+            camera.transform =
+                self.camera_controller
+                    .update(camera, &self.input_handler, delta_time);
+        });
 
         self.host
-            .render(|pixels| {
-                queue.write_texture(
-                    wgpu::ImageCopyTexture {
-                        texture: &self.texture,
-                        mip_level: 0,
-                        origin: Origin3d::ZERO,
-                        aspect: wgpu::TextureAspect::All,
-                    },
-                    pixels,
-                    wgpu::ImageDataLayout {
-                        offset: 0,
-                        bytes_per_row: Some(4 * self.texture.width()),
-                        rows_per_image: None,
-                    },
-                    Extent3d {
-                        width: self.texture.width(),
-                        height: self.texture.height(),
-                        depth_or_array_layers: 1,
-                    },
-                );
-            })
-            .unwrap();
+            .send_visible_world_actions(self.world.get_visible_world_actions());
+
+        self.host.render(|pixels| {
+            queue.write_texture(
+                wgpu::ImageCopyTexture {
+                    texture: &self.texture,
+                    mip_level: 0,
+                    origin: Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                },
+                pixels,
+                wgpu::ImageDataLayout {
+                    offset: 0,
+                    bytes_per_row: Some(4 * self.texture.width()),
+                    rows_per_image: None,
+                },
+                Extent3d {
+                    width: self.texture.width(),
+                    height: self.texture.height(),
+                    depth_or_array_layers: 1,
+                },
+            );
+        });
 
         let mut command_encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
@@ -129,6 +163,11 @@ impl RenderLoop for HostRenderLoop {
         );
 
         queue.submit(Some(command_encoder.finish()));
+
+        self.input_handler.update();
+        self.world.update();
+
+        false
     }
 }
 

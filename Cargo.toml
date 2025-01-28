@@ -11,11 +11,14 @@ version = "0.1.0"
 appearance = { version = "0.1.0", path = "crates/appearance" }
 
 appearance-build = { version = "0.1.0", path = "crates/appearance-build" }
+appearance-camera = { version = "0.1.0", path = "crates/appearance-camera" }
 appearance-input = { version = "0.1.0", path = "crates/appearance-input" }
 appearance-profiling = { version = "0.1.0", path = "crates/appearance-profiling", features = ["superluminal"] }
 appearance-render-loop = { version = "0.1.0", path = "crates/appearance-render-loop" }
 appearance-time = { version = "0.1.0", path = "crates/appearance-time" }
+appearance-transform = { version = "0.1.0", path = "crates/appearance-transform" }
 appearance-wgpu = { version = "0.1.0", path = "crates/appearance-wgpu" }
+appearance-world = { version = "0.1.0", path = "crates/appearance-world" }
 
 anyhow = { version = "1.0.94", default-features = false, features = ["std"] }
 bytemuck = { version = "1.13", default-features = false, features = ["derive", "extern_crate_alloc", "min_const_generics"] }
@@ -25,7 +28,7 @@ bytemuck = { version = "1.13", default-features = false, features = ["derive", "
 # egui-winit = { version = "0.30.0", default-features = false, features = ["webbrowser"] }
 env_logger = { version = "0.11.5", default-features = false }
 futures = { version = "0.3.30", default-features = false, features = ["executor", "thread-pool"] }
-glam = { version = "0.29.2", default-features = false, features = ["std"] }
+glam = { version = "0.29.2", default-features = false, features = ["std", "bytemuck"] }
 # gltf = { version = "1.0.0", default-features = true, features = ["KHR_materials_emissive_strength", "KHR_materials_ior", "KHR_materials_transmission"] }
 # image = { version = "0.25.5", default-features = false, features = ["png", "jpeg", "bmp"] }
 log = { version = "0.4.20", default-features = false }
@@ -34,6 +37,7 @@ puffin = { version = "0.19.0", default-features = false, features = ["web"] }
 # puffin_egui = { git = "https://github.com/TemporalInteractive/puffin.git", default-features = true }
 # rayon = { version = "1.8.1", default-features = false }
 superluminal-perf = { version = "0.3.0", default-features = false }
+tinybvh = { git = "https://github.com/TemporalInteractive/tinybvh.git", rev = "e2c65ef", default-features = false }
 uuid = { version = "1.12.1", default-features = false, features = ["std", "v4"]}
 winit = { version = "0.30.5", default-features = false, features = ["rwh_06"] }
 wgpu = { version = "23.0.1", default-features = false, features = ["wgsl"] }
@@ -43,10 +47,13 @@ members = [
     "apps/render-node",
     "apps/render-host",
     "crates/appearance-build",
+    "crates/appearance-camera",
     "crates/appearance-input",
     "crates/appearance-profiling",
     "crates/appearance-render-loop",
     "crates/appearance-time",
+    "crates/appearance-transform",
     "crates/appearance-wgpu",
+    "crates/appearance-world",
 ]
 resolver = "2"

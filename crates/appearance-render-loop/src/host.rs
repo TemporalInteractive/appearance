@@ -6,6 +6,7 @@ use std::{
 };
 
 use anyhow::Result;
+use appearance_world::visible_world_action::VisibleWorldAction;
 
 fn vec_remove_multiple<T>(vec: &mut Vec<T>, indices: &mut [usize]) {
     indices.sort();
@@ -18,14 +19,14 @@ fn vec_remove_multiple<T>(vec: &mut Vec<T>, indices: &mut [usize]) {
 #[repr(u32)]
 pub enum HostMessageType {
     StartRender,
-    Ping,
+    VisibleWorldAction,
 }
 
 impl From<u32> for HostMessageType {
     fn from(value: u32) -> Self {
         match value {
             0 => HostMessageType::StartRender,
-            1 => HostMessageType::Ping,
+            1 => HostMessageType::VisibleWorldAction,
             _ => panic!("{} cannot be converted into a HostMessageType", value),
         }
     }
@@ -38,6 +39,7 @@ pub struct HostMessage {
     pub width: u32,
     pub height: u32,
     pub assigned_rows: [u32; 2],
+    pub visible_world_action_ty: u32,
 }
 
 impl HostMessage {
@@ -105,17 +107,25 @@ impl Host {
 
         if let Ok(mut node) = node.lock() {
             if let Ok(len) = node.tcp_stream.read(buffered_pixels.as_mut()) {
-                node.state = NodeState::Finished;
+                // Node can send data with size of 0 when in the process of disconnecting
+                if len != 0 {
+                    node.state = NodeState::Finished;
 
-                if let Ok(mut pixels) = pixels.lock() {
-                    if let Some(pending_rows) = &node.pending_rows {
-                        let start_row = pending_rows[0];
+                    if let Ok(mut pixels) = pixels.lock() {
+                        if let Some(pending_rows) = &node.pending_rows {
+                            let start_row = pending_rows[0];
 
-                        unsafe {
-                            let dst_ptr = &mut pixels[(start_row * width * 4) as usize] as *mut u8;
-                            let src_ptr =
-                                &mut buffered_pixels[(start_row * width * 4) as usize] as *mut u8;
-                            std::ptr::copy_nonoverlapping(src_ptr, dst_ptr, len);
+                            unsafe {
+                                let dst_ptr =
+                                    &mut pixels[(start_row * width * 4) as usize] as *mut u8;
+                                let src_ptr = &mut buffered_pixels[0] as *mut u8;
+
+                                let num_bytes =
+                                    ((pending_rows[1] - pending_rows[0]) * width * 4) as usize;
+                                assert_eq!(len, num_bytes);
+
+                                std::ptr::copy_nonoverlapping(src_ptr, dst_ptr, num_bytes);
+                            }
                         }
                     }
                 }
@@ -143,15 +153,80 @@ impl Host {
         Ok(())
     }
 
-    pub fn render<F: Fn(&[u8])>(&mut self, result_callback: F) -> Result<()> {
-        // Notify all nodes to start rendering
+    pub fn send_visible_world_actions(&mut self, visible_world_actions: &[VisibleWorldAction]) {
         if let Ok(mut nodes) = self.nodes.lock() {
             let mut disconnected_node_indices = vec![];
 
             for (i, node) in nodes.iter_mut().enumerate() {
                 if let Ok(mut node) = node.lock() {
-                    // TODO: cut screen based on number of nodes
-                    let assigned_rows = [0, self.height];
+                    for visible_world_action in visible_world_actions {
+                        // Send message type, this way the node knows how to interpret the data package
+                        let message = HostMessage {
+                            ty: HostMessageType::VisibleWorldAction as u32,
+                            visible_world_action_ty: visible_world_action.ty,
+                            ..Default::default()
+                        };
+
+                        if node
+                            .tcp_stream
+                            .write_all(bytemuck::bytes_of(&message))
+                            .is_err()
+                        {
+                            disconnected_node_indices.push(i);
+                            continue;
+                        }
+
+                        if node
+                            .tcp_stream
+                            .write_all(visible_world_action.data.as_slice())
+                            .is_err()
+                        {
+                            disconnected_node_indices.push(i);
+                        }
+                    }
+                }
+            }
+
+            vec_remove_multiple(&mut nodes, &mut disconnected_node_indices);
+        }
+    }
+
+    pub fn render<F: Fn(&[u8])>(&mut self, result_callback: F) {
+        // Notify all nodes to start rendering
+        if let Ok(mut nodes) = self.nodes.lock() {
+            // Return pink when no nodes connected, this should be a visual warning to the host
+            if nodes.is_empty() {
+                if let Ok(mut pixels) = self.pixels.lock() {
+                    for x in 0..self.width {
+                        for y in 0..self.height {
+                            pixels[(y * self.width + x) as usize * 4] = 255;
+                            pixels[(y * self.width + x) as usize * 4 + 1] = 0;
+                            pixels[(y * self.width + x) as usize * 4 + 2] = 255;
+                            pixels[(y * self.width + x) as usize * 4 + 3] = 255;
+                        }
+                    }
+
+                    result_callback(pixels.as_ref());
+                }
+
+                return;
+            }
+
+            let mut disconnected_node_indices = vec![];
+
+            let num_nodes = nodes.len() as u32;
+            let rows_per_node = self.height / num_nodes;
+
+            for (i, node) in nodes.iter_mut().enumerate() {
+                if let Ok(mut node) = node.lock() {
+                    let rows_start = rows_per_node * i as u32;
+                    let rows_end = if i as u32 == num_nodes - 1 {
+                        self.height
+                    } else {
+                        rows_per_node * (i + 1) as u32
+                    };
+
+                    let assigned_rows = [rows_start, rows_end];
                     node.pending_rows = Some(assigned_rows);
 
                     let message = HostMessage {
@@ -159,6 +234,7 @@ impl Host {
                         width: self.width,
                         height: self.height,
                         assigned_rows,
+                        ..Default::default()
                     };
                     if node
                         .tcp_stream
@@ -198,7 +274,5 @@ impl Host {
         if let Ok(pixels) = self.pixels.lock() {
             result_callback(pixels.as_ref());
         }
-
-        Ok(())
     }
 }
