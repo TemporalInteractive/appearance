@@ -113,9 +113,13 @@ impl Host {
 
                         unsafe {
                             let dst_ptr = &mut pixels[(start_row * width * 4) as usize] as *mut u8;
-                            let src_ptr =
-                                &mut buffered_pixels[(start_row * width * 4) as usize] as *mut u8;
-                            std::ptr::copy_nonoverlapping(src_ptr, dst_ptr, len);
+                            let src_ptr = &mut buffered_pixels[0] as *mut u8;
+
+                            let num_bytes =
+                                ((pending_rows[1] - pending_rows[0]) * width * 4) as usize;
+                            assert_eq!(len, num_bytes);
+
+                            std::ptr::copy_nonoverlapping(src_ptr, dst_ptr, num_bytes);
                         }
                     }
                 }
@@ -143,15 +147,42 @@ impl Host {
         Ok(())
     }
 
-    pub fn render<F: Fn(&[u8])>(&mut self, result_callback: F) -> Result<()> {
+    pub fn render<F: Fn(&[u8])>(&mut self, result_callback: F) {
         // Notify all nodes to start rendering
         if let Ok(mut nodes) = self.nodes.lock() {
+            // Return pink when no nodes connected, this should be a visual warning to the host
+            if nodes.is_empty() {
+                if let Ok(mut pixels) = self.pixels.lock() {
+                    for x in 0..self.width {
+                        for y in 0..self.height {
+                            pixels[(y * self.width + x) as usize * 4] = 255;
+                            pixels[(y * self.width + x) as usize * 4 + 1] = 0;
+                            pixels[(y * self.width + x) as usize * 4 + 2] = 255;
+                            pixels[(y * self.width + x) as usize * 4 + 3] = 255;
+                        }
+                    }
+
+                    result_callback(pixels.as_ref());
+                }
+
+                return;
+            }
+
             let mut disconnected_node_indices = vec![];
+
+            let num_nodes = nodes.len() as u32;
+            let rows_per_node = self.height / num_nodes;
 
             for (i, node) in nodes.iter_mut().enumerate() {
                 if let Ok(mut node) = node.lock() {
-                    // TODO: cut screen based on number of nodes
-                    let assigned_rows = [0, self.height];
+                    let rows_start = rows_per_node * i as u32;
+                    let rows_end = if i as u32 == num_nodes - 1 {
+                        self.height
+                    } else {
+                        rows_per_node * (i + 1) as u32
+                    };
+
+                    let assigned_rows = [rows_start, rows_end];
                     node.pending_rows = Some(assigned_rows);
 
                     let message = HostMessage {
@@ -198,7 +229,5 @@ impl Host {
         if let Ok(pixels) = self.pixels.lock() {
             result_callback(pixels.as_ref());
         }
-
-        Ok(())
     }
 }

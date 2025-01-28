@@ -116,29 +116,27 @@ impl RenderLoop for HostRenderLoop {
             return true;
         }
 
-        self.host
-            .render(|pixels| {
-                queue.write_texture(
-                    wgpu::ImageCopyTexture {
-                        texture: &self.texture,
-                        mip_level: 0,
-                        origin: Origin3d::ZERO,
-                        aspect: wgpu::TextureAspect::All,
-                    },
-                    pixels,
-                    wgpu::ImageDataLayout {
-                        offset: 0,
-                        bytes_per_row: Some(4 * self.texture.width()),
-                        rows_per_image: None,
-                    },
-                    Extent3d {
-                        width: self.texture.width(),
-                        height: self.texture.height(),
-                        depth_or_array_layers: 1,
-                    },
-                );
-            })
-            .unwrap();
+        self.host.render(|pixels| {
+            queue.write_texture(
+                wgpu::ImageCopyTexture {
+                    texture: &self.texture,
+                    mip_level: 0,
+                    origin: Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                },
+                pixels,
+                wgpu::ImageDataLayout {
+                    offset: 0,
+                    bytes_per_row: Some(4 * self.texture.width()),
+                    rows_per_image: None,
+                },
+                Extent3d {
+                    width: self.texture.width(),
+                    height: self.texture.height(),
+                    depth_or_array_layers: 1,
+                },
+            );
+        });
 
         let mut command_encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
