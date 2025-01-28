@@ -1,0 +1,16 @@
+[package]
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+name = "appearance-model"
+publish.workspace = true
+version = "0.1.0"
+
+[dependencies]
+appearance-asset-database.workspace = true
+appearance-profiling.workspace = true
+
+anyhow.workspace = true
+glam.workspace = true
+log.workspace = true

@@ -11,6 +11,7 @@ version = "0.1.0"
 appearance-asset-database.workspace = true
 appearance-camera.workspace = true
 appearance-input.workspace = true
+appearance-model.workspace = true
 appearance-profiling.workspace = true
 appearance-render-loop.workspace = true
 appearance-time.workspace = true
