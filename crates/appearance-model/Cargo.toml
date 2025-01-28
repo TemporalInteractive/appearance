@@ -10,7 +10,9 @@ version = "0.1.0"
 [dependencies]
 appearance-asset-database.workspace = true
 appearance-profiling.workspace = true
+appearance-transform.workspace = true
 
 anyhow.workspace = true
 glam.workspace = true
+gltf.workspace = true
 log.workspace = true
