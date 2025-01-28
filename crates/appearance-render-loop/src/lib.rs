@@ -57,7 +57,12 @@ pub trait RenderLoop: 'static + Sized {
     fn window_event(&mut self, _event: winit::event::WindowEvent) {}
     fn device_event(&mut self, _event: winit::event::DeviceEvent) {}
 
-    fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue);
+    fn render(
+        &mut self,
+        view: &wgpu::TextureView,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+    ) -> bool;
 }
 
 struct RenderLoopState<R: RenderLoop> {
@@ -184,9 +189,12 @@ impl<R: RenderLoop> ApplicationHandler for RenderLoopHandler<R> {
                         format: Some(state.surface.config().view_formats[0]),
                         ..wgpu::TextureViewDescriptor::default()
                     });
-                    state
+                    if state
                         .render_loop
-                        .render(&view, &state.context.device, &state.context.queue);
+                        .render(&view, &state.context.device, &state.context.queue)
+                    {
+                        event_loop.exit();
+                    }
 
                     frame.present();
 

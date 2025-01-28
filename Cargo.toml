@@ -11,10 +11,12 @@ version = "0.1.0"
 appearance = { version = "0.1.0", path = "crates/appearance" }
 
 appearance-build = { version = "0.1.0", path = "crates/appearance-build" }
+appearance-camera = { version = "0.1.0", path = "crates/appearance-camera" }
 appearance-input = { version = "0.1.0", path = "crates/appearance-input" }
 appearance-profiling = { version = "0.1.0", path = "crates/appearance-profiling", features = ["superluminal"] }
 appearance-render-loop = { version = "0.1.0", path = "crates/appearance-render-loop" }
 appearance-time = { version = "0.1.0", path = "crates/appearance-time" }
+appearance-transform = { version = "0.1.0", path = "crates/appearance-transform" }
 appearance-wgpu = { version = "0.1.0", path = "crates/appearance-wgpu" }
 
 anyhow = { version = "1.0.94", default-features = false, features = ["std"] }
@@ -34,6 +36,7 @@ puffin = { version = "0.19.0", default-features = false, features = ["web"] }
 # puffin_egui = { git = "https://github.com/TemporalInteractive/puffin.git", default-features = true }
 # rayon = { version = "1.8.1", default-features = false }
 superluminal-perf = { version = "0.3.0", default-features = false }
+tinybvh = { git = "https://github.com/TemporalInteractive/tinybvh.git", default-features = false }
 uuid = { version = "1.12.1", default-features = false, features = ["std", "v4"]}
 winit = { version = "0.30.5", default-features = false, features = ["rwh_06"] }
 wgpu = { version = "23.0.1", default-features = false, features = ["wgsl"] }
@@ -43,10 +46,12 @@ members = [
     "apps/render-node",
     "apps/render-host",
     "crates/appearance-build",
+    "crates/appearance-camera",
     "crates/appearance-input",
     "crates/appearance-profiling",
     "crates/appearance-render-loop",
     "crates/appearance-time",
+    "crates/appearance-transform",
     "crates/appearance-wgpu",
 ]
 resolver = "2"

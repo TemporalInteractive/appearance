@@ -1,4 +1,7 @@
 use anyhow::Result;
+use appearance::appearance_camera::{Camera, CameraController};
+use appearance::appearance_input::InputHandler;
+use appearance::appearance_render_loop::winit::keyboard::KeyCode;
 use std::sync::Arc;
 
 use appearance::appearance_render_loop::host::Host;
@@ -16,6 +19,10 @@ pub struct HostRenderLoop {
     texture: wgpu::Texture,
     swapchain_format: wgpu::TextureFormat,
     timer: Timer,
+
+    input_handler: InputHandler,
+    camera_controller: CameraController,
+    camera: Camera,
 }
 
 impl RenderLoop for HostRenderLoop {
@@ -58,6 +65,10 @@ impl RenderLoop for HostRenderLoop {
             texture,
             swapchain_format: config.view_formats[0],
             timer: Timer::new(),
+
+            input_handler: InputHandler::new(),
+            camera_controller: CameraController::new(),
+            camera: Camera::default(),
         }
     }
 
@@ -83,12 +94,27 @@ impl RenderLoop for HostRenderLoop {
         });
     }
 
-    fn window_event(&mut self, _event: winit::event::WindowEvent) {}
+    fn window_event(&mut self, event: winit::event::WindowEvent) {
+        self.input_handler.handle_window_input(&event);
+    }
 
-    fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
+    fn device_event(&mut self, event: winit::event::DeviceEvent) {
+        self.input_handler.handle_device_input(&event);
+    }
+
+    fn render(
+        &mut self,
+        view: &wgpu::TextureView,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+    ) -> bool {
         let elapsed_time = self.timer.elapsed();
         self.timer.reset();
         log::info!("FPS {}", 1.0 / elapsed_time);
+
+        if self.input_handler.key(KeyCode::Escape) {
+            return true;
+        }
 
         self.host
             .render(|pixels| {
@@ -129,6 +155,10 @@ impl RenderLoop for HostRenderLoop {
         );
 
         queue.submit(Some(command_encoder.finish()));
+
+        self.input_handler.update();
+
+        false
     }
 }
 
