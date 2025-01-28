@@ -1,7 +1,6 @@
 use anyhow::Result;
 use appearance::appearance_camera::Camera;
 use appearance::appearance_render_loop::node::{Node, NodeRenderer};
-use appearance::appearance_transform::Transform;
 use appearance::appearance_world::visible_world_action::VisibleWorldActionType;
 use appearance::Appearance;
 use glam::{Mat4, Vec2, Vec3, Vec4, Vec4Swizzles};

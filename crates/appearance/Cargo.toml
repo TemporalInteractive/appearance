@@ -8,6 +8,7 @@ publish.workspace = true
 version = "0.1.0"
 
 [dependencies]
+appearance-asset-database.workspace = true
 appearance-camera.workspace = true
 appearance-input.workspace = true
 appearance-profiling.workspace = true
