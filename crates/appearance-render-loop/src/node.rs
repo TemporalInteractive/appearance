@@ -7,7 +7,7 @@ use std::thread;
 
 use crate::host::{HostMessage, HostMessageType};
 
-pub trait NodeRenderer: Send {
+pub trait NodeRenderer {
     // TODO: world manipulation
     fn visible_world_action(&mut self, action: &VisibleWorldActionType);
 

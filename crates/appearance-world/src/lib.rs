@@ -1,4 +1,6 @@
 use appearance_camera::Camera;
+use appearance_transform::Transform;
+use glam::Vec3;
 use visible_world_action::{CameraUpdateData, VisibleWorldAction, VisibleWorldActionType};
 
 pub mod visible_world_action;
@@ -10,10 +12,22 @@ pub struct World {
     visible_world_actions: Vec<VisibleWorldAction>,
 }
 
+impl Default for World {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl World {
     pub fn new() -> Self {
         Self {
-            camera: Camera::default(),
+            camera: Camera::new(
+                Transform::from_translation(Vec3::new(0.0, 0.0, -5.0)),
+                60.0,
+                0.1,
+                100.0,
+                1.0,
+            ),
             visible_world_actions: Vec::new(),
         }
     }

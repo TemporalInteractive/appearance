@@ -107,21 +107,25 @@ impl Host {
 
         if let Ok(mut node) = node.lock() {
             if let Ok(len) = node.tcp_stream.read(buffered_pixels.as_mut()) {
-                node.state = NodeState::Finished;
+                // Node can send data with size of 0 when in the process of disconnecting
+                if len != 0 {
+                    node.state = NodeState::Finished;
 
-                if let Ok(mut pixels) = pixels.lock() {
-                    if let Some(pending_rows) = &node.pending_rows {
-                        let start_row = pending_rows[0];
+                    if let Ok(mut pixels) = pixels.lock() {
+                        if let Some(pending_rows) = &node.pending_rows {
+                            let start_row = pending_rows[0];
 
-                        unsafe {
-                            let dst_ptr = &mut pixels[(start_row * width * 4) as usize] as *mut u8;
-                            let src_ptr = &mut buffered_pixels[0] as *mut u8;
+                            unsafe {
+                                let dst_ptr =
+                                    &mut pixels[(start_row * width * 4) as usize] as *mut u8;
+                                let src_ptr = &mut buffered_pixels[0] as *mut u8;
 
-                            let num_bytes =
-                                ((pending_rows[1] - pending_rows[0]) * width * 4) as usize;
-                            assert_eq!(len, num_bytes);
+                                let num_bytes =
+                                    ((pending_rows[1] - pending_rows[0]) * width * 4) as usize;
+                                assert_eq!(len, num_bytes);
 
-                            std::ptr::copy_nonoverlapping(src_ptr, dst_ptr, num_bytes);
+                                std::ptr::copy_nonoverlapping(src_ptr, dst_ptr, num_bytes);
+                            }
                         }
                     }
                 }

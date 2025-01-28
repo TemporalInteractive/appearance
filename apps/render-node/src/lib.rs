@@ -1,9 +1,11 @@
 use anyhow::Result;
 use appearance::appearance_camera::Camera;
 use appearance::appearance_render_loop::node::{Node, NodeRenderer};
+use appearance::appearance_transform::Transform;
 use appearance::appearance_world::visible_world_action::VisibleWorldActionType;
 use appearance::Appearance;
 use glam::{Mat4, Vec2, Vec3, Vec4, Vec4Swizzles};
+use tinybvh::Bvh;
 use tinybvh::{vec_helpers::Vec3Helpers, Ray};
 
 struct CameraMatrices {
@@ -16,27 +18,43 @@ struct Renderer {
     frame_idx: u32,
 
     camera: Camera,
+    blas: Bvh,
 }
+
+const VERTICES: &[Vec4] = &[
+    Vec4::new(-1.0, 0.0, 0.0, 0.0),
+    Vec4::new(0.0, 1.0, 0.0, 0.0),
+    Vec4::new(1.0, 0.0, 0.0, 0.0),
+];
 
 impl Renderer {
     fn new() -> Self {
+        let mut blas = Bvh::new();
+        blas.build(VERTICES);
+
         Self {
             pixels: Vec::new(),
             frame_idx: 0,
             camera: Camera::default(),
+            blas,
         }
     }
 
     fn render_pixel(&mut self, uv: &Vec2, camera_matrices: &CameraMatrices) -> Vec3 {
-        let corrected_uv = Vec2::new(uv.x, -uv.y); // ?
+        let corrected_uv = Vec2::new(uv.x, -uv.y);
         let origin = camera_matrices.inv_view * Vec4::new(0.0, 0.0, 0.0, 1.0);
         let target = camera_matrices.inv_proj * Vec4::from((corrected_uv, 1.0, 1.0));
         let direction = camera_matrices.inv_view * Vec4::from((target.xyz().normalize(), 0.0));
 
-        let ray = Ray::new(origin.xyz(), direction.xyz());
+        let mut ray = Ray::new(origin.xyz(), direction.xyz());
 
-        let a = 0.5 * (ray.D.y() + 1.0);
-        (1.0 - a) * Vec3::new(1.0, 1.0, 1.0) + a * Vec3::new(0.5, 0.7, 1.0)
+        self.blas.intersect(&mut ray);
+        if ray.hit.t != 1e30 {
+            Vec3::new(0.0, 1.0, 1.0)
+        } else {
+            let a = 0.5 * (ray.D.y() + 1.0);
+            (1.0 - a) * Vec3::new(1.0, 1.0, 1.0) + a * Vec3::new(0.5, 0.7, 1.0)
+        }
     }
 }
 
@@ -59,6 +77,8 @@ impl NodeRenderer for Renderer {
         let end_row = assigned_rows[1];
         let num_rows = end_row - start_row;
         self.pixels.resize((width * num_rows * 4) as usize, 0);
+
+        self.camera.set_aspect_ratio(width as f32 / height as f32);
 
         let camera_matrices = CameraMatrices {
             inv_view: self.camera.transform.get_matrix(),

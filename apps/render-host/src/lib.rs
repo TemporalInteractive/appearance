@@ -1,5 +1,5 @@
 use anyhow::Result;
-use appearance::appearance_camera::{Camera, CameraController};
+use appearance::appearance_camera::CameraController;
 use appearance::appearance_input::InputHandler;
 use appearance::appearance_render_loop::winit::keyboard::KeyCode;
 use appearance::appearance_world::World;
@@ -109,9 +109,9 @@ impl RenderLoop for HostRenderLoop {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) -> bool {
-        let elapsed_time = self.timer.elapsed();
+        let delta_time = self.timer.elapsed();
         self.timer.reset();
-        log::info!("FPS {}", 1.0 / elapsed_time);
+        log::info!("FPS {}", 1.0 / delta_time);
 
         if self.input_handler.key(KeyCode::Escape) {
             return true;
@@ -120,7 +120,7 @@ impl RenderLoop for HostRenderLoop {
         self.world.camera_mut(|camera| {
             camera.transform =
                 self.camera_controller
-                    .update(camera, &self.input_handler, 1.0 / 60.0);
+                    .update(camera, &self.input_handler, delta_time);
         });
 
         self.host

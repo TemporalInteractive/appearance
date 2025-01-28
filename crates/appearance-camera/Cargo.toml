@@ -12,5 +12,6 @@ appearance-input.workspace = true
 appearance-profiling.workspace = true
 appearance-transform.workspace = true
 
+log.workspace = true
 glam.workspace = true
 winit.workspace = true
