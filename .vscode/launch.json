@@ -1,0 +1,55 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Host",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/target/debug/render-host.exe",
+            "args": [
+            ],
+            "cwd": "${workspaceFolder}/target/debug",
+            "preLaunchTask": "rust: cargo build"
+        },
+        {
+            "name": "Node",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/target/debug/render-node.exe",
+            "args": [
+            ],
+            "cwd": "${workspaceFolder}/target/debug",
+            "preLaunchTask": "rust: cargo build"
+        },
+        {
+            "name": "Host Release",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/target/debug/render-host.exe",
+            "args": [
+            ],
+            "cwd": "${workspaceFolder}/target/debug",
+            "preLaunchTask": "rust: cargo build -r"
+        },
+        {
+            "name": "Node Release",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/target/debug/render-node.exe",
+            "args": [
+            ],
+            "cwd": "${workspaceFolder}/target/debug",
+            "preLaunchTask": "rust: cargo build -r"
+        },
+    ],
+    "compounds": [
+        {
+            "name": "Host/Node",
+            "configurations": ["Host", "Node"]
+        },
+        {
+            "name": "Host/Node Release",
+            "configurations": ["Host Release", "Node Release"]
+        }
+    ],
+}
