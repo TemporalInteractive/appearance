@@ -86,7 +86,7 @@ impl Renderer {
         let mut blas_instances = vec![];
 
         let mut blas_idx_offset = 0;
-        for (_asset_path, (model, entity_uuids)) in &mut self.models {
+        for (model, entity_uuids) in self.models.values_mut() {
             for root_node in &model.root_nodes {
                 let mut entity_uuids_indices_to_remove = vec![];
 
