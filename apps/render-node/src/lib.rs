@@ -9,6 +9,7 @@ use appearance::appearance_model::Model;
 use appearance::appearance_render_loop::node::{Node, NodeRenderer};
 use appearance::appearance_world::visible_world_action::VisibleWorldActionType;
 use appearance::Appearance;
+use clap::{arg, command, Parser};
 use glam::{Mat4, Vec2, Vec3, Vec4, Vec4Swizzles};
 use tinybvh::{vec_helpers::Vec3Helpers, Ray};
 use tinybvh::{BlasInstance, Bvh, BvhBase, Intersection};
@@ -265,48 +266,62 @@ impl NodeRenderer for Renderer {
         let start_row = assigned_rows[0];
         let end_row = assigned_rows[1];
         let num_rows = end_row - start_row;
-        self.pixels.resize((width * num_rows * 4) as usize, 0);
+        self.pixels.resize((width * num_rows * 4) as usize, 128);
 
-        self.camera.set_aspect_ratio(width as f32 / height as f32);
+        // self.camera.set_aspect_ratio(width as f32 / height as f32);
 
-        let camera_matrices = CameraMatrices {
-            inv_view: self.camera.transform.get_matrix(),
-            inv_proj: self.camera.get_matrix().inverse(),
-        };
+        // let camera_matrices = CameraMatrices {
+        //     inv_view: self.camera.transform.get_matrix(),
+        //     inv_proj: self.camera.get_matrix().inverse(),
+        // };
 
-        self.rebuild_tlas();
+        // self.rebuild_tlas();
 
-        for local_y in 0..num_rows {
-            for local_x in 0..width {
-                let x = local_x;
-                let y = local_y + start_row;
-                let uv = Vec2::new(
-                    (x as f32 + 0.5) / width as f32,
-                    (y as f32 + 0.5) / height as f32,
-                ) * 2.0
-                    - 1.0;
+        // for local_y in 0..num_rows {
+        //     for local_x in 0..width {
+        //         let x = local_x;
+        //         let y = local_y + start_row;
+        //         let uv = Vec2::new(
+        //             (x as f32 + 0.5) / width as f32,
+        //             (y as f32 + 0.5) / height as f32,
+        //         ) * 2.0
+        //             - 1.0;
 
-                let result = self.render_pixel(&uv, &camera_matrices);
+        //         let result = self.render_pixel(&uv, &camera_matrices);
 
-                self.pixels[(local_y * width + local_x) as usize * 4] = (result.x * 255.0) as u8;
-                self.pixels[(local_y * width + local_x) as usize * 4 + 1] =
-                    (result.y * 255.0) as u8;
-                self.pixels[(local_y * width + local_x) as usize * 4 + 2] =
-                    (result.z * 255.0) as u8;
-                self.pixels[(local_y * width + local_x) as usize * 4 + 3] = 255;
-            }
-        }
+        //         self.pixels[(local_y * width + local_x) as usize * 4] = (result.x * 255.0) as u8;
+        //         self.pixels[(local_y * width + local_x) as usize * 4 + 1] =
+        //             (result.y * 255.0) as u8;
+        //         self.pixels[(local_y * width + local_x) as usize * 4 + 2] =
+        //             (result.z * 255.0) as u8;
+        //         self.pixels[(local_y * width + local_x) as usize * 4 + 3] = 255;
+        //     }
+        // }
 
-        self.frame_idx += 1;
+        // self.frame_idx += 1;
 
         &self.pixels
     }
 }
 
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    /// Ip
+    #[arg(short, long, default_value_t = String::from("127.0.0.1"))]
+    ip: String,
+
+    /// Port
+    #[arg(short, long, default_value_t = String::from("34234"))]
+    port: String,
+}
+
 pub fn internal_main() -> Result<()> {
     let _appearance = Appearance::new("Render Node");
 
-    let node = Node::new(Renderer::new(), "127.0.0.1:34234")?;
+    let args = Args::parse();
+    let host_addr = format!("{}:{}", args.ip, args.port);
+    let node = Node::new(Renderer::new(), &host_addr)?; // Host ip / Jason
     node.run();
 
     Ok(())

@@ -5,6 +5,7 @@ use appearance::appearance_render_loop::winit::keyboard::KeyCode;
 use appearance::appearance_transform::{Transform, RIGHT};
 use appearance::appearance_world::components::{ModelComponent, TransformComponent};
 use appearance::appearance_world::{specs, World};
+use clap::Parser;
 use glam::{Quat, Vec3};
 use std::sync::Arc;
 
@@ -17,6 +18,18 @@ use appearance::appearance_time::Timer;
 use appearance::appearance_wgpu::helper_passes::blit_pass;
 use appearance::appearance_wgpu::wgpu::{self, Extent3d, Origin3d};
 use appearance::Appearance;
+
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    /// Ip
+    #[arg(short, long, default_value_t = String::from("127.0.0.1"))]
+    ip: String,
+
+    /// Port
+    #[arg(short, long, default_value_t = String::from("34234"))]
+    port: String,
+}
 
 pub struct HostRenderLoop {
     host: Host,
@@ -47,7 +60,9 @@ impl RenderLoop for HostRenderLoop {
         _queue: &wgpu::Queue,
         _window: Arc<Window>,
     ) -> Self {
-        let host = Host::new("127.0.0.1:34234".to_owned(), config.width, config.height).unwrap();
+        let args = Args::parse();
+        let host_addr = format!("{}:{}", args.ip, args.port);
+        let host = Host::new(host_addr, config.width, config.height).unwrap();
 
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("texture"),

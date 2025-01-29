@@ -24,6 +24,7 @@ appearance-world = { version = "0.1.0", path = "crates/appearance-world" }
 
 anyhow = { version = "1.0.94", default-features = false, features = ["std"] }
 bytemuck = { version = "1.13", default-features = false, features = ["derive", "extern_crate_alloc", "min_const_generics"] }
+clap = { version = "4.5.27", default-features = true, features = ["derive"] }
 # egui = { version = "0.30.0", default-features = true, features = ["bytemuck"] }
 # egui_extras = { version = "0.30.0", default-features = true }
 # egui_plot = { version = "0.30.0", default-features = false }
