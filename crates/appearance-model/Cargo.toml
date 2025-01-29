@@ -16,3 +16,4 @@ anyhow.workspace = true
 glam.workspace = true
 gltf.workspace = true
 log.workspace = true
+tinybvh.workspace = true

@@ -1,6 +1,8 @@
 use glam::{Vec2, Vec3, Vec4, Vec4Swizzles};
+use std::rc::Rc;
 
-#[derive(Debug)]
+use tinybvh::Bvh;
+
 pub struct Mesh {
     pub vertex_positions: Vec<Vec4>,
     pub vertex_normals: Vec<Vec3>,
@@ -8,6 +10,8 @@ pub struct Mesh {
     pub vertex_tex_coords: Vec<Vec2>,
     pub indices: Vec<u32>,
     pub material_idx: u32,
+
+    pub blas: Rc<Bvh>,
 }
 
 impl Mesh {
@@ -19,6 +23,13 @@ impl Mesh {
         indices: Vec<u32>,
         material_idx: u32,
     ) -> Self {
+        let mut blas = Bvh::new();
+        if indices.is_empty() {
+            blas.build(vertex_positions.clone());
+        } else {
+            blas.build_with_indices(vertex_positions.clone(), indices.clone());
+        }
+
         Mesh {
             vertex_positions,
             vertex_normals,
@@ -26,6 +37,7 @@ impl Mesh {
             vertex_tex_coords,
             indices,
             material_idx,
+            blas: Rc::new(blas),
         }
     }
 
@@ -64,6 +76,10 @@ impl Mesh {
 
     pub fn generate_tangents(&mut self) {
         appearance_profiling::profile_function!();
+
+        if self.vertex_tex_coords.is_empty() {
+            return;
+        }
 
         // Source: 2001. http://www.terathon.com/code/tangent.html
         let mut tan1 = vec![Vec3::default(); self.vertex_positions.len()];
