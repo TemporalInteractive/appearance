@@ -2,8 +2,8 @@ use anyhow::Result;
 use appearance::appearance_camera::CameraController;
 use appearance::appearance_input::InputHandler;
 use appearance::appearance_render_loop::winit::keyboard::KeyCode;
-use appearance::appearance_transform::Transform;
-use appearance::appearance_world::components::ModelComponent;
+use appearance::appearance_transform::{Transform, RIGHT};
+use appearance::appearance_world::components::{ModelComponent, TransformComponent};
 use appearance::appearance_world::{specs, World};
 use glam::{Quat, Vec3};
 use std::sync::Arc;
@@ -28,7 +28,7 @@ pub struct HostRenderLoop {
     camera_controller: CameraController,
     world: World,
 
-    _duck_entity: specs::Entity,
+    duck_entity: Option<specs::Entity>,
 }
 
 impl RenderLoop for HostRenderLoop {
@@ -87,7 +87,7 @@ impl RenderLoop for HostRenderLoop {
             camera_controller: CameraController::new(),
             world,
 
-            _duck_entity: duck_entity,
+            duck_entity: Some(duck_entity),
         }
     }
 
@@ -131,6 +131,19 @@ impl RenderLoop for HostRenderLoop {
         self.timer.reset();
         log::info!("FPS {}", 1.0 / delta_time);
 
+        if let Some(duck_entity) = self.duck_entity {
+            let mut transforms_mut = self.world.entities_mut::<TransformComponent>();
+
+            let duck_transform = transforms_mut.get_mut(duck_entity).unwrap();
+            duck_transform.transform.translate(RIGHT * delta_time * 0.5);
+        }
+
+        if self.input_handler.key(KeyCode::KeyX) {
+            if let Some(duck_entity) = self.duck_entity.take() {
+                self.world.destroy_entity(duck_entity);
+            }
+        }
+
         if self.input_handler.key(KeyCode::Escape) {
             return true;
         }
@@ -143,6 +156,8 @@ impl RenderLoop for HostRenderLoop {
 
         if self.host.handle_new_connections() {
             self.world.resync_all_visible_world_actions();
+        } else {
+            self.world.finalize_visible_world_actions();
         }
 
         self.host

@@ -15,3 +15,4 @@ appearance-transform.workspace = true
 bytemuck.workspace = true
 glam.workspace = true
 specs.workspace = true
+uuid.workspace = true

@@ -95,7 +95,6 @@ impl<T: NodeRenderer + 'static> Node<T> {
                         ExpectedPackage::Message => {
                             let host_message = *bytemuck::from_bytes::<HostMessage>(buf.as_ref());
 
-                            log::info!("Received message: {:?}", host_message);
                             if self.handle_message(host_message).is_err() {
                                 self.disconnect();
                             }

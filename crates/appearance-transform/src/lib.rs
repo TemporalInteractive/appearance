@@ -1,3 +1,4 @@
+use core::sync::atomic::{AtomicBool, Ordering};
 use glam::{Mat4, Quat, Vec3};
 use std::sync::Mutex;
 
@@ -12,20 +13,20 @@ pub struct Transform {
     scale: Vec3,
     matrix: Mutex<(Mat4, bool)>,
 
-    has_changed_this_frame: Mutex<bool>,
+    has_changed_this_frame: AtomicBool,
 }
 
 impl Clone for Transform {
     fn clone(&self) -> Self {
         let matrix = self.matrix.lock().unwrap();
-        let has_changed_this_frame = self.has_changed_this_frame.lock().unwrap();
+        let has_changed_this_frame = self.has_changed_this_frame.load(Ordering::Relaxed);
 
         Self {
             translation: self.translation,
             rotation: self.rotation,
             scale: self.scale,
             matrix: Mutex::new(*matrix),
-            has_changed_this_frame: Mutex::new(*has_changed_this_frame),
+            has_changed_this_frame: AtomicBool::new(has_changed_this_frame),
         }
     }
 }
@@ -37,7 +38,7 @@ impl Default for Transform {
             rotation: Quat::IDENTITY,
             scale: Vec3::ONE,
             matrix: Mutex::new((Mat4::IDENTITY, true)),
-            has_changed_this_frame: Mutex::new(true),
+            has_changed_this_frame: AtomicBool::new(true),
         }
     }
 }
@@ -64,7 +65,7 @@ impl Transform {
                 Mat4::from_scale_rotation_translation(scale, rotation, translation),
                 false,
             )),
-            has_changed_this_frame: Mutex::new(true),
+            has_changed_this_frame: AtomicBool::new(true),
         }
     }
 
@@ -77,7 +78,7 @@ impl Transform {
                 Mat4::from_scale_rotation_translation(Vec3::ONE, Quat::IDENTITY, translation),
                 false,
             )),
-            has_changed_this_frame: Mutex::new(true),
+            has_changed_this_frame: AtomicBool::new(true),
         }
     }
 
@@ -90,7 +91,7 @@ impl Transform {
                 Mat4::from_scale_rotation_translation(scale, Quat::IDENTITY, Vec3::ZERO),
                 false,
             )),
-            has_changed_this_frame: Mutex::new(true),
+            has_changed_this_frame: AtomicBool::new(true),
         }
     }
 
@@ -155,6 +156,7 @@ impl Transform {
             matrix.0 =
                 Mat4::from_scale_rotation_translation(self.scale, self.rotation, self.translation);
             matrix.1 = false;
+            self.has_changed_this_frame.store(true, Ordering::Relaxed);
         }
 
         matrix.0
@@ -164,7 +166,15 @@ impl Transform {
         let mut my_matrix = self.matrix.lock().unwrap();
         my_matrix.0 = matrix;
         my_matrix.1 = false;
+        self.has_changed_this_frame.store(true, Ordering::Relaxed);
 
         (self.scale, self.rotation, self.translation) = matrix.to_scale_rotation_translation();
+    }
+
+    /// Returns if there were any transform changes since the last time this function was called
+    pub fn handle_has_changed_this_frame(&self) -> bool {
+        let has_changed_this_frame = self.has_changed_this_frame.load(Ordering::Relaxed);
+        self.has_changed_this_frame.store(false, Ordering::Relaxed);
+        has_changed_this_frame || self.matrix.lock().unwrap().1
     }
 }

@@ -12,6 +12,7 @@ use appearance::Appearance;
 use glam::{Mat4, Vec2, Vec3, Vec4, Vec4Swizzles};
 use tinybvh::{vec_helpers::Vec3Helpers, Ray};
 use tinybvh::{BlasInstance, Bvh, BvhBase};
+use uuid::Uuid;
 
 struct CameraMatrices {
     inv_view: Mat4,
@@ -22,7 +23,8 @@ struct Renderer {
     pixels: Vec<u8>,
     frame_idx: u32,
 
-    models: HashMap<String, (Arc<Model>, Vec<Mat4>)>,
+    models: HashMap<String, (Arc<Model>, Vec<Uuid>)>,
+    model_instances: HashMap<Uuid, Mat4>,
 
     model_assets: AssetDatabase<Model>,
     camera: Camera,
@@ -38,6 +40,7 @@ impl Renderer {
             pixels: Vec::new(),
             frame_idx: 0,
             models: HashMap::new(),
+            model_instances: HashMap::new(),
             model_assets,
             camera: Camera::default(),
             tlas: Bvh::new(),
@@ -83,30 +86,43 @@ impl Renderer {
         let mut blas_instances = vec![];
 
         let mut blas_idx_offset = 0;
-        for (_asset_path, (model, instance_transforms)) in &self.models {
+        for (model, entity_uuids) in self.models.values_mut() {
             for root_node in &model.root_nodes {
+                let mut entity_uuids_indices_to_remove = vec![];
+
                 // Loop over all world instances of the model
-                for (i, instance_transform) in instance_transforms.iter().enumerate() {
-                    // Assign blasses when on the last instance, also increment the blas idx offset
-                    if i == instance_transforms.len() - 1 {
-                        blas_idx_offset += Self::rebuild_tlas_rec(
-                            root_node,
-                            *instance_transform,
-                            0,
-                            blas_idx_offset,
-                            &mut blas_instances,
-                            &mut Some(&mut blasses),
-                        );
+                for (i, entity_uuid) in entity_uuids.iter().enumerate() {
+                    // If this instance doesn't have a transform anymore, it has been destroyed
+                    if let Some(instance_transform) = self.model_instances.get(entity_uuid) {
+                        // Assign blasses when on the last instance, also increment the blas idx offset
+                        if i == entity_uuids.len() - 1 {
+                            blas_idx_offset += Self::rebuild_tlas_rec(
+                                root_node,
+                                *instance_transform,
+                                0,
+                                blas_idx_offset,
+                                &mut blas_instances,
+                                &mut Some(&mut blasses),
+                            );
+                        } else {
+                            Self::rebuild_tlas_rec(
+                                root_node,
+                                *instance_transform,
+                                0,
+                                blas_idx_offset,
+                                &mut blas_instances,
+                                &mut None,
+                            );
+                        };
                     } else {
-                        Self::rebuild_tlas_rec(
-                            root_node,
-                            *instance_transform,
-                            0,
-                            blas_idx_offset,
-                            &mut blas_instances,
-                            &mut None,
-                        );
-                    };
+                        entity_uuids_indices_to_remove.push(i);
+                    }
+                }
+
+                // Remove all entity uuids that have been removed
+                entity_uuids_indices_to_remove.sort();
+                for (j, i) in entity_uuids_indices_to_remove.iter().enumerate() {
+                    entity_uuids.remove(i - j);
                 }
             }
         }
@@ -145,17 +161,27 @@ impl NodeRenderer for Renderer {
             }
             VisibleWorldActionType::SpawnModel(data) => {
                 if let Some(model) = self.models.get_mut(data.asset_path()) {
-                    model.1.push(data.transform_matrix);
+                    model.1.push(data.entity_uuid);
                 } else {
                     let model_asset = self.model_assets.get(data.asset_path()).unwrap();
                     self.models.insert(
                         data.asset_path().to_owned(),
-                        (model_asset, vec![data.transform_matrix]),
+                        (model_asset, vec![data.entity_uuid]),
                     );
                 }
 
-                // self.model_instances
-                //     .push((data.asset_path().to_owned(), data.transform_matrix));
+                self.model_instances
+                    .insert(data.entity_uuid, data.transform_matrix);
+            }
+            VisibleWorldActionType::TransformModel(data) => {
+                if let Some(instance_transform) = self.model_instances.get_mut(&data.entity_uuid) {
+                    *instance_transform = data.transform_matrix;
+                } else {
+                    log::warn!("Failed to update model instance transform.");
+                }
+            }
+            VisibleWorldActionType::DestroyModel(data) => {
+                self.model_instances.remove(&data.entity_uuid);
             }
             VisibleWorldActionType::Clear(_) => {
                 self.models.clear();

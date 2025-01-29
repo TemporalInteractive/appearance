@@ -2,6 +2,7 @@ use core::str;
 use std::io::Write;
 
 use glam::Mat4;
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, bytemuck::NoUninit, bytemuck::AnyBitPattern)]
 #[repr(C)]
@@ -17,11 +18,12 @@ pub struct CameraUpdateData {
 #[repr(C)]
 pub struct SpawnModelData {
     pub transform_matrix: Mat4,
+    pub entity_uuid: Uuid,
     asset_path_bytes: [u8; 256],
 }
 
 impl SpawnModelData {
-    pub fn new(transform_matrix: Mat4, asset_path: &String) -> Self {
+    pub fn new(transform_matrix: Mat4, entity_uuid: Uuid, asset_path: &String) -> Self {
         let mut asset_path_bytes = [0u8; 256];
         {
             let mut asset_path_bytes = &mut asset_path_bytes[..];
@@ -30,6 +32,7 @@ impl SpawnModelData {
 
         Self {
             transform_matrix,
+            entity_uuid,
             asset_path_bytes,
         }
     }
@@ -45,11 +48,26 @@ impl SpawnModelData {
     }
 }
 
+#[derive(Debug, Clone, Copy, bytemuck::NoUninit, bytemuck::AnyBitPattern)]
+#[repr(C)]
+pub struct TransformModelData {
+    pub transform_matrix: Mat4,
+    pub entity_uuid: Uuid,
+}
+
+#[derive(Debug, Clone, Copy, bytemuck::NoUninit, bytemuck::AnyBitPattern)]
+#[repr(C)]
+pub struct DestroyModelData {
+    pub entity_uuid: Uuid,
+}
+
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Copy)]
 pub enum VisibleWorldActionType {
     CameraUpdate(CameraUpdateData),
     SpawnModel(SpawnModelData),
+    TransformModel(TransformModelData),
+    DestroyModel(DestroyModelData),
     Clear(u32),
 }
 
@@ -58,7 +76,9 @@ impl From<VisibleWorldActionType> for u32 {
         match val {
             VisibleWorldActionType::CameraUpdate(_) => 0,
             VisibleWorldActionType::SpawnModel(_) => 1,
-            VisibleWorldActionType::Clear(_) => 2,
+            VisibleWorldActionType::TransformModel(_) => 2,
+            VisibleWorldActionType::DestroyModel(_) => 3,
+            VisibleWorldActionType::Clear(_) => 4,
         }
     }
 }
@@ -68,7 +88,9 @@ impl VisibleWorldActionType {
         match ty {
             0 => Self::CameraUpdate(*bytemuck::from_bytes::<CameraUpdateData>(bytes)),
             1 => Self::SpawnModel(*bytemuck::from_bytes::<SpawnModelData>(bytes)),
-            2 => Self::Clear(*bytemuck::from_bytes::<u32>(bytes)),
+            2 => Self::TransformModel(*bytemuck::from_bytes::<TransformModelData>(bytes)),
+            3 => Self::DestroyModel(*bytemuck::from_bytes::<DestroyModelData>(bytes)),
+            4 => Self::Clear(*bytemuck::from_bytes::<u32>(bytes)),
             _ => panic!(),
         }
     }
@@ -77,7 +99,9 @@ impl VisibleWorldActionType {
         match ty {
             0 => std::mem::size_of::<CameraUpdateData>(),
             1 => std::mem::size_of::<SpawnModelData>(),
-            2 => std::mem::size_of::<u32>(),
+            2 => std::mem::size_of::<TransformModelData>(),
+            3 => std::mem::size_of::<DestroyModelData>(),
+            4 => std::mem::size_of::<u32>(),
             _ => panic!(),
         }
     }
@@ -86,6 +110,8 @@ impl VisibleWorldActionType {
         match &self {
             Self::CameraUpdate(data) => bytemuck::bytes_of(data),
             Self::SpawnModel(data) => bytemuck::bytes_of(data),
+            Self::TransformModel(data) => bytemuck::bytes_of(data),
+            Self::DestroyModel(data) => bytemuck::bytes_of(data),
             Self::Clear(data) => bytemuck::bytes_of(data),
         }
     }
