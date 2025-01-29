@@ -27,7 +27,7 @@ pub struct HostRenderLoop {
     camera_controller: CameraController,
     world: World,
 
-    duck_entity: specs::Entity,
+    _duck_entity: specs::Entity,
 }
 
 impl RenderLoop for HostRenderLoop {
@@ -80,7 +80,7 @@ impl RenderLoop for HostRenderLoop {
             camera_controller: CameraController::new(),
             world,
 
-            duck_entity,
+            _duck_entity: duck_entity,
         }
     }
 
