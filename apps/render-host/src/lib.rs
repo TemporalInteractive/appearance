@@ -28,7 +28,7 @@ pub struct HostRenderLoop {
     camera_controller: CameraController,
     world: World,
 
-    duck_entity: specs::Entity,
+    duck_entity: Option<specs::Entity>,
 }
 
 impl RenderLoop for HostRenderLoop {
@@ -87,7 +87,7 @@ impl RenderLoop for HostRenderLoop {
             camera_controller: CameraController::new(),
             world,
 
-            duck_entity,
+            duck_entity: Some(duck_entity),
         }
     }
 
@@ -131,11 +131,17 @@ impl RenderLoop for HostRenderLoop {
         self.timer.reset();
         log::info!("FPS {}", 1.0 / delta_time);
 
-        {
+        if let Some(duck_entity) = self.duck_entity {
             let mut transforms_mut = self.world.entities_mut::<TransformComponent>();
 
-            let duck_transform = transforms_mut.get_mut(self.duck_entity).unwrap();
+            let duck_transform = transforms_mut.get_mut(duck_entity).unwrap();
             duck_transform.transform.translate(RIGHT * delta_time * 0.5);
+        }
+
+        if self.input_handler.key(KeyCode::KeyX) {
+            if let Some(duck_entity) = self.duck_entity.take() {
+                self.world.destroy_entity(duck_entity);
+            }
         }
 
         if self.input_handler.key(KeyCode::Escape) {

@@ -86,32 +86,43 @@ impl Renderer {
         let mut blas_instances = vec![];
 
         let mut blas_idx_offset = 0;
-        for (_asset_path, (model, entity_uuids)) in &self.models {
+        for (_asset_path, (model, entity_uuids)) in &mut self.models {
             for root_node in &model.root_nodes {
+                let mut entity_uuids_indices_to_remove = vec![];
+
                 // Loop over all world instances of the model
                 for (i, entity_uuid) in entity_uuids.iter().enumerate() {
-                    let instance_transform = self.model_instances.get(entity_uuid).unwrap();
-
-                    // Assign blasses when on the last instance, also increment the blas idx offset
-                    if i == entity_uuids.len() - 1 {
-                        blas_idx_offset += Self::rebuild_tlas_rec(
-                            root_node,
-                            *instance_transform,
-                            0,
-                            blas_idx_offset,
-                            &mut blas_instances,
-                            &mut Some(&mut blasses),
-                        );
+                    // If this instance doesn't have a transform anymore, it has been destroyed
+                    if let Some(instance_transform) = self.model_instances.get(entity_uuid) {
+                        // Assign blasses when on the last instance, also increment the blas idx offset
+                        if i == entity_uuids.len() - 1 {
+                            blas_idx_offset += Self::rebuild_tlas_rec(
+                                root_node,
+                                *instance_transform,
+                                0,
+                                blas_idx_offset,
+                                &mut blas_instances,
+                                &mut Some(&mut blasses),
+                            );
+                        } else {
+                            Self::rebuild_tlas_rec(
+                                root_node,
+                                *instance_transform,
+                                0,
+                                blas_idx_offset,
+                                &mut blas_instances,
+                                &mut None,
+                            );
+                        };
                     } else {
-                        Self::rebuild_tlas_rec(
-                            root_node,
-                            *instance_transform,
-                            0,
-                            blas_idx_offset,
-                            &mut blas_instances,
-                            &mut None,
-                        );
-                    };
+                        entity_uuids_indices_to_remove.push(i);
+                    }
+                }
+
+                // Remove all entity uuids that have been removed
+                entity_uuids_indices_to_remove.sort();
+                for (j, i) in entity_uuids_indices_to_remove.iter().enumerate() {
+                    entity_uuids.remove(i - j);
                 }
             }
         }
@@ -168,6 +179,9 @@ impl NodeRenderer for Renderer {
                 } else {
                     log::warn!("Failed to update model instance transform.");
                 }
+            }
+            VisibleWorldActionType::DestroyModel(data) => {
+                self.model_instances.remove(&data.entity_uuid);
             }
             VisibleWorldActionType::Clear(_) => {
                 self.models.clear();

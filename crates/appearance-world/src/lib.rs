@@ -5,7 +5,7 @@ use glam::Vec3;
 use specs::{Builder, Join, WorldExt};
 use uuid::Uuid;
 use visible_world_action::{
-    CameraUpdateData, SpawnModelData, TransformModelData, VisibleWorldAction,
+    CameraUpdateData, DestroyModelData, SpawnModelData, TransformModelData, VisibleWorldAction,
     VisibleWorldActionType,
 };
 
@@ -193,6 +193,16 @@ impl World {
         ) = self.ecs.system_data();
 
         for (transform_component, _model_component) in (&transform, &model).join() {
+            if transform_component.marked_for_destroy {
+                self.visible_world_actions.push(VisibleWorldAction::new(
+                    VisibleWorldActionType::DestroyModel(DestroyModelData {
+                        entity_uuid: *transform_component.uuid(),
+                    }),
+                ));
+
+                continue;
+            }
+
             if transform_component
                 .transform
                 .handle_has_changed_this_frame()

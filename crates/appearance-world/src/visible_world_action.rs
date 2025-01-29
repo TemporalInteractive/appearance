@@ -55,12 +55,19 @@ pub struct TransformModelData {
     pub entity_uuid: Uuid,
 }
 
+#[derive(Debug, Clone, Copy, bytemuck::NoUninit, bytemuck::AnyBitPattern)]
+#[repr(C)]
+pub struct DestroyModelData {
+    pub entity_uuid: Uuid,
+}
+
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Copy)]
 pub enum VisibleWorldActionType {
     CameraUpdate(CameraUpdateData),
     SpawnModel(SpawnModelData),
     TransformModel(TransformModelData),
+    DestroyModel(DestroyModelData),
     Clear(u32),
 }
 
@@ -70,7 +77,8 @@ impl From<VisibleWorldActionType> for u32 {
             VisibleWorldActionType::CameraUpdate(_) => 0,
             VisibleWorldActionType::SpawnModel(_) => 1,
             VisibleWorldActionType::TransformModel(_) => 2,
-            VisibleWorldActionType::Clear(_) => 3,
+            VisibleWorldActionType::DestroyModel(_) => 3,
+            VisibleWorldActionType::Clear(_) => 4,
         }
     }
 }
@@ -81,7 +89,8 @@ impl VisibleWorldActionType {
             0 => Self::CameraUpdate(*bytemuck::from_bytes::<CameraUpdateData>(bytes)),
             1 => Self::SpawnModel(*bytemuck::from_bytes::<SpawnModelData>(bytes)),
             2 => Self::TransformModel(*bytemuck::from_bytes::<TransformModelData>(bytes)),
-            3 => Self::Clear(*bytemuck::from_bytes::<u32>(bytes)),
+            3 => Self::DestroyModel(*bytemuck::from_bytes::<DestroyModelData>(bytes)),
+            4 => Self::Clear(*bytemuck::from_bytes::<u32>(bytes)),
             _ => panic!(),
         }
     }
@@ -91,7 +100,8 @@ impl VisibleWorldActionType {
             0 => std::mem::size_of::<CameraUpdateData>(),
             1 => std::mem::size_of::<SpawnModelData>(),
             2 => std::mem::size_of::<TransformModelData>(),
-            3 => std::mem::size_of::<u32>(),
+            3 => std::mem::size_of::<DestroyModelData>(),
+            4 => std::mem::size_of::<u32>(),
             _ => panic!(),
         }
     }
@@ -101,6 +111,7 @@ impl VisibleWorldActionType {
             Self::CameraUpdate(data) => bytemuck::bytes_of(data),
             Self::SpawnModel(data) => bytemuck::bytes_of(data),
             Self::TransformModel(data) => bytemuck::bytes_of(data),
+            Self::DestroyModel(data) => bytemuck::bytes_of(data),
             Self::Clear(data) => bytemuck::bytes_of(data),
         }
     }
