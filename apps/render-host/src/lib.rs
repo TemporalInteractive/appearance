@@ -5,6 +5,7 @@ use appearance::appearance_render_loop::winit::keyboard::KeyCode;
 use appearance::appearance_transform::Transform;
 use appearance::appearance_world::components::ModelComponent;
 use appearance::appearance_world::{specs, World};
+use glam::{Quat, Vec3};
 use std::sync::Arc;
 
 use appearance::appearance_render_loop::host::Host;
@@ -66,9 +67,15 @@ impl RenderLoop for HostRenderLoop {
         });
 
         let mut world = World::new();
-        let duck_entity = world.create_entity("Duck", Transform::default(), |builder| {
-            builder.with(ModelComponent::new("assets/Duck.glb"))
-        });
+        let duck_entity =
+            world.create_entity("Duck", Transform::from_scale(Vec3::splat(1.0)), |builder| {
+                builder.with(ModelComponent::new("assets/Duck.glb"))
+            });
+        let duck_entity2 = world.create_entity(
+            "Duck2",
+            Transform::new(Vec3::new(2.0, 0.0, 0.0), Quat::IDENTITY, Vec3::splat(1.0)),
+            |builder| builder.with(ModelComponent::new("assets/Duck.glb")),
+        );
 
         Self {
             host,

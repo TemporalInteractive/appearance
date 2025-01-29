@@ -4,7 +4,6 @@ use mesh::Mesh;
 pub mod asset;
 pub mod mesh;
 
-#[derive(Debug)]
 pub struct ModelNode {
     pub name: String,
 
@@ -14,7 +13,6 @@ pub struct ModelNode {
     pub mesh: Option<Mesh>,
 }
 
-#[derive(Debug)]
 pub struct Model {
     pub root_nodes: Vec<ModelNode>,
 }

@@ -1,15 +1,17 @@
 use std::collections::HashMap;
+use std::rc::Rc;
+use std::sync::Arc;
 
 use anyhow::Result;
 use appearance::appearance_asset_database::AssetDatabase;
 use appearance::appearance_camera::Camera;
-use appearance::appearance_model::Model;
+use appearance::appearance_model::{Model, ModelNode};
 use appearance::appearance_render_loop::node::{Node, NodeRenderer};
 use appearance::appearance_world::visible_world_action::VisibleWorldActionType;
 use appearance::Appearance;
 use glam::{Mat4, Vec2, Vec3, Vec4, Vec4Swizzles};
-use tinybvh::Bvh;
 use tinybvh::{vec_helpers::Vec3Helpers, Ray};
+use tinybvh::{BlasInstance, Bvh, BvhBase};
 
 struct CameraMatrices {
     inv_view: Mat4,
@@ -20,11 +22,12 @@ struct Renderer {
     pixels: Vec<u8>,
     frame_idx: u32,
 
-    model_asset_to_blas: HashMap<String, usize>,
-    blasses: Vec<Bvh>,
+    models: HashMap<String, (Arc<Model>, Vec<Mat4>)>,
 
     model_assets: AssetDatabase<Model>,
     camera: Camera,
+
+    tlas: Bvh,
 }
 
 impl Renderer {
@@ -34,11 +37,79 @@ impl Renderer {
         Self {
             pixels: Vec::new(),
             frame_idx: 0,
-            model_asset_to_blas: HashMap::new(),
-            blasses: Vec::new(),
+            models: HashMap::new(),
             model_assets,
             camera: Camera::default(),
+            tlas: Bvh::new(),
         }
+    }
+
+    fn rebuild_tlas_rec(
+        node: &ModelNode,
+        parent_transform: Mat4,
+        mut blas_idx: u32,
+        blas_idx_offset: u32,
+        blas_instances: &mut Vec<BlasInstance>,
+        blasses: &mut Option<&mut Vec<Rc<dyn BvhBase>>>,
+    ) -> u32 {
+        let transform = parent_transform * node.transform.get_matrix();
+
+        if let Some(mesh) = &node.mesh {
+            if let Some(blasses) = blasses {
+                blasses.push(mesh.blas.clone() as Rc<dyn BvhBase>);
+            }
+
+            blas_instances.push(BlasInstance::new(transform, blas_idx_offset + blas_idx));
+
+            blas_idx += 1;
+        }
+
+        for child_node in &node.children {
+            blas_idx = Self::rebuild_tlas_rec(
+                child_node,
+                transform,
+                blas_idx,
+                blas_idx_offset,
+                blas_instances,
+                blasses,
+            );
+        }
+
+        blas_idx
+    }
+
+    fn rebuild_tlas(&mut self) {
+        let mut blasses = vec![];
+        let mut blas_instances = vec![];
+
+        let mut blas_idx_offset = 0;
+        for (_asset_path, (model, instance_transforms)) in &self.models {
+            // Loop over all world instances of the model
+            for (i, instance_transform) in instance_transforms.iter().enumerate() {
+                // Assign blasses when on the last instance, also increment the blas idx offset
+                if i == instance_transforms.len() - 1 {
+                    blas_idx_offset += Self::rebuild_tlas_rec(
+                        &model.root_nodes[0],
+                        *instance_transform,
+                        0,
+                        blas_idx_offset,
+                        &mut blas_instances,
+                        &mut Some(&mut blasses),
+                    );
+                } else {
+                    Self::rebuild_tlas_rec(
+                        &model.root_nodes[0],
+                        *instance_transform,
+                        0,
+                        blas_idx_offset,
+                        &mut blas_instances,
+                        &mut None,
+                    );
+                };
+            }
+        }
+
+        self.tlas.build_with_blas_instances(blas_instances, blasses);
     }
 
     fn render_pixel(&mut self, uv: &Vec2, camera_matrices: &CameraMatrices) -> Vec3 {
@@ -49,11 +120,9 @@ impl Renderer {
 
         let mut ray = Ray::new(origin.xyz(), direction.xyz());
 
-        for blas in &self.blasses {
-            blas.intersect(&mut ray);
-            if ray.hit.t != 1e30 {
-                return Vec3::new(1.0, 1.0, 0.0);
-            }
+        self.tlas.intersect(&mut ray);
+        if ray.hit.t != 1e30 {
+            return Vec3::new(1.0, 1.0, 0.0);
         }
 
         let a = 0.5 * (ray.D.y() + 1.0);
@@ -73,19 +142,21 @@ impl NodeRenderer for Renderer {
                     .set_matrix(data.transform_matrix_bytes);
             }
             VisibleWorldActionType::SpawnModel(data) => {
-                let model_asset = self.model_assets.get(data.asset_path()).unwrap();
+                if let Some(model) = self.models.get_mut(data.asset_path()) {
+                    model.1.push(data.transform_matrix);
+                } else {
+                    let model_asset = self.model_assets.get(data.asset_path()).unwrap();
+                    self.models.insert(
+                        data.asset_path().to_owned(),
+                        (model_asset, vec![data.transform_matrix]),
+                    );
+                }
 
-                // HARDCODED!
-                let duck_mesh = model_asset.root_nodes[0].children[0].mesh.as_ref().unwrap();
-
-                let mut blas = Bvh::new();
-                blas.build_with_indices(&duck_mesh.vertex_positions, &duck_mesh.indices);
-
-                self.blasses.push(blas);
+                // self.model_instances
+                //     .push((data.asset_path().to_owned(), data.transform_matrix));
             }
             VisibleWorldActionType::Clear(_) => {
-                self.model_asset_to_blas.clear();
-                self.blasses.clear();
+                self.models.clear();
             }
         }
     }
@@ -102,6 +173,8 @@ impl NodeRenderer for Renderer {
             inv_view: self.camera.transform.get_matrix(),
             inv_proj: self.camera.get_matrix().inverse(),
         };
+
+        self.rebuild_tlas();
 
         for local_y in 0..num_rows {
             for local_x in 0..width {

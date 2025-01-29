@@ -54,7 +54,7 @@ impl Default for Camera {
 impl Default for CameraController {
     fn default() -> Self {
         Self {
-            translation_speed: 200.0,
+            translation_speed: 5.0,
             look_sensitivity: 0.3,
             vertical_rotation: Quat::IDENTITY,
             horizontal_rotation: Quat::IDENTITY,
