@@ -134,6 +134,10 @@ impl RenderLoop for HostRenderLoop {
                     .update(camera, &self.input_handler, delta_time);
         });
 
+        if self.host.handle_new_connections() {
+            self.world.resync_all_visible_world_actions();
+        }
+
         self.host
             .send_visible_world_actions(self.world.get_visible_world_actions());
 

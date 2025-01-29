@@ -24,10 +24,7 @@ impl Component for ModelComponent {
         visible_world_actions: &mut Vec<VisibleWorldAction>,
     ) {
         visible_world_actions.push(VisibleWorldAction::new(VisibleWorldActionType::SpawnModel(
-            SpawnModelData {
-                transform_matrix: transform.get_matrix(),
-                asset_path_bytes: [0; 256],
-            },
+            SpawnModelData::new(transform.get_matrix(), &self.model),
         )));
     }
 }

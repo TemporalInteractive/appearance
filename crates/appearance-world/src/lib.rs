@@ -2,8 +2,10 @@ use appearance_camera::Camera;
 use appearance_transform::Transform;
 use components::{Component, ModelComponent, TransformComponent};
 use glam::Vec3;
-use specs::{Builder, WorldExt};
-use visible_world_action::{CameraUpdateData, VisibleWorldAction, VisibleWorldActionType};
+use specs::{Builder, Join, WorldExt};
+use visible_world_action::{
+    CameraUpdateData, SpawnModelData, VisibleWorldAction, VisibleWorldActionType,
+};
 
 pub use specs;
 
@@ -146,6 +148,27 @@ impl World {
         ));
     }
 
+    /// WARNING - This is very expensive!
+    /// Add the current state of all visible elements of the world to the visible world actions.
+    pub fn resync_all_visible_world_actions(&mut self) {
+        self.visible_world_actions.clear();
+
+        let (transform, model): (
+            specs::ReadStorage<'_, TransformComponent>,
+            specs::ReadStorage<'_, ModelComponent>,
+        ) = self.ecs.system_data();
+
+        for (transform_component, model_component) in (&transform, &model).join() {
+            self.visible_world_actions.push(VisibleWorldAction::new(
+                VisibleWorldActionType::SpawnModel(SpawnModelData::new(
+                    transform_component.transform.get_matrix(),
+                    &model_component.model,
+                )),
+            ));
+        }
+    }
+
+    /// Receive all visible world actions which occured since the last world update
     pub fn get_visible_world_actions(&self) -> &[VisibleWorldAction] {
         &self.visible_world_actions
     }
