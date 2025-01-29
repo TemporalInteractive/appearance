@@ -10,15 +10,25 @@ pub struct CameraUpdateData {
     pub _padding: u32,
 }
 
+#[derive(Debug, Clone, Copy, bytemuck::NoUninit, bytemuck::AnyBitPattern)]
+#[repr(C)]
+pub struct SpawnModelData {
+    pub transform_matrix: Mat4,
+    pub asset_path_bytes: [u8; 256],
+}
+
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Copy)]
 pub enum VisibleWorldActionType {
     CameraUpdate(CameraUpdateData),
+    SpawnModel(SpawnModelData),
 }
 
 impl From<VisibleWorldActionType> for u32 {
     fn from(val: VisibleWorldActionType) -> Self {
         match val {
             VisibleWorldActionType::CameraUpdate(_) => 0,
+            VisibleWorldActionType::SpawnModel(_) => 1,
         }
     }
 }
@@ -27,6 +37,7 @@ impl VisibleWorldActionType {
     pub fn from_ty_and_bytes(ty: u32, bytes: &[u8]) -> Self {
         match ty {
             0 => Self::CameraUpdate(*bytemuck::from_bytes::<CameraUpdateData>(bytes)),
+            1 => Self::SpawnModel(*bytemuck::from_bytes::<SpawnModelData>(bytes)),
             _ => panic!(),
         }
     }
@@ -34,6 +45,7 @@ impl VisibleWorldActionType {
     pub fn data_size_from_ty(ty: u32) -> usize {
         match ty {
             0 => std::mem::size_of::<CameraUpdateData>(),
+            1 => std::mem::size_of::<SpawnModelData>(),
             _ => panic!(),
         }
     }
@@ -41,6 +53,7 @@ impl VisibleWorldActionType {
     pub fn as_bytes(&self) -> &[u8] {
         match &self {
             Self::CameraUpdate(data) => bytemuck::bytes_of(data),
+            Self::SpawnModel(data) => bytemuck::bytes_of(data),
         }
     }
 }

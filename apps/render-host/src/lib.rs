@@ -2,7 +2,9 @@ use anyhow::Result;
 use appearance::appearance_camera::CameraController;
 use appearance::appearance_input::InputHandler;
 use appearance::appearance_render_loop::winit::keyboard::KeyCode;
-use appearance::appearance_world::World;
+use appearance::appearance_transform::Transform;
+use appearance::appearance_world::components::ModelComponent;
+use appearance::appearance_world::{specs, World};
 use std::sync::Arc;
 
 use appearance::appearance_render_loop::host::Host;
@@ -24,6 +26,8 @@ pub struct HostRenderLoop {
     input_handler: InputHandler,
     camera_controller: CameraController,
     world: World,
+
+    duck_entity: specs::Entity,
 }
 
 impl RenderLoop for HostRenderLoop {
@@ -61,6 +65,11 @@ impl RenderLoop for HostRenderLoop {
             view_formats: &[],
         });
 
+        let mut world = World::new();
+        let duck_entity = world.create_entity("Duck", Transform::default(), |builder| {
+            builder.with(ModelComponent::new("assets/Duck.glb"))
+        });
+
         Self {
             host,
             texture,
@@ -69,7 +78,9 @@ impl RenderLoop for HostRenderLoop {
 
             input_handler: InputHandler::new(),
             camera_controller: CameraController::new(),
-            world: World::new(),
+            world,
+
+            duck_entity,
         }
     }
 

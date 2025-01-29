@@ -23,12 +23,6 @@ struct Renderer {
     blas: Bvh,
 }
 
-const VERTICES: &[Vec4] = &[
-    Vec4::new(-1.0, 0.0, 0.0, 0.0),
-    Vec4::new(0.0, 1.0, 0.0, 0.0),
-    Vec4::new(1.0, 0.0, 0.0, 0.0),
-];
-
 impl Renderer {
     fn new() -> Self {
         let mut model_assets = AssetDatabase::<Model>::new();
@@ -75,6 +69,9 @@ impl NodeRenderer for Renderer {
                 self.camera
                     .transform
                     .set_matrix(data.transform_matrix_bytes);
+            }
+            VisibleWorldActionType::SpawnModel(data) => {
+                todo!()
             }
         }
     }

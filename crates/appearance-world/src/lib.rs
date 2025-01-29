@@ -1,28 +1,46 @@
 use appearance_camera::Camera;
 use appearance_transform::Transform;
-use components::TransformComponent;
+use components::{Component, ModelComponent, TransformComponent};
 use glam::Vec3;
 use specs::{Builder, WorldExt};
 use visible_world_action::{CameraUpdateData, VisibleWorldAction, VisibleWorldActionType};
+
+pub use specs;
 
 pub mod components;
 pub mod visible_world_action;
 
 pub struct EntityBuilder<'a> {
+    visible_world_actions: &'a mut Vec<VisibleWorldAction>,
+    transform: Transform,
+
     builder: specs::EntityBuilder<'a>,
 }
 
 impl<'a> EntityBuilder<'a> {
-    fn new(ecs: &'a mut specs::World, name: &str, transform: Transform) -> Self {
+    fn new(
+        visible_world_actions: &'a mut Vec<VisibleWorldAction>,
+        ecs: &'a mut specs::World,
+        name: &str,
+        transform: Transform,
+    ) -> Self {
         let builder = ecs
             .create_entity()
-            .with(TransformComponent::new(name.to_owned(), transform));
+            .with(TransformComponent::new(name.to_owned(), transform.clone()));
 
-        Self { builder }
+        Self {
+            visible_world_actions,
+            transform,
+            builder,
+        }
     }
 
-    pub fn with<T: specs::Component + Send + Sync>(self, c: T) -> Self {
+    pub fn with<T: Component + specs::Component + Send + Sync>(self, c: T) -> Self {
+        c.visible_world_actions(&self.transform, self.visible_world_actions);
+
         Self {
+            visible_world_actions: self.visible_world_actions,
+            transform: self.transform,
             builder: self.builder.with(c),
         }
     }
@@ -45,8 +63,12 @@ impl Default for World {
 
 impl World {
     pub fn new() -> Self {
+        let mut ecs = specs::World::new();
+        ecs.register::<ModelComponent>();
+        ecs.register::<TransformComponent>();
+
         Self {
-            ecs: specs::World::new(),
+            ecs,
             entities_marked_for_destroy: Vec::new(),
             camera: Camera::new(
                 Transform::from_translation(Vec3::new(0.0, 0.0, -5.0)),
@@ -71,7 +93,12 @@ impl World {
         appearance_profiling::profile_function!();
 
         let entity = {
-            let builder = builder_pattern(EntityBuilder::new(&mut self.ecs, name, transform));
+            let builder = builder_pattern(EntityBuilder::new(
+                &mut self.visible_world_actions,
+                &mut self.ecs,
+                name,
+                transform,
+            ));
             builder.builder.build()
         };
 
@@ -123,6 +150,8 @@ impl World {
         &self.visible_world_actions
     }
 
+    /// Should be called once at the end of each frame.
+    /// All visible world actions are cleared and destroyed entities are cleaned up.
     pub fn update(&mut self) {
         appearance_profiling::profile_function!();
 
