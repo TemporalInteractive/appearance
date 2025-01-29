@@ -8,11 +8,12 @@ pub struct ModelNode {
     pub name: String,
 
     pub transform: Transform,
-    pub children: Vec<ModelNode>,
+    pub children: Vec<u32>,
 
     pub mesh: Option<Mesh>,
 }
 
 pub struct Model {
-    pub root_nodes: Vec<ModelNode>,
+    pub root_nodes: Vec<u32>,
+    pub nodes: Vec<ModelNode>,
 }
