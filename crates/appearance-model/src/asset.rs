@@ -11,15 +11,16 @@ impl Asset for Model {
         let (document, buffers, images) = gltf::import_slice(&data).expect("Failed to load model.");
 
         let mut root_nodes = Vec::new();
+        let mut nodes = Vec::new();
+
         if let Some(scene) = document.default_scene() {
             for root_node in scene.nodes() {
-                root_nodes.push(process_nodes_recursive(
-                    &document, &root_node, &buffers, &images,
-                ));
+                root_nodes.push(nodes.len() as u32);
+                process_nodes_recursive(&document, &root_node, &buffers, &images, &mut nodes);
             }
         }
 
-        Model { root_nodes }
+        Model { root_nodes, nodes }
     }
 }
 
@@ -28,15 +29,16 @@ fn process_nodes_recursive(
     node: &gltf::Node,
     buffers: &[gltf::buffer::Data],
     images: &[gltf::image::Data],
-) -> ModelNode {
-    let mut root_node = process_node(document, node, buffers, images);
+    nodes: &mut Vec<ModelNode>,
+) {
+    nodes.push(process_node(document, node, buffers, images));
+    let node_idx = nodes.len() - 1;
 
     for child in node.children() {
-        root_node
-            .children
-            .push(process_nodes_recursive(document, &child, buffers, images));
+        let child_idx = nodes.len() as u32;
+        nodes[node_idx].children.push(child_idx);
+        process_nodes_recursive(document, &child, buffers, images, nodes);
     }
-    root_node
 }
 
 fn process_node(
