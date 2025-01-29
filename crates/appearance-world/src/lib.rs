@@ -3,8 +3,10 @@ use appearance_transform::Transform;
 use components::{Component, ModelComponent, TransformComponent};
 use glam::Vec3;
 use specs::{Builder, Join, WorldExt};
+use uuid::Uuid;
 use visible_world_action::{
-    CameraUpdateData, SpawnModelData, VisibleWorldAction, VisibleWorldActionType,
+    CameraUpdateData, SpawnModelData, TransformModelData, VisibleWorldAction,
+    VisibleWorldActionType,
 };
 
 pub use specs;
@@ -15,6 +17,7 @@ pub mod visible_world_action;
 pub struct EntityBuilder<'a> {
     visible_world_actions: &'a mut Vec<VisibleWorldAction>,
     transform: Transform,
+    entity_uuid: Uuid,
 
     builder: specs::EntityBuilder<'a>,
 }
@@ -26,23 +29,30 @@ impl<'a> EntityBuilder<'a> {
         name: &str,
         transform: Transform,
     ) -> Self {
-        let builder = ecs
-            .create_entity()
-            .with(TransformComponent::new(name.to_owned(), transform.clone()));
+        let transform_component = TransformComponent::new(name.to_owned(), transform.clone());
+        let entity_uuid = *transform_component.uuid();
+
+        let builder = ecs.create_entity().with(transform_component);
 
         Self {
             visible_world_actions,
             transform,
+            entity_uuid,
             builder,
         }
     }
 
     pub fn with<T: Component + specs::Component + Send + Sync>(self, c: T) -> Self {
-        c.visible_world_actions(&self.transform, self.visible_world_actions);
+        c.visible_world_actions(
+            &self.transform,
+            self.entity_uuid,
+            self.visible_world_actions,
+        );
 
         Self {
             visible_world_actions: self.visible_world_actions,
             transform: self.transform,
+            entity_uuid: self.entity_uuid,
             builder: self.builder.with(c),
         }
     }
@@ -151,7 +161,10 @@ impl World {
     /// WARNING - This is very expensive!
     /// Add the current state of all visible elements of the world to the visible world actions.
     pub fn resync_all_visible_world_actions(&mut self) {
-        self.visible_world_actions.clear();
+        appearance_profiling::profile_function!();
+
+        self.visible_world_actions =
+            vec![VisibleWorldAction::new(VisibleWorldActionType::Clear(0))];
 
         let (transform, model): (
             specs::ReadStorage<'_, TransformComponent>,
@@ -162,13 +175,39 @@ impl World {
             self.visible_world_actions.push(VisibleWorldAction::new(
                 VisibleWorldActionType::SpawnModel(SpawnModelData::new(
                     transform_component.transform.get_matrix(),
+                    *transform_component.uuid(),
                     &model_component.model,
                 )),
             ));
         }
     }
 
-    /// Receive all visible world actions which occured since the last world update
+    /// Record the final visible world actions which happened somewhere along the current frame. Call this before `get_visible_world_actions` to make sure no actions are missed.
+    /// Finalization is not required when doing a resync during the same frame.
+    pub fn finalize_visible_world_actions(&mut self) {
+        appearance_profiling::profile_function!();
+
+        let (transform, model): (
+            specs::ReadStorage<'_, TransformComponent>,
+            specs::ReadStorage<'_, ModelComponent>,
+        ) = self.ecs.system_data();
+
+        for (transform_component, _model_component) in (&transform, &model).join() {
+            if transform_component
+                .transform
+                .handle_has_changed_this_frame()
+            {
+                self.visible_world_actions.push(VisibleWorldAction::new(
+                    VisibleWorldActionType::TransformModel(TransformModelData {
+                        transform_matrix: transform_component.transform.get_matrix(),
+                        entity_uuid: *transform_component.uuid(),
+                    }),
+                ));
+            }
+        }
+    }
+
+    /// Receive all visible world actions which occured since the last world update.
     pub fn get_visible_world_actions(&self) -> &[VisibleWorldAction] {
         &self.visible_world_actions
     }
