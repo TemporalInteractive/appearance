@@ -1,5 +1,9 @@
+use std::collections::HashMap;
+
 use anyhow::Result;
+use appearance::appearance_asset_database::AssetDatabase;
 use appearance::appearance_camera::Camera;
+use appearance::appearance_model::Model;
 use appearance::appearance_render_loop::node::{Node, NodeRenderer};
 use appearance::appearance_world::visible_world_action::VisibleWorldActionType;
 use appearance::Appearance;
@@ -16,26 +20,24 @@ struct Renderer {
     pixels: Vec<u8>,
     frame_idx: u32,
 
-    camera: Camera,
-    blas: Bvh,
-}
+    model_asset_to_blas: HashMap<String, usize>,
+    blasses: Vec<Bvh>,
 
-const VERTICES: &[Vec4] = &[
-    Vec4::new(-1.0, 0.0, 0.0, 0.0),
-    Vec4::new(0.0, 1.0, 0.0, 0.0),
-    Vec4::new(1.0, 0.0, 0.0, 0.0),
-];
+    model_assets: AssetDatabase<Model>,
+    camera: Camera,
+}
 
 impl Renderer {
     fn new() -> Self {
-        let mut blas = Bvh::new();
-        blas.build(VERTICES);
+        let model_assets = AssetDatabase::<Model>::new();
 
         Self {
             pixels: Vec::new(),
             frame_idx: 0,
+            model_asset_to_blas: HashMap::new(),
+            blasses: Vec::new(),
+            model_assets,
             camera: Camera::default(),
-            blas,
         }
     }
 
@@ -47,13 +49,15 @@ impl Renderer {
 
         let mut ray = Ray::new(origin.xyz(), direction.xyz());
 
-        self.blas.intersect(&mut ray);
-        if ray.hit.t != 1e30 {
-            Vec3::new(0.0, 1.0, 1.0)
-        } else {
-            let a = 0.5 * (ray.D.y() + 1.0);
-            (1.0 - a) * Vec3::new(1.0, 1.0, 1.0) + a * Vec3::new(0.5, 0.7, 1.0)
+        for blas in &self.blasses {
+            blas.intersect(&mut ray);
+            if ray.hit.t != 1e30 {
+                return Vec3::new(1.0, 1.0, 0.0);
+            }
         }
+
+        let a = 0.5 * (ray.D.y() + 1.0);
+        (1.0 - a) * Vec3::new(1.0, 1.0, 1.0) + a * Vec3::new(0.5, 0.7, 1.0)
     }
 }
 
@@ -67,6 +71,21 @@ impl NodeRenderer for Renderer {
                 self.camera
                     .transform
                     .set_matrix(data.transform_matrix_bytes);
+            }
+            VisibleWorldActionType::SpawnModel(data) => {
+                let model_asset = self.model_assets.get(data.asset_path()).unwrap();
+
+                // HARDCODED!
+                let duck_mesh = model_asset.root_nodes[0].children[0].mesh.as_ref().unwrap();
+
+                let mut blas = Bvh::new();
+                blas.build_with_indices(&duck_mesh.vertex_positions, &duck_mesh.indices);
+
+                self.blasses.push(blas);
+            }
+            VisibleWorldActionType::Clear(_) => {
+                self.model_asset_to_blas.clear();
+                self.blasses.clear();
             }
         }
     }

@@ -8,7 +8,7 @@
             "program": "${workspaceFolder}/target/debug/render-host.exe",
             "args": [
             ],
-            "cwd": "${workspaceFolder}/target/debug",
+            "cwd": "${workspaceFolder}",
             "preLaunchTask": "rust: cargo build"
         },
         {
@@ -18,7 +18,7 @@
             "program": "${workspaceFolder}/target/debug/render-node.exe",
             "args": [
             ],
-            "cwd": "${workspaceFolder}/target/debug",
+           "cwd": "${workspaceFolder}",
             "preLaunchTask": "rust: cargo build"
         },
         {
@@ -28,7 +28,7 @@
             "program": "${workspaceFolder}/target/release/render-host.exe",
             "args": [
             ],
-            "cwd": "${workspaceFolder}/target/release",
+            "cwd": "${workspaceFolder}",
             "preLaunchTask": "rust: cargo build -r"
         },
         {
@@ -38,7 +38,7 @@
             "program": "${workspaceFolder}/target/release/render-node.exe",
             "args": [
             ],
-            "cwd": "${workspaceFolder}/target/release",
+            "cwd": "${workspaceFolder}",
             "preLaunchTask": "rust: cargo build -r"
         },
     ],

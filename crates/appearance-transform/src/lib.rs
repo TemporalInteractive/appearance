@@ -1,4 +1,4 @@
-use glam::{Mat4, Quat, Vec3, Vec4};
+use glam::{Mat4, Quat, Vec3};
 use std::sync::Mutex;
 
 pub const RIGHT: Vec3 = Vec3::new(1.0, 0.0, 0.0);
@@ -11,17 +11,21 @@ pub struct Transform {
     rotation: Quat,
     scale: Vec3,
     matrix: Mutex<(Mat4, bool)>,
+
+    has_changed_this_frame: Mutex<bool>,
 }
 
 impl Clone for Transform {
     fn clone(&self) -> Self {
         let matrix = self.matrix.lock().unwrap();
+        let has_changed_this_frame = self.has_changed_this_frame.lock().unwrap();
 
         Self {
             translation: self.translation,
             rotation: self.rotation,
             scale: self.scale,
             matrix: Mutex::new(*matrix),
+            has_changed_this_frame: Mutex::new(*has_changed_this_frame),
         }
     }
 }
@@ -33,6 +37,7 @@ impl Default for Transform {
             rotation: Quat::IDENTITY,
             scale: Vec3::ONE,
             matrix: Mutex::new((Mat4::IDENTITY, true)),
+            has_changed_this_frame: Mutex::new(true),
         }
     }
 }
@@ -59,6 +64,7 @@ impl Transform {
                 Mat4::from_scale_rotation_translation(scale, rotation, translation),
                 false,
             )),
+            has_changed_this_frame: Mutex::new(true),
         }
     }
 
@@ -71,6 +77,7 @@ impl Transform {
                 Mat4::from_scale_rotation_translation(Vec3::ONE, Quat::IDENTITY, translation),
                 false,
             )),
+            has_changed_this_frame: Mutex::new(true),
         }
     }
 
@@ -83,6 +90,7 @@ impl Transform {
                 Mat4::from_scale_rotation_translation(scale, Quat::IDENTITY, Vec3::ZERO),
                 false,
             )),
+            has_changed_this_frame: Mutex::new(true),
         }
     }
 
@@ -156,17 +164,7 @@ impl Transform {
         let mut my_matrix = self.matrix.lock().unwrap();
         my_matrix.0 = matrix;
         my_matrix.1 = false;
+
         (self.scale, self.rotation, self.translation) = matrix.to_scale_rotation_translation();
-    }
-
-    pub fn practically_equal(&self, other: &Transform) -> bool {
-        let translation_diff = (self.translation - other.translation).length_squared();
-        let rotation_diff = (Vec4::from_array(self.rotation.to_array())
-            - Vec4::from_array(other.rotation.to_array()))
-        .length_squared()
-            * 1000.0;
-        let scale_diff = (self.scale - other.scale).length_squared();
-
-        (translation_diff + rotation_diff + scale_diff) < 0.0001
     }
 }

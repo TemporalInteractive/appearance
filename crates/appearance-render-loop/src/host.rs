@@ -1,3 +1,4 @@
+use core::sync::atomic::{AtomicBool, Ordering};
 use std::{
     io::{Read, Write},
     net::{TcpListener, TcpStream},
@@ -72,6 +73,7 @@ impl ConnectedNode {
 
 pub struct Host {
     nodes: Arc<Mutex<Vec<Arc<Mutex<ConnectedNode>>>>>,
+    has_received_new_connections: Arc<AtomicBool>,
 
     width: u32,
     height: u32,
@@ -82,14 +84,20 @@ impl Host {
     pub fn new(host_addr: String, width: u32, height: u32) -> Result<Self> {
         let pixels = Arc::new(Mutex::new(vec![0; (width * height * 4) as usize]));
         let nodes = Arc::new(Mutex::new(Vec::new()));
+        let has_received_new_connections = Arc::new(AtomicBool::new(false));
 
         #[allow(clippy::redundant_closure_call)] // TODO: ?
-        (|host_addr, nodes| {
-            thread::spawn(move || Self::listen(host_addr, nodes));
-        })(host_addr.clone(), nodes.clone());
+        (|host_addr, nodes, has_received_new_connections| {
+            thread::spawn(move || Self::listen(host_addr, nodes, has_received_new_connections));
+        })(
+            host_addr.clone(),
+            nodes.clone(),
+            has_received_new_connections.clone(),
+        );
 
         Ok(Self {
             nodes,
+            has_received_new_connections,
 
             width,
             height,
@@ -133,7 +141,11 @@ impl Host {
         }
     }
 
-    fn listen(host_addr: String, nodes: Arc<Mutex<Vec<Arc<Mutex<ConnectedNode>>>>>) -> Result<()> {
+    fn listen(
+        host_addr: String,
+        nodes: Arc<Mutex<Vec<Arc<Mutex<ConnectedNode>>>>>,
+        has_received_new_connections: Arc<AtomicBool>,
+    ) -> Result<()> {
         let tcp_listener = TcpListener::bind(host_addr)?;
 
         for stream in tcp_listener.incoming() {
@@ -142,6 +154,7 @@ impl Host {
                     if let Ok(mut nodes) = nodes.lock() {
                         log::info!("New render node connected!");
                         nodes.push(ConnectedNode::new(stream));
+                        has_received_new_connections.store(true, Ordering::Relaxed);
                     }
                 }
                 Err(_) => {
@@ -191,6 +204,15 @@ impl Host {
         }
     }
 
+    /// Returns if there were any new connections since the last time this function was called
+    pub fn handle_new_connections(&self) -> bool {
+        let has_received_new_connections =
+            self.has_received_new_connections.load(Ordering::Relaxed);
+        self.has_received_new_connections
+            .store(false, Ordering::Relaxed);
+        has_received_new_connections
+    }
+
     pub fn render<F: Fn(&[u8])>(&mut self, result_callback: F) {
         // Notify all nodes to start rendering
         if let Ok(mut nodes) = self.nodes.lock() {
@@ -223,7 +245,7 @@ impl Host {
                     let rows_end = if i as u32 == num_nodes - 1 {
                         self.height
                     } else {
-                        rows_per_node * (i + 1) as u32
+                        rows_per_node * (i as u32 + 1)
                     };
 
                     let assigned_rows = [rows_start, rows_end];
