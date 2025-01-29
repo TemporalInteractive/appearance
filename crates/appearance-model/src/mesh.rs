@@ -77,6 +77,10 @@ impl Mesh {
     pub fn generate_tangents(&mut self) {
         appearance_profiling::profile_function!();
 
+        if self.vertex_tex_coords.is_empty() {
+            return;
+        }
+
         // Source: 2001. http://www.terathon.com/code/tangent.html
         let mut tan1 = vec![Vec3::default(); self.vertex_positions.len()];
         let mut tan2 = vec![Vec3::default(); self.vertex_positions.len()];

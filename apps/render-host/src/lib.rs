@@ -71,10 +71,10 @@ impl RenderLoop for HostRenderLoop {
             world.create_entity("Duck", Transform::from_scale(Vec3::splat(1.0)), |builder| {
                 builder.with(ModelComponent::new("assets/Duck.glb"))
             });
-        let duck_entity2 = world.create_entity(
-            "Duck2",
-            Transform::new(Vec3::new(2.0, 0.0, 0.0), Quat::IDENTITY, Vec3::splat(1.0)),
-            |builder| builder.with(ModelComponent::new("assets/Duck.glb")),
+        let _ = world.create_entity(
+            "Buggy",
+            Transform::new(Vec3::new(3.0, 0.0, 0.0), Quat::IDENTITY, Vec3::splat(0.02)),
+            |builder| builder.with(ModelComponent::new("assets/Buggy.glb")),
         );
 
         Self {

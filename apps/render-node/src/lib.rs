@@ -84,28 +84,30 @@ impl Renderer {
 
         let mut blas_idx_offset = 0;
         for (_asset_path, (model, instance_transforms)) in &self.models {
-            // Loop over all world instances of the model
-            for (i, instance_transform) in instance_transforms.iter().enumerate() {
-                // Assign blasses when on the last instance, also increment the blas idx offset
-                if i == instance_transforms.len() - 1 {
-                    blas_idx_offset += Self::rebuild_tlas_rec(
-                        &model.root_nodes[0],
-                        *instance_transform,
-                        0,
-                        blas_idx_offset,
-                        &mut blas_instances,
-                        &mut Some(&mut blasses),
-                    );
-                } else {
-                    Self::rebuild_tlas_rec(
-                        &model.root_nodes[0],
-                        *instance_transform,
-                        0,
-                        blas_idx_offset,
-                        &mut blas_instances,
-                        &mut None,
-                    );
-                };
+            for root_node in &model.root_nodes {
+                // Loop over all world instances of the model
+                for (i, instance_transform) in instance_transforms.iter().enumerate() {
+                    // Assign blasses when on the last instance, also increment the blas idx offset
+                    if i == instance_transforms.len() - 1 {
+                        blas_idx_offset += Self::rebuild_tlas_rec(
+                            root_node,
+                            *instance_transform,
+                            0,
+                            blas_idx_offset,
+                            &mut blas_instances,
+                            &mut Some(&mut blasses),
+                        );
+                    } else {
+                        Self::rebuild_tlas_rec(
+                            root_node,
+                            *instance_transform,
+                            0,
+                            blas_idx_offset,
+                            &mut blas_instances,
+                            &mut None,
+                        );
+                    };
+                }
             }
         }
 
