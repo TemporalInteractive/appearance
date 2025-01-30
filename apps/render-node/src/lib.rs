@@ -210,7 +210,7 @@ impl Renderer {
 
         let mut ray = Ray::new(origin.xyz(), direction.xyz());
 
-        for _ in 0..100 {
+        for _ in 0..1 {
             self.tlas.intersect(&mut ray);
         }
         if ray.hit.t != 1e30 {
@@ -278,6 +278,9 @@ impl NodeRenderer for Renderer {
         let num_rows = end_row - start_row;
         if let Ok(mut pixels) = self.pixels.lock() {
             pixels.resize((width * num_rows * 4) as usize, 128);
+
+            // result_callback(pixels.as_ref());
+            // return;
         }
 
         self.camera.set_aspect_ratio(width as f32 / height as f32);
@@ -288,20 +291,6 @@ impl NodeRenderer for Renderer {
         };
 
         self.rebuild_tlas();
-
-        // let _ = (0..(num_rows * width))
-        // .collect::<Vec<u32>>()
-        // .par_iter()
-        // .map(|i| {
-        //     let local_y = i / width;
-        //     let local_x = i % width;
-
-        // let _ = (0..(num_rows))
-        //     .collect::<Vec<u32>>()
-        //     .par_iter()
-        //     .map(|i| {
-        //         let local_y = i;
-        //         for local_x in 0..width {
 
         let _ = (0..(num_rows * width))
             .collect::<Vec<u32>>()

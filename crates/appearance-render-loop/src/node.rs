@@ -88,11 +88,8 @@ impl<T: NodeRenderer + 'static> Node<T> {
                                     data.row_start,
                                     data.row_end,
                                     |pixels| {
-                                        let max_pixels_per_package = 300;
-                                        // (laminar::Config::default().receive_buffer_max_size as u32
-                                        //     + 12)
-                                        //     / 4;
-                                        // TODO: why does this calc not work??
+                                        let max_pixels_per_package = 20; //(508 - 12) / 4;
+                                                                         // TODO: why does this calc not work??
 
                                         let packages_per_row =
                                             data.width.div_ceil(max_pixels_per_package);

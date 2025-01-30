@@ -174,10 +174,10 @@ pub struct Host {
 
 pub(crate) fn laminar_config() -> laminar::Config {
     laminar::Config {
-        rtt_smoothing_factor: 0.1,
-        max_packets_in_flight: 2000,
-        max_fragments: 16,
-        socket_polling_timeout: Some(Duration::from_micros(1000)),
+        // rtt_smoothing_factor: 0.1,
+        // max_packets_in_flight: 2000,
+        // max_fragments: 16,
+        socket_polling_timeout: Some(Duration::from_micros(1)),
         ..Default::default()
     }
 }
