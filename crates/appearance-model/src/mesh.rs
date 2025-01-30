@@ -1,5 +1,5 @@
 use glam::{Vec2, Vec3, Vec4, Vec4Swizzles};
-use std::rc::Rc;
+use std::sync::Arc;
 
 use tinybvh::Bvh;
 
@@ -11,7 +11,7 @@ pub struct Mesh {
     pub indices: Vec<u32>,
     pub material_idx: u32,
 
-    pub blas: Rc<Bvh>,
+    pub blas: Arc<Bvh>,
 }
 
 impl Mesh {
@@ -37,7 +37,7 @@ impl Mesh {
             vertex_tex_coords,
             indices,
             material_idx,
-            blas: Rc::new(blas),
+            blas: Arc::new(blas),
         }
     }
 

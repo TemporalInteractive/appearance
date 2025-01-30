@@ -1,6 +1,7 @@
+use rayon::prelude::*;
 use std::collections::HashMap;
 use std::rc::Rc;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
 use appearance::appearance_asset_database::AssetDatabase;
@@ -21,7 +22,7 @@ struct CameraMatrices {
 }
 
 struct Renderer {
-    pixels: Vec<u8>,
+    pixels: Arc<Mutex<Vec<u8>>>,
     frame_idx: u32,
 
     models: HashMap<String, (Arc<Model>, Vec<Uuid>)>,
@@ -39,7 +40,7 @@ impl Renderer {
         let model_assets = AssetDatabase::<Model>::new();
 
         Self {
-            pixels: Vec::new(),
+            pixels: Arc::new(Mutex::new(Vec::new())),
             frame_idx: 0,
             models: HashMap::new(),
             model_instances: HashMap::new(),
@@ -59,14 +60,14 @@ impl Renderer {
         mut blas_idx: u32,
         blas_idx_offset: u32,
         blas_instances: &mut Vec<BlasInstance>,
-        blasses: &mut Option<&mut Vec<Rc<dyn BvhBase>>>,
+        blasses: &mut Option<&mut Vec<Arc<dyn BvhBase>>>,
         blas_idx_to_mesh_mapping: &mut HashMap<u32, (String, u32, Mat4)>,
     ) -> u32 {
         let transform = parent_transform * model.nodes[node as usize].transform.get_matrix();
 
         if let Some(mesh) = &model.nodes[node as usize].mesh {
             if let Some(blasses) = blasses {
-                blasses.push(mesh.blas.clone() as Rc<dyn BvhBase>);
+                blasses.push(mesh.blas.clone() as Arc<dyn BvhBase>);
             }
 
             let inv_trans_transform = transform.inverse().transpose();
@@ -201,7 +202,7 @@ impl Renderer {
         (position.xyz(), normal, tex_coord)
     }
 
-    fn render_pixel(&mut self, uv: &Vec2, camera_matrices: &CameraMatrices) -> Vec3 {
+    fn render_pixel(&self, uv: &Vec2, camera_matrices: &CameraMatrices) -> Vec3 {
         let corrected_uv = Vec2::new(uv.x, -uv.y);
         let origin = camera_matrices.inv_view * Vec4::new(0.0, 0.0, 0.0, 1.0);
         let target = camera_matrices.inv_proj * Vec4::from((corrected_uv, 1.0, 1.0));
@@ -209,7 +210,9 @@ impl Renderer {
 
         let mut ray = Ray::new(origin.xyz(), direction.xyz());
 
-        self.tlas.intersect(&mut ray);
+        for _ in 0..254 {
+            self.tlas.intersect(&mut ray);
+        }
         if ray.hit.t != 1e30 {
             let (_position, normal, _tex_coord) = self.get_hit_data(&ray.hit);
 
@@ -264,9 +267,18 @@ impl NodeRenderer for Renderer {
         }
     }
 
-    fn render(&mut self, width: u32, height: u32, start_row: u32, end_row: u32) -> &[u8] {
+    fn render<F: Fn(&[u8])>(
+        &mut self,
+        width: u32,
+        height: u32,
+        start_row: u32,
+        end_row: u32,
+        result_callback: F,
+    ) {
         let num_rows = end_row - start_row;
-        self.pixels.resize((width * num_rows * 4) as usize, 128);
+        if let Ok(mut pixels) = self.pixels.lock() {
+            pixels.resize((width * num_rows * 4) as usize, 128);
+        }
 
         self.camera.set_aspect_ratio(width as f32 / height as f32);
 
@@ -277,8 +289,26 @@ impl NodeRenderer for Renderer {
 
         self.rebuild_tlas();
 
-        for local_y in 0..num_rows {
-            for local_x in 0..width {
+        // let _ = (0..(num_rows * width))
+        // .collect::<Vec<u32>>()
+        // .par_iter()
+        // .map(|i| {
+        //     let local_y = i / width;
+        //     let local_x = i % width;
+
+        // let _ = (0..(num_rows))
+        //     .collect::<Vec<u32>>()
+        //     .par_iter()
+        //     .map(|i| {
+        //         let local_y = i;
+        //         for local_x in 0..width {
+
+        let _ = (0..(num_rows * width))
+            .collect::<Vec<u32>>()
+            .par_iter()
+            .map(|i| {
+                let local_y = i / width;
+                let local_x = i % width;
                 let x = local_x;
                 let y = local_y + start_row;
                 let uv = Vec2::new(
@@ -289,18 +319,41 @@ impl NodeRenderer for Renderer {
 
                 let result = self.render_pixel(&uv, &camera_matrices);
 
-                self.pixels[(local_y * width + local_x) as usize * 4] = (result.x * 255.0) as u8;
-                self.pixels[(local_y * width + local_x) as usize * 4 + 1] =
-                    (result.y * 255.0) as u8;
-                self.pixels[(local_y * width + local_x) as usize * 4 + 2] =
-                    (result.z * 255.0) as u8;
-                self.pixels[(local_y * width + local_x) as usize * 4 + 3] = 255;
-            }
+                if let Ok(mut pixels) = self.pixels.lock() {
+                    pixels[(local_y * width + local_x) as usize * 4] = (result.x * 255.0) as u8;
+                    pixels[(local_y * width + local_x) as usize * 4 + 1] = (result.y * 255.0) as u8;
+                    pixels[(local_y * width + local_x) as usize * 4 + 2] = (result.z * 255.0) as u8;
+                    pixels[(local_y * width + local_x) as usize * 4 + 3] = 255;
+                }
+            })
+            .collect::<Vec<_>>();
+
+        // for local_y in 0..num_rows {
+        //     for local_x in 0..width {
+        //         let x = local_x;
+        //         let y = local_y + start_row;
+        //         let uv = Vec2::new(
+        //             (x as f32 + 0.5) / width as f32,
+        //             (y as f32 + 0.5) / height as f32,
+        //         ) * 2.0
+        //             - 1.0;
+
+        //         let result = self.render_pixel(&uv, &camera_matrices);
+
+        //         if let Ok(mut pixels) = self.pixels.lock() {
+        //             pixels[(local_y * width + local_x) as usize * 4] = (result.x * 255.0) as u8;
+        //             pixels[(local_y * width + local_x) as usize * 4 + 1] = (result.y * 255.0) as u8;
+        //             pixels[(local_y * width + local_x) as usize * 4 + 2] = (result.z * 255.0) as u8;
+        //             pixels[(local_y * width + local_x) as usize * 4 + 3] = 255;
+        //         }
+        //     }
+        // }
+
+        self.frame_idx += 1;
+
+        if let Ok(pixels) = self.pixels.lock() {
+            result_callback(pixels.as_ref());
         }
-
-        // self.frame_idx += 1;
-
-        &self.pixels
     }
 }
 
