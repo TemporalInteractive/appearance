@@ -262,9 +262,7 @@ impl NodeRenderer for Renderer {
         }
     }
 
-    fn render(&mut self, width: u32, height: u32, assigned_rows: [u32; 2]) -> &[u8] {
-        let start_row = assigned_rows[0];
-        let end_row = assigned_rows[1];
+    fn render(&mut self, width: u32, height: u32, start_row: u32, end_row: u32) -> &[u8] {
         let num_rows = end_row - start_row;
         self.pixels.resize((width * num_rows * 4) as usize, 128);
 
@@ -307,24 +305,29 @@ impl NodeRenderer for Renderer {
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    /// Ip
-    #[arg(short, long, default_value_t = String::from("169.254.187.239"))]
-    ip: String,
+    /// Ip 169.254.187.239
+    #[arg(long, default_value_t = String::from("127.0.0.1"))]
+    host_ip: String,
 
-    /// Tcp port
-    #[arg(short, long, default_value_t = String::from("34234"))]
-    tcp_port: String,
+    /// Host port
+    #[arg(long, default_value_t = String::from("34234"))]
+    host_port: String,
 
-    /// Udp port
-    #[arg(short, long, default_value_t = String::from("2000"))]
-    udp_port: String,
+    /// Node port
+    #[arg(long, default_value_t = String::from("34235"))]
+    node_port: String,
 }
 
 pub fn internal_main() -> Result<()> {
     let _appearance = Appearance::new("Render Node");
 
     let args = Args::parse();
-    let node = Node::new(Renderer::new(), &args.ip, &args.tcp_port, &args.udp_port)?;
+    let node = Node::new(
+        Renderer::new(),
+        &args.host_ip,
+        &args.host_port,
+        &args.node_port,
+    )?;
     node.run();
 
     Ok(())

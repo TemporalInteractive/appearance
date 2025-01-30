@@ -15,5 +15,8 @@ appearance-world.workspace = true
 anyhow.workspace = true
 bytemuck.workspace = true
 futures.workspace = true
+laminar.workspace = true
 log.workspace = true
 winit.workspace = true
+
+crossbeam = "0.8.4"

@@ -22,13 +22,9 @@ use appearance::Appearance;
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    /// Tcp port
-    #[arg(short, long, default_value_t = String::from("34234"))]
-    tcp_port: String,
-
-    /// Udp port
-    #[arg(short, long, default_value_t = String::from("2000"))]
-    udp_port: String,
+    /// Host port
+    #[arg(long, default_value_t = String::from("34234"))]
+    host_port: String,
 }
 
 pub struct HostRenderLoop {
@@ -61,7 +57,7 @@ impl RenderLoop for HostRenderLoop {
         _window: Arc<Window>,
     ) -> Self {
         let args = Args::parse();
-        let host = Host::new(args.tcp_port, args.udp_port, config.width, config.height).unwrap();
+        let host = Host::new(&args.host_port, config.width, config.height).unwrap();
 
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("texture"),
@@ -168,14 +164,14 @@ impl RenderLoop for HostRenderLoop {
                     .update(camera, &self.input_handler, delta_time);
         });
 
-        if self.host.handle_new_connections() {
-            self.world.resync_all_visible_world_actions();
-        } else {
-            self.world.finalize_visible_world_actions();
-        }
+        // if self.host.handle_new_connections() {
+        //     self.world.resync_all_visible_world_actions();
+        // } else {
+        //     self.world.finalize_visible_world_actions();
+        // }
 
-        self.host
-            .send_visible_world_actions(self.world.get_visible_world_actions());
+        // self.host
+        //     .send_visible_world_actions(self.world.get_visible_world_actions());
 
         self.host.render(|pixels| {
             queue.write_texture(
