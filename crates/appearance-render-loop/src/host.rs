@@ -161,15 +161,15 @@ impl Fence {
 }
 
 pub struct Host {
-    connected_nodes: Arc<Mutex<Vec<ConnectedNode>>>,
-    has_received_new_connections: Arc<AtomicBool>,
-    current_fence: Arc<Mutex<Fence>>,
+    connected_nodes: Vec<ConnectedNode>,
+    has_received_new_connections: bool,
     packet_sender: Sender<Packet>,
+    event_receiver: Receiver<SocketEvent>,
 
     frame_idx: u32,
     width: u32,
     height: u32,
-    pixels: Arc<Mutex<Vec<u8>>>,
+    pixels: Vec<u8>,
 }
 
 pub(crate) fn laminar_config() -> laminar::Config {
@@ -184,41 +184,40 @@ pub(crate) fn laminar_config() -> laminar::Config {
 
 impl Host {
     pub fn new(port: &str, width: u32, height: u32) -> Result<Self> {
-        let connected_nodes = Arc::new(Mutex::new(Vec::new()));
-        let has_received_new_connections = Arc::new(AtomicBool::new(false));
-        let current_fence = Arc::new(Mutex::new(Fence::new(0, u32::MAX)));
-        let pixels = Arc::new(Mutex::new(vec![0; (width * height * 4) as usize]));
+        let connected_nodes = Vec::new();
+        let has_received_new_connections = false;
+        let pixels = vec![0; (width * height * 4) as usize];
 
         let mut socket = Socket::bind_with_config(format!("0.0.0.0:{}", port), laminar_config())?;
         let event_receiver = socket.get_event_receiver();
         let packet_sender = socket.get_packet_sender();
         thread::spawn(move || socket.start_polling());
 
-        #[allow(clippy::redundant_closure_call)]
-        (|connected_nodes, has_received_new_connections, pixels, width, current_fence| {
-            thread::spawn(move || {
-                Self::receive_events(
-                    event_receiver,
-                    connected_nodes,
-                    has_received_new_connections,
-                    pixels,
-                    width,
-                    current_fence,
-                )
-            });
-        })(
-            connected_nodes.clone(),
-            has_received_new_connections.clone(),
-            pixels.clone(),
-            width,
-            current_fence.clone(),
-        );
+        // #[allow(clippy::redundant_closure_call)]
+        // (|connected_nodes, has_received_new_connections, pixels, width, current_fence| {
+        //     thread::spawn(move || {
+        //         Self::receive_events(
+        //             event_receiver,
+        //             connected_nodes,
+        //             has_received_new_connections,
+        //             pixels,
+        //             width,
+        //             current_fence,
+        //         )
+        //     });
+        // })(
+        //     connected_nodes.clone(),
+        //     has_received_new_connections.clone(),
+        //     pixels.clone(),
+        //     width,
+        //     current_fence.clone(),
+        // );
 
         Ok(Self {
             connected_nodes,
             has_received_new_connections,
-            current_fence,
             packet_sender,
+            event_receiver,
 
             frame_idx: 0,
             width,
@@ -227,68 +226,50 @@ impl Host {
         })
     }
 
-    fn receive_events(
-        event_receiver: Receiver<SocketEvent>,
-        connected_nodes: Arc<Mutex<Vec<ConnectedNode>>>,
-        has_received_new_connections: Arc<AtomicBool>,
-        pixels: Arc<Mutex<Vec<u8>>>,
-        width: u32,
-        current_fence: Arc<Mutex<Fence>>,
-    ) {
-        loop {
-            match event_receiver.recv() {
+    fn receive_events(&mut self) {
+        let expected_nodes = self.connected_nodes.len() as u32;
+        let mut finished_nodes = 0;
+
+        while finished_nodes != expected_nodes || self.connected_nodes.is_empty() {
+            match self.event_receiver.recv() {
                 #[allow(clippy::single_match)]
                 Ok(socket_event) => match socket_event {
                     SocketEvent::Packet(packet) => {
                         if let Ok(message) = NodeToHostMessage::from_bytes(packet.payload()) {
                             match message {
-                                NodeToHostMessage::RenderPartialFinished(mut data) => {
-                                    if let Ok(mut pixels) = pixels.lock() {
-                                        unsafe {
-                                            let first_dst_pixel =
-                                                (data.row * width) + data.row_start;
+                                NodeToHostMessage::RenderPartialFinished(mut data) => unsafe {
+                                    let first_dst_pixel = (data.row * self.width) + data.row_start;
 
-                                            let dst_ptr = &mut pixels
-                                                [(first_dst_pixel * 4) as usize]
-                                                as *mut u8;
-                                            let src_ptr = &mut data.pixels[0] as *mut u8;
+                                    let dst_ptr =
+                                        &mut self.pixels[(first_dst_pixel * 4) as usize] as *mut u8;
+                                    let src_ptr = &mut data.pixels[0] as *mut u8;
 
-                                            std::ptr::copy_nonoverlapping(
-                                                src_ptr,
-                                                dst_ptr,
-                                                data.pixels.len(),
-                                            );
-                                        }
-                                    }
-                                }
+                                    std::ptr::copy_nonoverlapping(
+                                        src_ptr,
+                                        dst_ptr,
+                                        data.pixels.len(),
+                                    );
+                                },
                                 NodeToHostMessage::RenderFinished(data) => {
-                                    if let Ok(current_fence) = current_fence.lock() {
-                                        if current_fence.frame_idx == data.frame_idx {
-                                            current_fence
-                                                .finished_nodes
-                                                .fetch_add(1i32, Ordering::SeqCst);
-                                        } else {
-                                            panic!();
-                                        }
+                                    if self.frame_idx == data.frame_idx {
+                                        finished_nodes += 1;
                                     } else {
                                         panic!();
                                     }
                                 }
                                 NodeToHostMessage::Connect => {
-                                    if let Ok(mut connected_nodes) = connected_nodes.lock() {
-                                        let mut already_connected = false;
-                                        for node in connected_nodes.iter() {
-                                            if node.addr == packet.addr() {
-                                                already_connected = true;
-                                            }
+                                    let mut already_connected = false;
+                                    for node in &self.connected_nodes {
+                                        if node.addr == packet.addr() {
+                                            already_connected = true;
                                         }
+                                    }
 
-                                        if !already_connected {
-                                            log::info!("Node connected!");
-                                            connected_nodes.push(ConnectedNode::new(packet.addr()));
-                                            has_received_new_connections
-                                                .store(true, Ordering::SeqCst);
-                                        }
+                                    if !already_connected {
+                                        log::info!("Node connected!");
+                                        self.connected_nodes
+                                            .push(ConnectedNode::new(packet.addr()));
+                                        self.has_received_new_connections = true;
                                     }
                                 }
                             }
@@ -319,56 +300,44 @@ impl Host {
     }
 
     pub fn send_visible_world_actions(&mut self, visible_world_actions: Vec<VisibleWorldAction>) {
-        if let Ok(connected_nodes) = self.connected_nodes.lock() {
-            for visible_world_action in visible_world_actions {
-                let message = HostToNodeMessage::VisibleWorldAction(visible_world_action);
-                let message_bytes = message.to_bytes();
+        for visible_world_action in visible_world_actions {
+            let message = HostToNodeMessage::VisibleWorldAction(visible_world_action);
+            let message_bytes = message.to_bytes();
 
-                for node in connected_nodes.iter() {
-                    let packet = Packet::unreliable(node.addr, message_bytes.clone());
-                    self.packet_sender.send(packet).unwrap();
-                }
+            for node in self.connected_nodes.iter() {
+                let packet = Packet::unreliable(node.addr, message_bytes.clone());
+                self.packet_sender.send(packet).unwrap();
             }
         }
     }
 
     /// Returns if there were any new connections since the last time this function was called
-    pub fn handle_new_connections(&self) -> bool {
-        let has_received_new_connections =
-            self.has_received_new_connections.load(Ordering::Relaxed);
-        self.has_received_new_connections
-            .store(false, Ordering::Relaxed);
+    pub fn handle_new_connections(&mut self) -> bool {
+        let has_received_new_connections = self.has_received_new_connections;
+        self.has_received_new_connections = false;
         has_received_new_connections
     }
 
     pub fn render<F: Fn(&[u8])>(&mut self, result_callback: F) {
-        if let Ok(connected_nodes) = self.connected_nodes.lock() {
-            if let Ok(mut current_fence) = self.current_fence.lock() {
-                *current_fence = Fence::new(connected_nodes.len() as u32, self.frame_idx);
-            }
-
-            // Return pink when no nodes connected, this should be a visual warning to the host
-            if connected_nodes.is_empty() {
-                if let Ok(mut pixels) = self.pixels.lock() {
-                    for x in 0..self.width {
-                        for y in 0..self.height {
-                            pixels[(y * self.width + x) as usize * 4] = 255;
-                            pixels[(y * self.width + x) as usize * 4 + 1] = 0;
-                            pixels[(y * self.width + x) as usize * 4 + 2] = 255;
-                            pixels[(y * self.width + x) as usize * 4 + 3] = 255;
-                        }
-                    }
-
-                    result_callback(pixels.as_ref());
+        // Return pink when no nodes connected, this should be a visual warning to the host
+        if self.connected_nodes.is_empty() {
+            for x in 0..self.width {
+                for y in 0..self.height {
+                    self.pixels[(y * self.width + x) as usize * 4] = 255;
+                    self.pixels[(y * self.width + x) as usize * 4 + 1] = 0;
+                    self.pixels[(y * self.width + x) as usize * 4 + 2] = 255;
+                    self.pixels[(y * self.width + x) as usize * 4 + 3] = 255;
                 }
-
-                return;
             }
 
-            let num_nodes = connected_nodes.len() as u32;
+            //result_callback(self.pixels.as_ref());
+
+            //return;
+        } else {
+            let num_nodes = self.connected_nodes.len() as u32;
             let rows_per_node = self.height / num_nodes;
 
-            for (i, node) in connected_nodes.iter().enumerate() {
+            for (i, node) in self.connected_nodes.iter().enumerate() {
                 let row_start = rows_per_node * i as u32;
                 let row_end = if i as u32 == num_nodes - 1 {
                     self.height
@@ -388,19 +357,19 @@ impl Host {
             }
         }
 
-        loop {
-            if let Ok(current_fence) = self.current_fence.lock() {
-                if current_fence.is_finished() {
-                    break;
-                }
-            }
+        self.receive_events();
 
-            thread::yield_now();
-        }
+        // loop {
+        //     if let Ok(current_fence) = self.current_fence.lock() {
+        //         if current_fence.is_finished() {
+        //             break;
+        //         }
+        //     }
 
-        if let Ok(pixels) = self.pixels.lock() {
-            result_callback(pixels.as_ref());
-        }
+        //     thread::yield_now();
+        // }
+
+        result_callback(self.pixels.as_ref());
 
         self.frame_idx += 1;
     }

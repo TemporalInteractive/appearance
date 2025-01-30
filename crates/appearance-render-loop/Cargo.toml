@@ -17,6 +17,7 @@ bytemuck.workspace = true
 futures.workspace = true
 laminar.workspace = true
 log.workspace = true
+rayon.workspace = true
 winit.workspace = true
 
 crossbeam = "0.8.4"

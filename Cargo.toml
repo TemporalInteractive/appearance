@@ -40,7 +40,7 @@ specs = { version = "0.20.0", default-features = false, features = ["parallel"] 
 parking_lot = { version = "0.12.3", default-features = false }
 puffin = { version = "0.19.0", default-features = false, features = ["web"] }
 # puffin_egui = { git = "https://github.com/TemporalInteractive/puffin.git", default-features = true }
-# rayon = { version = "1.8.1", default-features = false }
+rayon = { version = "1.8.1", default-features = false }
 superluminal-perf = { version = "0.3.0", default-features = false }
 tinybvh = { git = "https://github.com/TemporalInteractive/tinybvh.git", rev = "27224a6", default-features = false, features = ["simd"] }
 #tinybvh = { path = "../tinybvh", default-features = false, features = ["simd"] }

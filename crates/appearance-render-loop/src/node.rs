@@ -1,5 +1,10 @@
-use core::{convert::From, net::SocketAddr};
+use core::{
+    iter::{IntoIterator, Iterator},
+    net::SocketAddr,
+};
 use std::thread;
+
+use rayon::prelude::*;
 
 use anyhow::Result;
 use appearance_time::Timer;
@@ -25,6 +30,13 @@ pub struct Node<T: NodeRenderer> {
     renderer: T,
     host_addr: SocketAddr,
     connection_timer: Timer,
+}
+
+fn sum_of_squares(input: &[u32]) -> u32 {
+    input
+        .par_iter() // <-- just change that!
+        .map(|&i| i * i)
+        .sum()
 }
 
 impl<T: NodeRenderer + 'static> Node<T> {
@@ -70,19 +82,6 @@ impl<T: NodeRenderer + 'static> Node<T> {
                                     data.row_end,
                                 );
 
-                                {
-                                    let message =
-                                        NodeToHostMessage::RenderFinished(RenderFinishedData {
-                                            frame_idx: data.frame_idx,
-                                        });
-                                    let packet = Packet::reliable_ordered(
-                                        packet.addr(),
-                                        message.to_bytes(),
-                                        None,
-                                    );
-                                    self.packet_sender.send(packet).unwrap();
-                                }
-
                                 let max_pixels_per_package = 300;
                                 // (laminar::Config::default().receive_buffer_max_size as u32
                                 //     + 12)
@@ -91,7 +90,14 @@ impl<T: NodeRenderer + 'static> Node<T> {
 
                                 let packages_per_row = data.width.div_ceil(max_pixels_per_package);
 
-                                for local_row in 0..(data.row_end - data.row_start) {
+                                let mut packets = vec![];
+
+                                let indices: Vec<u32> =
+                                    (0..(data.row_end - data.row_start)).collect::<Vec<u32>>();
+
+                                indices.par_iter().map(|local_row| {});
+
+                                for local_row in &indices {
                                     let row = local_row + data.row_start;
 
                                     let mut pixels_processed_this_row = 0;
@@ -118,13 +124,29 @@ impl<T: NodeRenderer + 'static> Node<T> {
                                                 pixels: pixel_row,
                                             },
                                         );
-                                        let packet = Packet::unreliable_sequenced(
+                                        packets.push(Packet::unreliable_sequenced(
                                             packet.addr(),
                                             message.to_bytes(),
                                             None,
-                                        );
-                                        self.packet_sender.send(packet).unwrap();
+                                        ));
                                     }
+                                }
+
+                                {
+                                    let message =
+                                        NodeToHostMessage::RenderFinished(RenderFinishedData {
+                                            frame_idx: data.frame_idx,
+                                        });
+                                    let packet = Packet::reliable_ordered(
+                                        packet.addr(),
+                                        message.to_bytes(),
+                                        None,
+                                    );
+                                    self.packet_sender.send(packet).unwrap();
+                                }
+
+                                for packet in packets {
+                                    self.packet_sender.send(packet).unwrap();
                                 }
                             }
                             HostToNodeMessage::VisibleWorldAction(data) => {
