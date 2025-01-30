@@ -100,8 +100,10 @@ impl<T: NodeRenderer + 'static> Node<T> {
                                                 row_start: first_pixel_in_row,
                                                 pixels: pixel_row,
                                             });
-                                        let packet =
-                                            Packet::unreliable(packet.addr(), message.to_bytes());
+                                        let packet = Packet::reliable_unordered(
+                                            packet.addr(),
+                                            message.to_bytes(),
+                                        );
                                         self.packet_sender.send(packet).unwrap();
                                     }
                                 }

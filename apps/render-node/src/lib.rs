@@ -207,17 +207,19 @@ impl Renderer {
         let target = camera_matrices.inv_proj * Vec4::from((corrected_uv, 1.0, 1.0));
         let direction = camera_matrices.inv_view * Vec4::from((target.xyz().normalize(), 0.0));
 
-        let mut ray = Ray::new(origin.xyz(), direction.xyz());
+        // let mut ray = Ray::new(origin.xyz(), direction.xyz());
 
-        self.tlas.intersect(&mut ray);
-        if ray.hit.t != 1e30 {
-            let (_position, normal, _tex_coord) = self.get_hit_data(&ray.hit);
+        // self.tlas.intersect(&mut ray);
+        // if ray.hit.t != 1e30 {
+        //     let (_position, normal, _tex_coord) = self.get_hit_data(&ray.hit);
 
-            return normal * 0.5 + 0.5;
-        }
+        //     return normal * 0.5 + 0.5;
+        // }
 
-        let a = 0.5 * (ray.D.y() + 1.0);
-        (1.0 - a) * Vec3::new(1.0, 1.0, 1.0) + a * Vec3::new(0.5, 0.7, 1.0)
+        // let a = 0.5 * (ray.D.y() + 1.0);
+        // (1.0 - a) * Vec3::new(1.0, 1.0, 1.0) + a * Vec3::new(0.5, 0.7, 1.0)
+
+        Vec3::new(uv.x, uv.y, 0.0) * 0.5 + 0.5
     }
 }
 
@@ -268,33 +270,33 @@ impl NodeRenderer for Renderer {
 
         // self.camera.set_aspect_ratio(width as f32 / height as f32);
 
-        // let camera_matrices = CameraMatrices {
-        //     inv_view: self.camera.transform.get_matrix(),
-        //     inv_proj: self.camera.get_matrix().inverse(),
-        // };
+        let camera_matrices = CameraMatrices {
+            inv_view: self.camera.transform.get_matrix(),
+            inv_proj: self.camera.get_matrix().inverse(),
+        };
 
         // self.rebuild_tlas();
 
-        // for local_y in 0..num_rows {
-        //     for local_x in 0..width {
-        //         let x = local_x;
-        //         let y = local_y + start_row;
-        //         let uv = Vec2::new(
-        //             (x as f32 + 0.5) / width as f32,
-        //             (y as f32 + 0.5) / height as f32,
-        //         ) * 2.0
-        //             - 1.0;
+        for local_y in 0..num_rows {
+            for local_x in 0..width {
+                let x = local_x;
+                let y = local_y + start_row;
+                let uv = Vec2::new(
+                    (x as f32 + 0.5) / width as f32,
+                    (y as f32 + 0.5) / height as f32,
+                ) * 2.0
+                    - 1.0;
 
-        //         let result = self.render_pixel(&uv, &camera_matrices);
+                let result = self.render_pixel(&uv, &camera_matrices);
 
-        //         self.pixels[(local_y * width + local_x) as usize * 4] = (result.x * 255.0) as u8;
-        //         self.pixels[(local_y * width + local_x) as usize * 4 + 1] =
-        //             (result.y * 255.0) as u8;
-        //         self.pixels[(local_y * width + local_x) as usize * 4 + 2] =
-        //             (result.z * 255.0) as u8;
-        //         self.pixels[(local_y * width + local_x) as usize * 4 + 3] = 255;
-        //     }
-        // }
+                self.pixels[(local_y * width + local_x) as usize * 4] = (result.x * 255.0) as u8;
+                self.pixels[(local_y * width + local_x) as usize * 4 + 1] =
+                    (result.y * 255.0) as u8;
+                self.pixels[(local_y * width + local_x) as usize * 4 + 2] =
+                    (result.z * 255.0) as u8;
+                self.pixels[(local_y * width + local_x) as usize * 4 + 3] = 255;
+            }
+        }
 
         // self.frame_idx += 1;
 
@@ -306,7 +308,7 @@ impl NodeRenderer for Renderer {
 #[command(version, about, long_about = None)]
 struct Args {
     /// Ip 169.254.187.239
-    #[arg(long, default_value_t = String::from("127.0.0.1"))]
+    #[arg(long, default_value_t = String::from("169.254.187.239"))]
     host_ip: String,
 
     /// Host port

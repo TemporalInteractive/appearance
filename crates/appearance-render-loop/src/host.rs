@@ -119,7 +119,7 @@ impl Host {
         let has_received_new_connections = Arc::new(AtomicBool::new(false));
         let pixels = Arc::new(Mutex::new(vec![0; (width * height * 4) as usize]));
 
-        let mut socket = Socket::bind(format!("127.0.0.1:{}", port))?;
+        let mut socket = Socket::bind(format!("0.0.0.0:{}", port))?;
         let event_receiver = socket.get_event_receiver();
         let packet_sender = socket.get_packet_sender();
         thread::spawn(move || socket.start_polling());
@@ -253,7 +253,7 @@ impl Host {
                     row_start,
                     row_end,
                 });
-                let packet = Packet::unreliable(node.addr, message.to_bytes());
+                let packet = Packet::reliable_unordered(node.addr, message.to_bytes());
                 self.packet_sender.send(packet).unwrap();
             }
         }
