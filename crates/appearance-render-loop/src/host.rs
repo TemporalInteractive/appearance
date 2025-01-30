@@ -1,5 +1,10 @@
 use anyhow::Result;
-use core::{net::SocketAddr, sync::atomic::AtomicBool, time::Duration};
+use appearance_world::visible_world_action::VisibleWorldAction;
+use core::{
+    net::SocketAddr,
+    sync::atomic::{AtomicBool, Ordering},
+    time::Duration,
+};
 use crossbeam::channel::{Receiver, Sender};
 use std::{
     sync::{Arc, Mutex},
@@ -65,6 +70,7 @@ pub struct StartRenderData {
 
 pub enum HostToNodeMessage {
     StartRender(StartRenderData),
+    VisibleWorldAction(VisibleWorldAction),
 }
 
 impl HostToNodeMessage {
@@ -73,6 +79,12 @@ impl HostToNodeMessage {
             HostToNodeMessage::StartRender(data) => {
                 let mut bytes = bytemuck::bytes_of(&0u32).to_vec();
                 bytes.append(&mut bytemuck::bytes_of(&data).to_vec());
+                bytes
+            }
+            HostToNodeMessage::VisibleWorldAction(mut data) => {
+                let mut bytes = bytemuck::bytes_of(&1u32).to_vec();
+                bytes.append(&mut bytemuck::bytes_of(&data.ty).to_vec());
+                bytes.append(&mut data.data);
                 bytes
             }
         }
@@ -84,6 +96,11 @@ impl HostToNodeMessage {
             0 => Ok(Self::StartRender(*bytemuck::from_bytes::<StartRenderData>(
                 &bytes[4..bytes.len()],
             ))),
+            1 => {
+                let ty = *bytemuck::from_bytes::<u32>(&bytes[4..8]);
+                let data = bytes[8..bytes.len()].to_vec();
+                Ok(Self::VisibleWorldAction(VisibleWorldAction { ty, data }))
+            }
             _ => Err(anyhow::Error::msg(
                 "Failed to convert bytes to host-to-node message.",
             )),
@@ -125,11 +142,22 @@ impl Host {
         thread::spawn(move || socket.start_polling());
 
         #[allow(clippy::redundant_closure_call)]
-        (|connected_nodes, pixels, width| {
+        (|connected_nodes, has_received_new_connections, pixels, width| {
             thread::spawn(move || {
-                Self::receive_events(event_receiver, connected_nodes, pixels, width)
+                Self::receive_events(
+                    event_receiver,
+                    connected_nodes,
+                    has_received_new_connections,
+                    pixels,
+                    width,
+                )
             });
-        })(connected_nodes.clone(), pixels.clone(), width);
+        })(
+            connected_nodes.clone(),
+            has_received_new_connections.clone(),
+            pixels.clone(),
+            width,
+        );
 
         Ok(Self {
             connected_nodes,
@@ -145,6 +173,7 @@ impl Host {
     fn receive_events(
         event_receiver: Receiver<SocketEvent>,
         connected_nodes: Arc<Mutex<Vec<ConnectedNode>>>,
+        has_received_new_connections: Arc<AtomicBool>,
         pixels: Arc<Mutex<Vec<u8>>>,
         width: u32,
     ) {
@@ -186,6 +215,8 @@ impl Host {
                                         if !already_connected {
                                             log::info!("Node connected!");
                                             connected_nodes.push(ConnectedNode::new(packet.addr()));
+                                            has_received_new_connections
+                                                .store(true, Ordering::Relaxed);
                                         }
                                     }
                                 }
@@ -214,6 +245,29 @@ impl Host {
                 }
             }
         }
+    }
+
+    pub fn send_visible_world_actions(&mut self, visible_world_actions: Vec<VisibleWorldAction>) {
+        if let Ok(connected_nodes) = self.connected_nodes.lock() {
+            for visible_world_action in visible_world_actions {
+                let message = HostToNodeMessage::VisibleWorldAction(visible_world_action);
+                let message_bytes = message.to_bytes();
+
+                for node in connected_nodes.iter() {
+                    let packet = Packet::reliable_unordered(node.addr, message_bytes.clone());
+                    self.packet_sender.send(packet).unwrap();
+                }
+            }
+        }
+    }
+
+    /// Returns if there were any new connections since the last time this function was called
+    pub fn handle_new_connections(&self) -> bool {
+        let has_received_new_connections =
+            self.has_received_new_connections.load(Ordering::Relaxed);
+        self.has_received_new_connections
+            .store(false, Ordering::Relaxed);
+        has_received_new_connections
     }
 
     pub fn render<F: Fn(&[u8])>(&mut self, result_callback: F) {

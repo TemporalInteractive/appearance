@@ -108,6 +108,15 @@ impl<T: NodeRenderer + 'static> Node<T> {
                                     }
                                 }
                             }
+                            HostToNodeMessage::VisibleWorldAction(data) => {
+                                let visible_world_action =
+                                    VisibleWorldActionType::from_ty_and_bytes(
+                                        data.ty,
+                                        data.data.as_ref(),
+                                    );
+
+                                self.renderer.visible_world_action(&visible_world_action);
+                            }
                         }
                     } else {
                         //log::warn!("Failed to read message from {}.", packet.addr());

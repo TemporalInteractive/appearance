@@ -207,19 +207,19 @@ impl Renderer {
         let target = camera_matrices.inv_proj * Vec4::from((corrected_uv, 1.0, 1.0));
         let direction = camera_matrices.inv_view * Vec4::from((target.xyz().normalize(), 0.0));
 
-        // let mut ray = Ray::new(origin.xyz(), direction.xyz());
+        let mut ray = Ray::new(origin.xyz(), direction.xyz());
 
-        // self.tlas.intersect(&mut ray);
-        // if ray.hit.t != 1e30 {
-        //     let (_position, normal, _tex_coord) = self.get_hit_data(&ray.hit);
+        self.tlas.intersect(&mut ray);
+        if ray.hit.t != 1e30 {
+            let (_position, normal, _tex_coord) = self.get_hit_data(&ray.hit);
 
-        //     return normal * 0.5 + 0.5;
-        // }
+            return normal * 0.5 + 0.5;
+        }
 
-        // let a = 0.5 * (ray.D.y() + 1.0);
-        // (1.0 - a) * Vec3::new(1.0, 1.0, 1.0) + a * Vec3::new(0.5, 0.7, 1.0)
+        let a = 0.5 * (ray.D.y() + 1.0);
+        (1.0 - a) * Vec3::new(1.0, 1.0, 1.0) + a * Vec3::new(0.5, 0.7, 1.0)
 
-        Vec3::new(uv.x, uv.y, 0.0) * 0.5 + 0.5
+        //Vec3::new(uv.x, uv.y, 0.0) * 0.5 + 0.5
     }
 }
 
@@ -268,14 +268,14 @@ impl NodeRenderer for Renderer {
         let num_rows = end_row - start_row;
         self.pixels.resize((width * num_rows * 4) as usize, 128);
 
-        // self.camera.set_aspect_ratio(width as f32 / height as f32);
+        self.camera.set_aspect_ratio(width as f32 / height as f32);
 
         let camera_matrices = CameraMatrices {
             inv_view: self.camera.transform.get_matrix(),
             inv_proj: self.camera.get_matrix().inverse(),
         };
 
-        // self.rebuild_tlas();
+        self.rebuild_tlas();
 
         for local_y in 0..num_rows {
             for local_x in 0..width {
