@@ -80,7 +80,6 @@ impl<T: NodeRenderer + 'static> Node<T> {
                     if let Ok(message) = HostToNodeMessage::from_bytes(packet.payload()) {
                         match message {
                             HostToNodeMessage::StartRender(data) => {
-                                log::info!("start render");
 
                                 self.renderer.render(
                                     data.width,
@@ -117,7 +116,7 @@ impl<T: NodeRenderer + 'static> Node<T> {
                                                     pixels_processed_this_row += num_pixels_in_row;
 
                                                     let pixel_start =
-                                                        row * data.width + first_pixel_in_row;
+                                                        local_row * data.width + first_pixel_in_row;
                                                     let pixel_end = pixel_start + num_pixels_in_row;
 
                                                     let pixel_row = pixels[(pixel_start * 4)

@@ -210,7 +210,7 @@ impl Renderer {
 
         let mut ray = Ray::new(origin.xyz(), direction.xyz());
 
-        for _ in 0..254 {
+        for _ in 0..100 {
             self.tlas.intersect(&mut ray);
         }
         if ray.hit.t != 1e30 {
