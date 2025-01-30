@@ -87,31 +87,25 @@ pub struct Host {
 }
 
 impl Host {
-    pub fn new(
-        host_ip: String,
-        tcp_port: String,
-        udp_port: String,
-        width: u32,
-        height: u32,
-    ) -> Result<Self> {
+    pub fn new(tcp_port: String, udp_port: String, width: u32, height: u32) -> Result<Self> {
         let pixels = Arc::new(Mutex::new(vec![0; (width * height * 4) as usize]));
         let nodes = Arc::new(Mutex::new(Vec::new()));
         let has_received_new_connections = Arc::new(AtomicBool::new(false));
 
-        #[allow(clippy::redundant_closure_call)] // TODO: ?
+        #[allow(clippy::redundant_closure_call)]
         (|host_addr, nodes, has_received_new_connections| {
             thread::spawn(move || Self::listen(host_addr, nodes, has_received_new_connections));
         })(
-            format!("{}:{}", host_ip, tcp_port),
+            format!("0.0.0.0:{}", tcp_port),
             nodes.clone(),
             has_received_new_connections.clone(),
         );
 
-        #[allow(clippy::redundant_closure_call)] // TODO: ?
+        #[allow(clippy::redundant_closure_call)]
         (|udp_addr, width, height, pixels| {
             thread::spawn(move || Self::handle_node_results(udp_addr, width, height, pixels));
         })(
-            format!("{}:{}", host_ip, udp_port),
+            format!("0.0.0.0:{}", udp_port),
             width,
             height,
             pixels.clone(),
@@ -197,10 +191,13 @@ impl Host {
         let udp_socket = UdpSocket::bind(udp_addr)?;
 
         let footer_size = std::mem::size_of::<NodePixelMessageFooter>();
-        let mut buf = vec![0u8; (width * 4) as usize + footer_size];
+        let mut buf =
+            vec![0u8; (width * 4 * NodePixelMessageFooter::NUM_ROWS) as usize + footer_size];
 
         loop {
-            if let Ok((len, _src)) = udp_socket.recv_from(&mut buf) {
+            if let Ok((len, src)) = udp_socket.recv_from(&mut buf) {
+                log::info!("src: {:?}", src);
+
                 let footer_bytes = &buf[(len - footer_size)..len];
                 let footer = *bytemuck::from_bytes::<NodePixelMessageFooter>(footer_bytes);
 
@@ -211,7 +208,7 @@ impl Host {
                                 &mut pixels[(footer.row() as u32 * width * 4) as usize] as *mut u8;
                             let src_ptr = &mut buf[0] as *mut u8;
 
-                            let num_bytes = (width * 4) as usize;
+                            let num_bytes = (width * 4 * NodePixelMessageFooter::NUM_ROWS) as usize;
 
                             std::ptr::copy_nonoverlapping(src_ptr, dst_ptr, num_bytes);
                         }
@@ -330,7 +327,8 @@ impl Host {
 
             vec_remove_multiple(&mut nodes, &mut disconnected_node_indices);
 
-            // Wait for all nodes to finish rendering
+            // Wait for all nodes to receive world activity events and the render events
+            // At this point the nodes are may not be done with rendering yet, but that's acceptable
             for node in nodes.iter_mut() {
                 if let Ok(mut node) = node.lock() {
                     let mut buf = vec![0u8; 4];
