@@ -308,20 +308,23 @@ impl NodeRenderer for Renderer {
 #[command(version, about, long_about = None)]
 struct Args {
     /// Ip
-    #[arg(short, long, default_value_t = String::from("127.0.0.1"))]
+    #[arg(short, long, default_value_t = String::from("169.254.187.239"))]
     ip: String,
 
-    /// Port
+    /// Tcp port
     #[arg(short, long, default_value_t = String::from("34234"))]
-    port: String,
+    tcp_port: String,
+
+    /// Udp port
+    #[arg(short, long, default_value_t = String::from("2000"))]
+    udp_port: String,
 }
 
 pub fn internal_main() -> Result<()> {
     let _appearance = Appearance::new("Render Node");
 
     let args = Args::parse();
-    let host_addr = format!("{}:{}", args.ip, args.port);
-    let node = Node::new(Renderer::new(), &host_addr)?; // Host ip / Jason
+    let node = Node::new(Renderer::new(), &args.ip, &args.tcp_port, &args.udp_port)?;
     node.run();
 
     Ok(())

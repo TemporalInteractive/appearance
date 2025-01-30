@@ -23,12 +23,17 @@ use appearance::Appearance;
 #[command(version, about, long_about = None)]
 struct Args {
     /// Ip
-    #[arg(short, long, default_value_t = String::from("127.0.0.1"))]
+    #[arg(short, long, default_value_t = String::from("169.254.187.239"))]
+    // 127.0.0.1 / 169.254.187.239
     ip: String,
 
-    /// Port
+    /// Tcp port
     #[arg(short, long, default_value_t = String::from("34234"))]
-    port: String,
+    tcp_port: String,
+
+    /// Udp port
+    #[arg(short, long, default_value_t = String::from("2000"))]
+    udp_port: String,
 }
 
 pub struct HostRenderLoop {
@@ -61,8 +66,14 @@ impl RenderLoop for HostRenderLoop {
         _window: Arc<Window>,
     ) -> Self {
         let args = Args::parse();
-        let host_addr = format!("{}:{}", args.ip, args.port);
-        let host = Host::new(host_addr, config.width, config.height).unwrap();
+        let host = Host::new(
+            args.ip,
+            args.tcp_port,
+            args.udp_port,
+            config.width,
+            config.height,
+        )
+        .unwrap();
 
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("texture"),

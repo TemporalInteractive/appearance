@@ -1,5 +1,5 @@
 use std::io::{Read, Write};
-use std::net::TcpStream;
+use std::net::{TcpStream, UdpSocket};
 
 use anyhow::Result;
 use appearance_world::visible_world_action::VisibleWorldActionType;
@@ -21,18 +21,50 @@ enum ExpectedPackage {
 }
 
 pub struct Node<T: NodeRenderer> {
-    host_addr: String,
+    host_ip: String,
+    tcp_port: String,
+    udp_port: String,
+
     tcp_stream: Option<TcpStream>,
+    udp_socket: Option<UdpSocket>,
     expected_package: ExpectedPackage,
 
     renderer: T,
 }
 
+#[derive(bytemuck::NoUninit, bytemuck::AnyBitPattern, Clone, Copy, Default, Debug)]
+#[repr(C)]
+pub struct NodePixelMessageFooter {
+    row: u32,
+    local_row: u32,
+}
+
+impl NodePixelMessageFooter {
+    fn new(row: u32, local_row: u32) -> Self {
+        Self { row, local_row }
+    }
+
+    pub fn row(&self) -> u32 {
+        self.row
+    }
+
+    pub fn local_row(&self) -> u32 {
+        self.local_row
+    }
+
+    pub fn is_valid(&self) -> bool {
+        true // TODO: checksum
+    }
+}
+
 impl<T: NodeRenderer + 'static> Node<T> {
-    pub fn new(renderer: T, host_addr: &str) -> Result<Self> {
+    pub fn new(renderer: T, host_ip: &str, tcp_port: &str, udp_port: &str) -> Result<Self> {
         Ok(Self {
-            host_addr: host_addr.to_owned(),
+            host_ip: host_ip.to_owned(),
+            tcp_port: tcp_port.to_owned(),
+            udp_port: udp_port.to_owned(),
             tcp_stream: None,
+            udp_socket: None,
             expected_package: ExpectedPackage::Message,
             renderer,
         })
@@ -41,14 +73,33 @@ impl<T: NodeRenderer + 'static> Node<T> {
     fn handle_message(&mut self, host_message: HostMessage) -> Result<()> {
         match host_message.ty() {
             HostMessageType::StartRender => {
-                if let Some(tcp_stream) = &mut self.tcp_stream {
+                if let Some(udp_socket) = &mut self.udp_socket {
                     let pixels = self.renderer.render(
                         host_message.width,
                         host_message.height,
                         host_message.assigned_rows,
                     );
 
-                    tcp_stream.write_all(pixels)?;
+                    for local_row in
+                        0..(host_message.assigned_rows[1] - host_message.assigned_rows[0])
+                    {
+                        let row = local_row + host_message.assigned_rows[0];
+                        let footer = NodePixelMessageFooter::new(row, local_row);
+
+                        let pixel_start = (local_row * host_message.width * 4) as usize;
+                        let pixel_end = ((local_row + 1) * host_message.width * 4) as usize;
+                        let mut pixel_row = pixels[pixel_start..pixel_end].to_vec();
+
+                        pixel_row.append(&mut bytemuck::bytes_of(&footer).to_vec());
+
+                        udp_socket
+                            .send_to(&pixel_row, format!("{}:{}", self.host_ip, self.udp_port))?;
+                    }
+
+                    self.tcp_stream
+                        .as_ref()
+                        .unwrap()
+                        .write_all(bytemuck::bytes_of(&100u32))?;
                 }
             }
             HostMessageType::VisibleWorldAction => {
@@ -63,6 +114,7 @@ impl<T: NodeRenderer + 'static> Node<T> {
     fn disconnect(&mut self) {
         log::info!("Disconnected");
         self.tcp_stream = None;
+        self.udp_socket = None;
     }
 
     pub fn run(mut self) {
@@ -71,9 +123,15 @@ impl<T: NodeRenderer + 'static> Node<T> {
         loop {
             // Try to connect to host if not connected yet
             if self.tcp_stream.is_none() {
-                if let Ok(tcp_stream) = TcpStream::connect(&self.host_addr) {
+                if let Ok(tcp_stream) =
+                    TcpStream::connect(format!("{}:{}", self.host_ip, self.tcp_port))
+                {
+                    let udp_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+                    //if let Ok(udp_socket) = UdpSocket::bind(&self.host_addr) {
                     log::info!("Connected");
                     self.tcp_stream = Some(tcp_stream);
+                    self.udp_socket = Some(udp_socket);
+                    //}
                 }
             }
 
