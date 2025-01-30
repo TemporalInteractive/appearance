@@ -7,7 +7,9 @@ use appearance_world::visible_world_action::VisibleWorldActionType;
 use crossbeam::channel::{Receiver, Sender};
 use laminar::{Packet, Socket, SocketEvent};
 
-use crate::host::{HostToNodeMessage, NodeToHostMessage, RenderFinishedData};
+use crate::host::{
+    HostToNodeMessage, NodeToHostMessage, RenderFinishedData, RenderPartialFinishedData,
+};
 
 pub trait NodeRenderer {
     // TODO: world manipulation
@@ -66,6 +68,19 @@ impl<T: NodeRenderer + 'static> Node<T> {
                                     data.row_end,
                                 );
 
+                                {
+                                    let message =
+                                        NodeToHostMessage::RenderFinished(RenderFinishedData {
+                                            frame_idx: data.frame_idx,
+                                        });
+                                    let packet = Packet::reliable_ordered(
+                                        packet.addr(),
+                                        message.to_bytes(),
+                                        None,
+                                    );
+                                    self.packet_sender.send(packet).unwrap();
+                                }
+
                                 let max_pixels_per_package = 250;
                                 // (laminar::Config::default().receive_buffer_max_size as u32
                                 //     + 12)
@@ -94,16 +109,15 @@ impl<T: NodeRenderer + 'static> Node<T> {
                                             [(pixel_start * 4) as usize..(pixel_end * 4) as usize]
                                             .to_vec();
 
-                                        let message =
-                                            NodeToHostMessage::RenderFinished(RenderFinishedData {
+                                        let message = NodeToHostMessage::RenderPartialFinished(
+                                            RenderPartialFinishedData {
                                                 row,
                                                 row_start: first_pixel_in_row,
                                                 pixels: pixel_row,
-                                            });
-                                        let packet = Packet::reliable_unordered(
-                                            packet.addr(),
-                                            message.to_bytes(),
+                                            },
                                         );
+                                        let packet =
+                                            Packet::unreliable(packet.addr(), message.to_bytes());
                                         self.packet_sender.send(packet).unwrap();
                                     }
                                 }
