@@ -39,7 +39,7 @@ pub struct NodePixelMessageFooter {
 }
 
 impl NodePixelMessageFooter {
-    const NUM_ROWS: u32 = 4;
+    pub const NUM_ROWS: u32 = 4;
 
     fn new(row: u32) -> Self {
         Self { row }
