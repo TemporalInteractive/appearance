@@ -4,6 +4,7 @@ use appearance_world::visible_world_action::VisibleWorldAction;
 use core::{
     net::SocketAddr,
     sync::atomic::{AtomicBool, AtomicI32, Ordering},
+    time::Duration,
     u32,
 };
 use crossbeam::channel::{Receiver, Sender};
@@ -171,6 +172,16 @@ pub struct Host {
     pixels: Arc<Mutex<Vec<u8>>>,
 }
 
+pub(crate) fn laminar_config() -> laminar::Config {
+    laminar::Config {
+        rtt_smoothing_factor: 0.1,
+        max_packets_in_flight: 2000,
+        max_fragments: 16,
+        socket_polling_timeout: Some(Duration::from_micros(1000)),
+        ..Default::default()
+    }
+}
+
 impl Host {
     pub fn new(port: &str, width: u32, height: u32) -> Result<Self> {
         let connected_nodes = Arc::new(Mutex::new(Vec::new()));
@@ -178,7 +189,7 @@ impl Host {
         let current_fence = Arc::new(Mutex::new(Fence::new(0, u32::MAX)));
         let pixels = Arc::new(Mutex::new(vec![0; (width * height * 4) as usize]));
 
-        let mut socket = Socket::bind(format!("0.0.0.0:{}", port))?;
+        let mut socket = Socket::bind_with_config(format!("0.0.0.0:{}", port), laminar_config())?;
         let event_receiver = socket.get_event_receiver();
         let packet_sender = socket.get_packet_sender();
         thread::spawn(move || socket.start_polling());
@@ -251,7 +262,6 @@ impl Host {
                                     }
                                 }
                                 NodeToHostMessage::RenderFinished(data) => {
-                                    let heifuieif = 0;
                                     if let Ok(current_fence) = current_fence.lock() {
                                         if current_fence.frame_idx == data.frame_idx {
                                             current_fence
@@ -378,7 +388,6 @@ impl Host {
             }
         }
 
-        let timeout_timer = Timer::new();
         loop {
             if let Ok(current_fence) = self.current_fence.lock() {
                 if current_fence.is_finished() {
@@ -386,14 +395,8 @@ impl Host {
                 }
             }
 
-            if timeout_timer.elapsed() > 0.5 {
-                break;
-            }
-
             thread::yield_now();
         }
-
-        //std::thread::sleep(Duration::from_millis(50));
 
         if let Ok(pixels) = self.pixels.lock() {
             result_callback(pixels.as_ref());

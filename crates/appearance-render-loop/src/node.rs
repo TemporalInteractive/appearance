@@ -8,7 +8,8 @@ use crossbeam::channel::{Receiver, Sender};
 use laminar::{Packet, Socket, SocketEvent};
 
 use crate::host::{
-    HostToNodeMessage, NodeToHostMessage, RenderFinishedData, RenderPartialFinishedData,
+    laminar_config, HostToNodeMessage, NodeToHostMessage, RenderFinishedData,
+    RenderPartialFinishedData,
 };
 
 pub trait NodeRenderer {
@@ -28,7 +29,8 @@ pub struct Node<T: NodeRenderer> {
 
 impl<T: NodeRenderer + 'static> Node<T> {
     pub fn new(renderer: T, host_ip: &str, host_port: &str, node_port: &str) -> Result<Self> {
-        let mut socket = Socket::bind(format!("0.0.0.0:{}", node_port))?;
+        let mut socket =
+            Socket::bind_with_config(format!("0.0.0.0:{}", node_port), laminar_config())?;
         let packet_sender = socket.get_packet_sender();
         let event_receiver = socket.get_event_receiver();
         thread::spawn(move || socket.start_polling());
@@ -81,7 +83,7 @@ impl<T: NodeRenderer + 'static> Node<T> {
                                     self.packet_sender.send(packet).unwrap();
                                 }
 
-                                let max_pixels_per_package = 250;
+                                let max_pixels_per_package = 300;
                                 // (laminar::Config::default().receive_buffer_max_size as u32
                                 //     + 12)
                                 //     / 4;
@@ -116,8 +118,11 @@ impl<T: NodeRenderer + 'static> Node<T> {
                                                 pixels: pixel_row,
                                             },
                                         );
-                                        let packet =
-                                            Packet::unreliable(packet.addr(), message.to_bytes());
+                                        let packet = Packet::unreliable_sequenced(
+                                            packet.addr(),
+                                            message.to_bytes(),
+                                            None,
+                                        );
                                         self.packet_sender.send(packet).unwrap();
                                     }
                                 }
