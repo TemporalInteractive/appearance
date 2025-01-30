@@ -86,7 +86,7 @@ impl<T: NodeRenderer + 'static> Node<T> {
                         - host_message.assigned_rows[0])
                         / NodePixelMessageFooter::NUM_ROWS
                     {
-                        let local_row = local_row * 20;
+                        let local_row = local_row * NodePixelMessageFooter::NUM_ROWS;
                         let row = local_row + host_message.assigned_rows[0];
                         let footer = NodePixelMessageFooter::new(row);
 
