@@ -80,6 +80,7 @@ impl<T: NodeRenderer + 'static> Node<T> {
                     if let Ok(message) = HostToNodeMessage::from_bytes(packet.payload()) {
                         match message {
                             HostToNodeMessage::StartRender(data) => {
+                                log::info!("start render: {:?}", data);
 
                                 self.renderer.render(
                                     data.width,
