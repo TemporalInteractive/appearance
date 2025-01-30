@@ -36,20 +36,17 @@ pub struct Node<T: NodeRenderer> {
 #[repr(C)]
 pub struct NodePixelMessageFooter {
     row: u32,
-    local_row: u32,
 }
 
 impl NodePixelMessageFooter {
-    fn new(row: u32, local_row: u32) -> Self {
-        Self { row, local_row }
+    const NUM_ROWS: u32 = 4;
+
+    fn new(row: u32) -> Self {
+        Self { row }
     }
 
     pub fn row(&self) -> u32 {
         self.row
-    }
-
-    pub fn local_row(&self) -> u32 {
-        self.local_row
     }
 
     pub fn is_valid(&self) -> bool {
@@ -74,20 +71,29 @@ impl<T: NodeRenderer + 'static> Node<T> {
         match host_message.ty() {
             HostMessageType::StartRender => {
                 if let Some(udp_socket) = &mut self.udp_socket {
+                    self.tcp_stream
+                        .as_ref()
+                        .unwrap()
+                        .write_all(bytemuck::bytes_of(&100u32))?;
+
                     let pixels = self.renderer.render(
                         host_message.width,
                         host_message.height,
                         host_message.assigned_rows,
                     );
 
-                    for local_row in
-                        0..(host_message.assigned_rows[1] - host_message.assigned_rows[0])
+                    for local_row in 0..(host_message.assigned_rows[1]
+                        - host_message.assigned_rows[0])
+                        / NodePixelMessageFooter::NUM_ROWS
                     {
+                        let local_row = local_row * 20;
                         let row = local_row + host_message.assigned_rows[0];
-                        let footer = NodePixelMessageFooter::new(row, local_row);
+                        let footer = NodePixelMessageFooter::new(row);
 
                         let pixel_start = (local_row * host_message.width * 4) as usize;
-                        let pixel_end = ((local_row + 1) * host_message.width * 4) as usize;
+                        let pixel_end = ((local_row + NodePixelMessageFooter::NUM_ROWS)
+                            * host_message.width
+                            * 4) as usize;
                         let mut pixel_row = pixels[pixel_start..pixel_end].to_vec();
 
                         pixel_row.append(&mut bytemuck::bytes_of(&footer).to_vec());
@@ -95,11 +101,6 @@ impl<T: NodeRenderer + 'static> Node<T> {
                         udp_socket
                             .send_to(&pixel_row, format!("{}:{}", self.host_ip, self.udp_port))?;
                     }
-
-                    self.tcp_stream
-                        .as_ref()
-                        .unwrap()
-                        .write_all(bytemuck::bytes_of(&100u32))?;
                 }
             }
             HostMessageType::VisibleWorldAction => {
