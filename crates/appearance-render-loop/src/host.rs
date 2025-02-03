@@ -40,6 +40,12 @@ impl NodeToHostMessage {
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
+        if bytes.len() < 4 {
+            return Err(anyhow::Error::msg(
+                "Failed to convert bytes to node-to-host message. (Empty bytes)",
+            ));
+        }
+
         let ty = *bytemuck::from_bytes::<u32>(&bytes[0..4]);
         match ty {
             0 => {
@@ -91,6 +97,12 @@ impl HostToNodeMessage {
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
+        if bytes.len() < 4 {
+            return Err(anyhow::Error::msg(
+                "Failed to convert bytes to host-to-node message. (Empty bytes)",
+            ));
+        }
+
         let ty = *bytemuck::from_bytes::<u32>(&bytes[0..4]);
         match ty {
             0 => Ok(Self::StartRender(*bytemuck::from_bytes::<StartRenderData>(
