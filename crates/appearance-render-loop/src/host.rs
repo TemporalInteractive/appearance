@@ -176,23 +176,26 @@ impl Host {
             if let Ok(socket_event) = event_receiver.recv() {
                 match socket_event {
                     SocketEvent::Packet(packet) => {
-                        if let Ok(message) = NodeToHostMessage::from_bytes(packet.payload()) {
-                            match message {
-                                NodeToHostMessage::RenderPartialFinished(mut data) => unsafe {
-                                    let first_dst_pixel = (data.row * width) + data.row_start;
+                        if !packet.is_barrier() {
+                            if let Ok(message) = NodeToHostMessage::from_bytes(packet.payload()) {
+                                match message {
+                                    NodeToHostMessage::RenderPartialFinished(mut data) => unsafe {
+                                        let first_dst_pixel = (data.row * width) + data.row_start;
 
-                                    if let Ok(mut pixels) = pixels.lock() {
-                                        let dst_ptr =
-                                            &mut pixels[(first_dst_pixel * 4) as usize] as *mut u8;
-                                        let src_ptr = &mut data.pixels[0] as *mut u8;
+                                        if let Ok(mut pixels) = pixels.lock() {
+                                            let dst_ptr = &mut pixels
+                                                [(first_dst_pixel * 4) as usize]
+                                                as *mut u8;
+                                            let src_ptr = &mut data.pixels[0] as *mut u8;
 
-                                        std::ptr::copy_nonoverlapping(
-                                            src_ptr,
-                                            dst_ptr,
-                                            data.pixels.len(),
-                                        );
-                                    }
-                                },
+                                            std::ptr::copy_nonoverlapping(
+                                                src_ptr,
+                                                dst_ptr,
+                                                data.pixels.len(),
+                                            );
+                                        }
+                                    },
+                                }
                             }
                         } else {
                             log::warn!("Failed to read message from {}.", packet.addr());
@@ -252,8 +255,6 @@ impl Host {
 
     pub fn render<F: Fn(&[u8])>(&mut self, result_callback: F) {
         if let Ok(connected_nodes) = self.connected_nodes.lock() {
-            let barrier = self.socket.barrier().fetch_add(1, Ordering::SeqCst);
-
             // Return pink when no nodes connected, this should be a visual warning to the host
             if connected_nodes.is_empty() {
                 if let Ok(mut pixels) = self.pixels.lock() {
@@ -267,6 +268,8 @@ impl Host {
                     }
                 }
             } else {
+                let barrier = self.socket.barrier().fetch_add(1, Ordering::SeqCst) + 1;
+
                 let num_nodes = connected_nodes.len() as u32;
                 let rows_per_node = self.height / num_nodes;
 
@@ -291,14 +294,14 @@ impl Host {
                         .send_barrier(*node, message.to_bytes())
                         .unwrap();
                 }
-            }
 
-            // Wait for all nodes to finish rendering
-            loop {
-                if self.socket.barrier().load(Ordering::SeqCst) == barrier + 1 {
-                    break;
+                // Wait for all nodes to finish rendering
+                loop {
+                    if self.socket.barrier().load(Ordering::SeqCst) == barrier + 1 {
+                        break;
+                    }
+                    thread::yield_now();
                 }
-                thread::yield_now();
             }
         }
 
