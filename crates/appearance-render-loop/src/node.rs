@@ -39,13 +39,6 @@ pub struct Node<T: NodeRenderer> {
     connection_timer: Timer,
 }
 
-fn sum_of_squares(input: &[u32]) -> u32 {
-    input
-        .par_iter() // <-- just change that!
-        .map(|&i| i * i)
-        .sum()
-}
-
 impl<T: NodeRenderer + 'static> Node<T> {
     pub fn new(renderer: T, host_ip: &str, host_port: &str, node_port: &str) -> Result<Self> {
         let mut socket =
