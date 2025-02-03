@@ -2,8 +2,9 @@ use core::{net::SocketAddr, ops::FnMut, sync::atomic::Ordering};
 use std::thread;
 
 use anyhow::Result;
+use appearance_time::Timer;
 use appearance_world::visible_world_action::VisibleWorldActionType;
-use unreliable::{Socket, SocketEvent};
+use unreliable::{Socket, SocketEvent, MAX_PACKET_PAYLOAD_SIZE};
 
 use crate::host::{
     HostToNodeMessage, NodeToHostMessage, RenderPartialFinishedData, StartRenderData,
@@ -44,7 +45,9 @@ impl<T: NodeRenderer + 'static> Node<T> {
             data.row_start,
             data.row_end,
             |pixels| {
-                let max_pixels_per_package = 20; //(508 - 12) / 4;
+                //let timer = Timer::new();
+
+                let max_pixels_per_package = (MAX_PACKET_PAYLOAD_SIZE as u32 - 12) / 4;
 
                 let packages_per_row = data.width.div_ceil(max_pixels_per_package);
 
@@ -82,7 +85,9 @@ impl<T: NodeRenderer + 'static> Node<T> {
                     }
                 }
 
-                self.socket.barrier().fetch_add(1, Ordering::SeqCst);
+                //println!("Took {}ms", timer.elapsed() * 1000.0);
+
+                self.socket.barrier().fetch_add(1, Ordering::Relaxed);
                 self.socket
                     .packet_sender()
                     .send_barrier(*addr, vec![])
@@ -102,6 +107,7 @@ impl<T: NodeRenderer + 'static> Node<T> {
                                 self.start_render(data, packet.addr());
                             }
                             HostToNodeMessage::VisibleWorldAction(data) => {
+                                println!("Action: {:?}", data.ty);
                                 let visible_world_action =
                                     VisibleWorldActionType::from_ty_and_bytes(
                                         data.ty,
