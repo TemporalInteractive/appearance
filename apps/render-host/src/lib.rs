@@ -23,8 +23,8 @@ use appearance::Appearance;
 #[command(version, about, long_about = None)]
 struct Args {
     /// Host port
-    #[arg(long, default_value_t = String::from("34234"))]
-    host_port: String,
+    #[arg(long, default_value_t = 34234)]
+    host_port: u16,
 }
 
 pub struct HostRenderLoop {
@@ -57,7 +57,7 @@ impl RenderLoop for HostRenderLoop {
         _window: Arc<Window>,
     ) -> Self {
         let args = Args::parse();
-        let host = Host::new(&args.host_port, config.width, config.height).unwrap();
+        let host = Host::new(args.host_port, config.width, config.height).unwrap();
 
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("texture"),

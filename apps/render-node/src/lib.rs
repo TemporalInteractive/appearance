@@ -1,6 +1,8 @@
+use core::net::SocketAddr;
+use core::ops::FnMut;
+use core::str::FromStr;
 use rayon::prelude::*;
 use std::collections::HashMap;
-use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
@@ -267,20 +269,20 @@ impl NodeRenderer for Renderer {
         }
     }
 
-    fn render<F: Fn(&[u8])>(
+    fn render<F: FnMut(&[u8])>(
         &mut self,
         width: u32,
         height: u32,
         start_row: u32,
         end_row: u32,
-        result_callback: F,
+        mut result_callback: F,
     ) {
         let num_rows = end_row - start_row;
         if let Ok(mut pixels) = self.pixels.lock() {
             pixels.resize((width * num_rows * 4) as usize, 128);
 
-            // result_callback(pixels.as_ref());
-            // return;
+            result_callback(pixels.as_ref());
+            return;
         }
 
         self.camera.set_aspect_ratio(width as f32 / height as f32);
@@ -354,24 +356,17 @@ struct Args {
     host_ip: String,
 
     /// Host port
-    #[arg(long, default_value_t = String::from("34234"))]
-    host_port: String,
-
-    /// Node port
-    #[arg(long, default_value_t = String::from("34235"))]
-    node_port: String,
+    #[arg(long, default_value_t = 34234)]
+    host_port: u16,
 }
 
 pub fn internal_main() -> Result<()> {
     let _appearance = Appearance::new("Render Node");
 
     let args = Args::parse();
-    let node = Node::new(
-        Renderer::new(),
-        &args.host_ip,
-        &args.host_port,
-        &args.node_port,
-    )?;
+    let addr = SocketAddr::from_str(&format!("{}:{}", args.host_ip, args.host_port)).unwrap();
+
+    let node = Node::new(Renderer::new(), addr)?;
     node.run();
 
     Ok(())
