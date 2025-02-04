@@ -79,13 +79,23 @@ impl<T: NodeRenderer + 'static> Node<T> {
                             &pixels[(start_pixel * 4) as usize..(end_pixel * 4) as usize];
 
                         // TODO: compress
-                        let compressed_pixels = block_pixels.to_vec();
+                        let image = turbojpeg::Image {
+                            pixels: block_pixels,
+                            width: RENDER_BLOCK_SIZE as usize,
+                            height: RENDER_BLOCK_SIZE as usize,
+                            pitch: RENDER_BLOCK_SIZE as usize * 4,
+                            format: turbojpeg::PixelFormat::RGBA,
+                        };
+                        let compressed_pixel_bytes =
+                            turbojpeg::compress(image, 95, turbojpeg::Subsamp::Sub2x2).unwrap();
+
+                        //let compressed_pixels = block_pixels;
 
                         let message =
                             NodeToHostMessage::RenderPartialFinished(RenderPartialFinishedData {
                                 row: (local_block_y * RENDER_BLOCK_SIZE) + data.row_start,
                                 column_block: local_block_x,
-                                pixels: compressed_pixels,
+                                compressed_pixel_bytes: compressed_pixel_bytes.to_vec(),
                             });
 
                         self.socket

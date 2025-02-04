@@ -18,7 +18,7 @@ pub const RENDER_BLOCK_SIZE: u32 = 32;
 pub struct RenderPartialFinishedData {
     pub row: u32,
     pub column_block: u32,
-    pub pixels: Vec<u8>,
+    pub compressed_pixel_bytes: Vec<u8>,
 }
 
 pub struct RenderFinishedData {
@@ -36,7 +36,7 @@ impl NodeToHostMessage {
                 let mut bytes = bytemuck::bytes_of(&0u32).to_vec();
                 bytes.append(&mut bytemuck::bytes_of(&data.row).to_vec());
                 bytes.append(&mut bytemuck::bytes_of(&data.column_block).to_vec());
-                bytes.append(&mut data.pixels);
+                bytes.append(&mut data.compressed_pixel_bytes);
                 bytes
             }
         }
@@ -54,11 +54,11 @@ impl NodeToHostMessage {
             0 => {
                 let row = *bytemuck::from_bytes::<u32>(&bytes[4..8]);
                 let column_block = *bytemuck::from_bytes::<u32>(&bytes[8..12]);
-                let pixels = bytes[12..bytes.len()].to_vec();
+                let compressed_pixel_bytes = bytes[12..bytes.len()].to_vec();
                 Ok(Self::RenderPartialFinished(RenderPartialFinishedData {
                     row,
                     column_block,
-                    pixels,
+                    compressed_pixel_bytes,
                 }))
             }
             _ => Err(anyhow::Error::msg(
@@ -184,7 +184,13 @@ impl Host {
                                 match message {
                                     NodeToHostMessage::RenderPartialFinished(data) => {
                                         // decompress
-                                        let decompressed_pixels = data.pixels;
+                                        let image = turbojpeg::decompress(
+                                            &data.compressed_pixel_bytes,
+                                            turbojpeg::PixelFormat::RGBA,
+                                        )
+                                        .unwrap();
+
+                                        //let decompressed_pixels = data.pixels;
 
                                         if let Ok(mut pixels) = pixels.lock() {
                                             for local_y in 0..RENDER_BLOCK_SIZE {
@@ -200,7 +206,7 @@ impl Host {
 
                                                     for i in 0..4 {
                                                         pixels[id * 4 + i] =
-                                                            decompressed_pixels[local_id * 4 + i];
+                                                            image.pixels[local_id * 4 + i];
                                                     }
                                                 }
                                             }
