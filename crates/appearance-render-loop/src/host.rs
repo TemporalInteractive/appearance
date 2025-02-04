@@ -97,6 +97,7 @@ impl HostToNodeMessage {
             HostToNodeMessage::VisibleWorldAction(mut data) => {
                 let mut bytes = bytemuck::bytes_of(&1u32).to_vec();
                 bytes.append(&mut bytemuck::bytes_of(&data.ty).to_vec());
+                bytes.append(&mut bytemuck::bytes_of(&(data.must_sync as u32)).to_vec());
                 bytes.append(&mut data.data);
                 bytes
             }
@@ -117,8 +118,13 @@ impl HostToNodeMessage {
             ))),
             1 => {
                 let ty = *bytemuck::from_bytes::<u32>(&bytes[4..8]);
-                let data = bytes[8..bytes.len()].to_vec();
-                Ok(Self::VisibleWorldAction(VisibleWorldAction { ty, data }))
+                let must_sync = (*bytemuck::from_bytes::<u32>(&bytes[8..12])) != 0;
+                let data = bytes[12..bytes.len()].to_vec();
+                Ok(Self::VisibleWorldAction(VisibleWorldAction {
+                    ty,
+                    data,
+                    must_sync,
+                }))
             }
             _ => Err(anyhow::Error::msg(
                 "Failed to convert bytes to host-to-node message.",
@@ -269,14 +275,22 @@ impl Host {
         let packet_sender = self.socket.packet_sender();
 
         for visible_world_action in visible_world_actions {
+            let must_sync = visible_world_action.must_sync;
+
             let message = HostToNodeMessage::VisibleWorldAction(visible_world_action);
             let message_bytes = message.to_bytes();
 
             if let Ok(connected_nodes) = self.connected_nodes.lock() {
                 for node in connected_nodes.iter() {
-                    packet_sender
-                        .send_barrier(*node, message_bytes.clone())
-                        .unwrap();
+                    if must_sync {
+                        packet_sender
+                            .send_barrier(*node, message_bytes.clone())
+                            .unwrap();
+                    } else {
+                        packet_sender
+                            .send_unreliable(*node, message_bytes.clone())
+                            .unwrap();
+                    }
                 }
             }
         }
