@@ -44,8 +44,8 @@ superluminal-perf = { version = "0.3.0", default-features = false }
 #tinybvh = { git = "https://github.com/TemporalInteractive/tinybvh.git", rev = "27224a6", default-features = false, features = ["simd"] }
 tinybvh = { path = "../tinybvh", default-features = false, features = ["simd", "unsafe-send-sync"] }
 turbojpeg = { version = "1.2.1", default-features = true }
-unreliable = { git = "https://github.com/TemporalInteractive/unreliable.git", rev = "000e35b", default-features = false }
-# unreliable = { path = "../unreliable/unreliable", default-features = false }
+# unreliable = { git = "https://github.com/TemporalInteractive/unreliable.git", rev = "000e35b", default-features = false }
+unreliable = { path = "../unreliable/unreliable", default-features = false }
 uuid = { version = "1.12.1", default-features = false, features = ["std", "v4", "bytemuck"]}
 winit = { version = "0.30.5", default-features = false, features = ["rwh_06"] }
 wgpu = { version = "23.0.1", default-features = false, features = ["wgsl"] }
