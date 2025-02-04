@@ -8,6 +8,7 @@ use unreliable::{Socket, SocketEvent, MAX_PACKET_PAYLOAD_SIZE};
 
 use crate::host::{
     HostToNodeMessage, NodeToHostMessage, RenderPartialFinishedData, StartRenderData,
+    RENDER_BLOCK_SIZE,
 };
 
 pub trait NodeRenderer {
@@ -45,45 +46,84 @@ impl<T: NodeRenderer + 'static> Node<T> {
             data.row_start,
             data.row_end,
             |pixels| {
-                //let timer = Timer::new();
+                //let timer = Timer::new();'
 
-                let max_pixels_per_package = (MAX_PACKET_PAYLOAD_SIZE as u32 - 12) / 4;
+                let num_blocks_x = data.width / RENDER_BLOCK_SIZE;
+                let num_blocks_y = (data.row_end - data.row_start) / RENDER_BLOCK_SIZE;
 
-                let packages_per_row = data.width.div_ceil(max_pixels_per_package);
+                for local_block_y in 0..num_blocks_y {
+                    for local_block_x in 0..num_blocks_x {
+                        // TODO: order pixels already in blocks inside the renderer
+                        let mut block_pixels =
+                            vec![0u8; (RENDER_BLOCK_SIZE * RENDER_BLOCK_SIZE * 4) as usize];
+                        for local_y in 0..RENDER_BLOCK_SIZE {
+                            for local_x in 0..RENDER_BLOCK_SIZE {
+                                let y = local_y + (local_block_y * RENDER_BLOCK_SIZE);
+                                let x = local_x + (local_block_x * RENDER_BLOCK_SIZE);
 
-                let packet_sender = self.socket.packet_sender();
+                                let id = (y * data.width + x) as usize;
+                                let local_id = (local_y * RENDER_BLOCK_SIZE + local_x) as usize;
 
-                for local_row in 0..(data.row_end - data.row_start) {
-                    let row = local_row + data.row_start;
+                                for i in 0..4 {
+                                    block_pixels[local_id * 4 + i] = pixels[id * 4 + i];
+                                }
+                            }
+                        }
 
-                    let mut pixels_processed_this_row = 0;
-                    for i in 0..packages_per_row {
-                        let first_pixel_in_row = i * max_pixels_per_package;
-                        let num_pixels_in_row = if i < packages_per_row - 1 {
-                            max_pixels_per_package
-                        } else {
-                            data.width - pixels_processed_this_row
-                        };
-                        pixels_processed_this_row += num_pixels_in_row;
-
-                        let pixel_start = local_row * data.width + first_pixel_in_row;
-                        let pixel_end = pixel_start + num_pixels_in_row;
-
-                        let pixel_row =
-                            pixels[(pixel_start * 4) as usize..(pixel_end * 4) as usize].to_vec();
+                        // TODO: compress
+                        let compressed_pixels = block_pixels;
 
                         let message =
                             NodeToHostMessage::RenderPartialFinished(RenderPartialFinishedData {
-                                row,
-                                row_start: first_pixel_in_row,
-                                pixels: pixel_row,
+                                row: (local_block_y * RENDER_BLOCK_SIZE) + data.row_start,
+                                column_block: local_block_x,
+                                pixels: compressed_pixels,
                             });
 
-                        packet_sender
+                        self.socket
+                            .packet_sender()
                             .send_unreliable(*addr, message.to_bytes())
                             .unwrap();
                     }
                 }
+
+                // let max_pixels_per_package = (MAX_PACKET_PAYLOAD_SIZE as u32 - 12) / 4;
+
+                // let packages_per_row = data.width.div_ceil(max_pixels_per_package);
+
+                // let packet_sender = self.socket.packet_sender();
+
+                // for local_row in 0..(data.row_end - data.row_start) {
+                //     let row = local_row + data.row_start;
+
+                //     let mut pixels_processed_this_row = 0;
+                //     for i in 0..packages_per_row {
+                //         let first_pixel_in_row = i * max_pixels_per_package;
+                //         let num_pixels_in_row = if i < packages_per_row - 1 {
+                //             max_pixels_per_package
+                //         } else {
+                //             data.width - pixels_processed_this_row
+                //         };
+                //         pixels_processed_this_row += num_pixels_in_row;
+
+                //         let pixel_start = local_row * data.width + first_pixel_in_row;
+                //         let pixel_end = pixel_start + num_pixels_in_row;
+
+                //         let pixel_row =
+                //             pixels[(pixel_start * 4) as usize..(pixel_end * 4) as usize].to_vec();
+
+                //         let message =
+                //             NodeToHostMessage::RenderPartialFinished(RenderPartialFinishedData {
+                //                 row,
+                //                 row_start: first_pixel_in_row,
+                //                 pixels: pixel_row,
+                //             });
+
+                //         packet_sender
+                //             .send_unreliable(*addr, message.to_bytes())
+                //             .unwrap();
+                //     }
+                // }
 
                 //println!("Took {}ms", timer.elapsed() * 1000.0);
 

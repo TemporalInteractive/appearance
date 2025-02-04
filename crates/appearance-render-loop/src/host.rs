@@ -12,9 +12,12 @@ use std::{
 
 use unreliable::{Socket, SocketEvent};
 
+/// Size of each rendered block is 8x8, as this is the minimum size jpeg is able to compress.
+pub const RENDER_BLOCK_SIZE: u32 = 8;
+
 pub struct RenderPartialFinishedData {
     pub row: u32,
-    pub row_start: u32,
+    pub column_block: u32,
     pub pixels: Vec<u8>,
 }
 
@@ -32,7 +35,7 @@ impl NodeToHostMessage {
             NodeToHostMessage::RenderPartialFinished(mut data) => {
                 let mut bytes = bytemuck::bytes_of(&0u32).to_vec();
                 bytes.append(&mut bytemuck::bytes_of(&data.row).to_vec());
-                bytes.append(&mut bytemuck::bytes_of(&data.row_start).to_vec());
+                bytes.append(&mut bytemuck::bytes_of(&data.column_block).to_vec());
                 bytes.append(&mut data.pixels);
                 bytes
             }
@@ -50,11 +53,11 @@ impl NodeToHostMessage {
         match ty {
             0 => {
                 let row = *bytemuck::from_bytes::<u32>(&bytes[4..8]);
-                let row_start = *bytemuck::from_bytes::<u32>(&bytes[8..12]);
+                let column_block = *bytemuck::from_bytes::<u32>(&bytes[8..12]);
                 let pixels = bytes[12..bytes.len()].to_vec();
                 Ok(Self::RenderPartialFinished(RenderPartialFinishedData {
                     row,
-                    row_start,
+                    column_block,
                     pixels,
                 }))
             }
@@ -179,22 +182,46 @@ impl Host {
                         if !packet.is_barrier() {
                             if let Ok(message) = NodeToHostMessage::from_bytes(packet.payload()) {
                                 match message {
-                                    NodeToHostMessage::RenderPartialFinished(mut data) => unsafe {
-                                        let first_dst_pixel = (data.row * width) + data.row_start;
+                                    NodeToHostMessage::RenderPartialFinished(data) => {
+                                        // decompress
+                                        let decompressed_pixels = data.pixels;
 
                                         if let Ok(mut pixels) = pixels.lock() {
-                                            let dst_ptr = &mut pixels
-                                                [(first_dst_pixel * 4) as usize]
-                                                as *mut u8;
-                                            let src_ptr = &mut data.pixels[0] as *mut u8;
+                                            for local_y in 0..RENDER_BLOCK_SIZE {
+                                                for local_x in 0..RENDER_BLOCK_SIZE {
+                                                    let x = local_x
+                                                        + (data.column_block * RENDER_BLOCK_SIZE);
+                                                    let y = local_y + data.row;
 
-                                            std::ptr::copy_nonoverlapping(
-                                                src_ptr,
-                                                dst_ptr,
-                                                data.pixels.len(),
-                                            );
+                                                    let id = (y * width + x) as usize;
+                                                    let local_id = (local_y * RENDER_BLOCK_SIZE
+                                                        + local_x)
+                                                        as usize;
+
+                                                    for i in 0..4 {
+                                                        pixels[id * 4 + i] =
+                                                            decompressed_pixels[local_id * 4 + i];
+                                                    }
+                                                }
+                                            }
                                         }
-                                    },
+
+                                        // TODO: in the future the 8x8 blocks can be memcpied, however this will require a more advanced blit pass to display correctly
+                                        // let first_dst_pixel = (data.row * width) + data.row_start;
+
+                                        // if let Ok(mut pixels) = pixels.lock() {
+                                        //     let dst_ptr = &mut pixels
+                                        //         [(first_dst_pixel * 4) as usize]
+                                        //         as *mut u8;
+                                        //     let src_ptr = &mut data.pixels[0] as *mut u8;
+
+                                        //     std::ptr::copy_nonoverlapping(
+                                        //         src_ptr,
+                                        //         dst_ptr,
+                                        //         data.pixels.len(),
+                                        //     );
+                                        // }
+                                    }
                                 }
                             } else {
                                 log::warn!("Failed to read message from {}.", packet.addr());
@@ -229,21 +256,21 @@ impl Host {
     }
 
     pub fn send_visible_world_actions(&mut self, visible_world_actions: Vec<VisibleWorldAction>) {
-        let packet_sender = self.socket.packet_sender();
+        // let packet_sender = self.socket.packet_sender();
 
-        for visible_world_action in visible_world_actions {
-            let message = HostToNodeMessage::VisibleWorldAction(visible_world_action);
-            let message_bytes = message.to_bytes();
+        // for visible_world_action in visible_world_actions {
+        //     let message = HostToNodeMessage::VisibleWorldAction(visible_world_action);
+        //     let message_bytes = message.to_bytes();
 
-            if let Ok(connected_nodes) = self.connected_nodes.lock() {
-                for node in connected_nodes.iter() {
-                    packet_sender
-                        .send_barrier(*node, message_bytes.clone())
-                        .unwrap();
-                    println!("Send action");
-                }
-            }
-        }
+        //     if let Ok(connected_nodes) = self.connected_nodes.lock() {
+        //         for node in connected_nodes.iter() {
+        //             packet_sender
+        //                 .send_barrier(*node, message_bytes.clone())
+        //                 .unwrap();
+        //             println!("Send action");
+        //         }
+        //     }
+        // }
     }
 
     /// Returns if there were any new connections since the last time this function was called
@@ -284,6 +311,8 @@ impl Host {
                     } else {
                         rows_per_node * (i as u32 + 1)
                     };
+
+                    assert!((row_end - row_start) % 8 == 0);
 
                     let message = HostToNodeMessage::StartRender(StartRenderData {
                         width: self.width,
