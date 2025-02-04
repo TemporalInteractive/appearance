@@ -275,9 +275,8 @@ impl Host {
             if let Ok(connected_nodes) = self.connected_nodes.lock() {
                 for node in connected_nodes.iter() {
                     packet_sender
-                        .send_unreliable(*node, message_bytes.clone())
+                        .send_barrier(*node, message_bytes.clone())
                         .unwrap();
-                    println!("Send action");
                 }
             }
         }
@@ -322,7 +321,7 @@ impl Host {
                         rows_per_node * (i as u32 + 1)
                     };
 
-                    assert!((row_end - row_start) % 8 == 0);
+                    assert!((row_end - row_start) % RENDER_BLOCK_SIZE == 0);
 
                     let message = HostToNodeMessage::StartRender(StartRenderData {
                         width: self.width,

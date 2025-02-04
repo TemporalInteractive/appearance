@@ -165,7 +165,6 @@ impl<T: NodeRenderer + 'static> Node<T> {
                                 self.start_render(data, packet.addr());
                             }
                             HostToNodeMessage::VisibleWorldAction(data) => {
-                                println!("Action: {:?}", data.ty);
                                 let visible_world_action =
                                     VisibleWorldActionType::from_ty_and_bytes(
                                         data.ty,
