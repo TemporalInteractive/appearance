@@ -13,7 +13,7 @@ use std::{
 use unreliable::{Socket, SocketEvent};
 
 /// Size of each rendered block is 8x8, as this is the minimum size jpeg is able to compress.
-pub const RENDER_BLOCK_SIZE: u32 = 8;
+pub const RENDER_BLOCK_SIZE: u32 = 32;
 
 pub struct RenderPartialFinishedData {
     pub row: u32,
