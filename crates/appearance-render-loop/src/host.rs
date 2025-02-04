@@ -305,7 +305,7 @@ impl Host {
                     }
                 }
             } else {
-                let barrier = self.socket.barrier().fetch_add(1, Ordering::Relaxed) + 1;
+                let barrier = self.socket.barrier().fetch_add(1, Ordering::SeqCst) + 1;
 
                 let num_nodes = connected_nodes.len() as u32;
                 let rows_per_node = self.height / num_nodes;
@@ -336,7 +336,7 @@ impl Host {
 
                 // Wait for all nodes to finish rendering
                 loop {
-                    if self.socket.barrier().load(Ordering::Relaxed) == barrier + 1 {
+                    if self.socket.barrier().load(Ordering::SeqCst) == barrier + 1 {
                         break;
                     }
                     thread::yield_now();

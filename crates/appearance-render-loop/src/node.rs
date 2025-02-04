@@ -145,7 +145,7 @@ impl<T: NodeRenderer + 'static> Node<T> {
 
                 //println!("Took {}ms", timer.elapsed() * 1000.0);
 
-                self.socket.barrier().fetch_add(1, Ordering::Relaxed);
+                self.socket.barrier().fetch_add(1, Ordering::SeqCst);
                 self.socket
                     .packet_sender()
                     .send_barrier(*addr, vec![])
