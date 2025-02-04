@@ -37,6 +37,13 @@ impl NodeToHostMessage {
                 bytes.append(&mut bytemuck::bytes_of(&data.row).to_vec());
                 bytes.append(&mut bytemuck::bytes_of(&data.column_block).to_vec());
                 bytes.append(&mut data.compressed_pixel_bytes);
+
+                // Pad pixel bytes
+                let padding_size = data.compressed_pixel_bytes.len() % 4;
+                for _ in 0..padding_size {
+                    bytes.push(0u8);
+                }
+
                 bytes
             }
         }
