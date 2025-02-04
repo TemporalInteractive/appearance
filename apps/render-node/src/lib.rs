@@ -213,25 +213,17 @@ impl Renderer {
 
         let mut ray = Ray::new(origin.xyz(), direction.xyz());
 
-        // for _ in 0..1 {
-        //     self.tlas.intersect(&mut ray);
-        // }
-        // if ray.hit.t != 1e30 {
-        //     let (_position, normal, _tex_coord) = self.get_hit_data(&ray.hit);
+        for _ in 0..1 {
+            self.tlas.intersect(&mut ray);
+        }
+        if ray.hit.t != 1e30 {
+            let (_position, normal, _tex_coord) = self.get_hit_data(&ray.hit);
 
-        //     return normal * 0.5 + 0.5;
-        // }
-
-        let mut c = Vec3::new(1.0, 0.0, 0.0);
-
-        if ((uv.y * 0.5 + 0.5) * 512.0) as u32 == (self.frame_idx * 5) % 512 {
-            c = Vec3::new(0.0, 1.0, 0.0);
+            return normal * 0.5 + 0.5;
         }
 
         let a = 0.5 * (ray.D.y() + 1.0);
-        (1.0 - a) * Vec3::new(1.0, 1.0, 1.0) + a * c
-
-        //Vec3::new(uv.x, uv.y, 0.0) * 0.5 + 0.5
+        (1.0 - a) * Vec3::new(1.0, 1.0, 1.0) + a * Vec3::new(0.5, 0.7, 1.0)
     }
 }
 
@@ -302,7 +294,7 @@ impl NodeRenderer for Renderer {
             inv_proj: self.camera.get_matrix().inverse(),
         };
 
-        //self.rebuild_tlas();
+        self.rebuild_tlas();
 
         for local_block_y in 0..num_blocks_y {
             for local_block_x in 0..num_blocks_x {
