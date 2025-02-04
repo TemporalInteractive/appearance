@@ -54,24 +54,32 @@ impl<T: NodeRenderer + 'static> Node<T> {
                 for local_block_y in 0..num_blocks_y {
                     for local_block_x in 0..num_blocks_x {
                         // TODO: order pixels already in blocks inside the renderer
-                        let mut block_pixels =
-                            vec![0u8; (RENDER_BLOCK_SIZE * RENDER_BLOCK_SIZE * 4) as usize];
-                        for local_y in 0..RENDER_BLOCK_SIZE {
-                            for local_x in 0..RENDER_BLOCK_SIZE {
-                                let y = local_y + (local_block_y * RENDER_BLOCK_SIZE);
-                                let x = local_x + (local_block_x * RENDER_BLOCK_SIZE);
+                        // let mut block_pixels =
+                        //     vec![0u8; (RENDER_BLOCK_SIZE * RENDER_BLOCK_SIZE * 4) as usize];
+                        // for local_y in 0..RENDER_BLOCK_SIZE {
+                        //     for local_x in 0..RENDER_BLOCK_SIZE {
+                        //         let y = local_y + (local_block_y * RENDER_BLOCK_SIZE);
+                        //         let x = local_x + (local_block_x * RENDER_BLOCK_SIZE);
 
-                                let id = (y * data.width + x) as usize;
-                                let local_id = (local_y * RENDER_BLOCK_SIZE + local_x) as usize;
+                        //         let id = (y * data.width + x) as usize;
+                        //         let local_id = (local_y * RENDER_BLOCK_SIZE + local_x) as usize;
 
-                                for i in 0..4 {
-                                    block_pixels[local_id * 4 + i] = pixels[id * 4 + i];
-                                }
-                            }
-                        }
+                        //         for i in 0..4 {
+                        //             block_pixels[local_id * 4 + i] = pixels[id * 4 + i];
+                        //         }
+                        //     }
+                        // }
+
+                        let block_size = RENDER_BLOCK_SIZE * RENDER_BLOCK_SIZE;
+                        let start_pixel = (local_block_y * block_size * num_blocks_x)
+                            + local_block_x * block_size;
+                        let end_pixel = start_pixel + block_size;
+
+                        let block_pixels =
+                            &pixels[(start_pixel * 4) as usize..(end_pixel * 4) as usize];
 
                         // TODO: compress
-                        let compressed_pixels = block_pixels;
+                        let compressed_pixels = block_pixels.to_vec();
 
                         let message =
                             NodeToHostMessage::RenderPartialFinished(RenderPartialFinishedData {

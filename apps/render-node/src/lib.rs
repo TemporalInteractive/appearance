@@ -1,3 +1,4 @@
+use appearance::appearance_render_loop::host::RENDER_BLOCK_SIZE;
 use core::net::SocketAddr;
 use core::ops::FnMut;
 use core::str::FromStr;
@@ -212,17 +213,23 @@ impl Renderer {
 
         let mut ray = Ray::new(origin.xyz(), direction.xyz());
 
-        for _ in 0..1 {
-            self.tlas.intersect(&mut ray);
-        }
-        if ray.hit.t != 1e30 {
-            let (_position, normal, _tex_coord) = self.get_hit_data(&ray.hit);
+        // for _ in 0..1 {
+        //     self.tlas.intersect(&mut ray);
+        // }
+        // if ray.hit.t != 1e30 {
+        //     let (_position, normal, _tex_coord) = self.get_hit_data(&ray.hit);
 
-            return normal * 0.5 + 0.5;
+        //     return normal * 0.5 + 0.5;
+        // }
+
+        let mut c = Vec3::new(1.0, 0.0, 0.0);
+
+        if ((uv.y * 0.5 + 0.5) * 512.0) as u32 == (self.frame_idx * 5) % 512 {
+            c = Vec3::new(0.0, 1.0, 0.0);
         }
 
         let a = 0.5 * (ray.D.y() + 1.0);
-        (1.0 - a) * Vec3::new(1.0, 1.0, 1.0) + a * Vec3::new(0.5, 0.7, 1.0)
+        (1.0 - a) * Vec3::new(1.0, 1.0, 1.0) + a * c
 
         //Vec3::new(uv.x, uv.y, 0.0) * 0.5 + 0.5
     }
@@ -278,11 +285,14 @@ impl NodeRenderer for Renderer {
         mut result_callback: F,
     ) {
         let num_rows = end_row - start_row;
+        let num_blocks_x = width / RENDER_BLOCK_SIZE;
+        let num_blocks_y = num_rows / RENDER_BLOCK_SIZE;
+
         if let Ok(mut pixels) = self.pixels.lock() {
             pixels.resize((width * num_rows * 4) as usize, 128);
 
-            result_callback(pixels.as_ref());
-            return;
+            // result_callback(pixels.as_ref());
+            // return;
         }
 
         self.camera.set_aspect_ratio(width as f32 / height as f32);
@@ -292,32 +302,68 @@ impl NodeRenderer for Renderer {
             inv_proj: self.camera.get_matrix().inverse(),
         };
 
-        self.rebuild_tlas();
+        //self.rebuild_tlas();
 
-        let _ = (0..(num_rows * width))
-            .collect::<Vec<u32>>()
-            .par_iter()
-            .map(|i| {
-                let local_y = i / width;
-                let local_x = i % width;
-                let x = local_x;
-                let y = local_y + start_row;
-                let uv = Vec2::new(
-                    (x as f32 + 0.5) / width as f32,
-                    (y as f32 + 0.5) / height as f32,
-                ) * 2.0
-                    - 1.0;
+        for local_block_y in 0..num_blocks_y {
+            for local_block_x in 0..num_blocks_x {
+                for block_y in 0..RENDER_BLOCK_SIZE {
+                    for block_x in 0..RENDER_BLOCK_SIZE {
+                        let local_x = (local_block_x * RENDER_BLOCK_SIZE) + block_x;
+                        let local_y = (local_block_y * RENDER_BLOCK_SIZE) + block_y;
 
-                let result = self.render_pixel(&uv, &camera_matrices);
+                        let x = local_x;
+                        let y = local_y + start_row;
 
-                if let Ok(mut pixels) = self.pixels.lock() {
-                    pixels[(local_y * width + local_x) as usize * 4] = (result.x * 255.0) as u8;
-                    pixels[(local_y * width + local_x) as usize * 4 + 1] = (result.y * 255.0) as u8;
-                    pixels[(local_y * width + local_x) as usize * 4 + 2] = (result.z * 255.0) as u8;
-                    pixels[(local_y * width + local_x) as usize * 4 + 3] = 255;
+                        let uv = Vec2::new(
+                            (x as f32 + 0.5) / width as f32,
+                            (y as f32 + 0.5) / height as f32,
+                        ) * 2.0
+                            - 1.0;
+
+                        let result = self.render_pixel(&uv, &camera_matrices);
+
+                        if let Ok(mut pixels) = self.pixels.lock() {
+                            let block_size = RENDER_BLOCK_SIZE * RENDER_BLOCK_SIZE;
+                            let start_pixel = (local_block_y * block_size * num_blocks_x)
+                                + local_block_x * block_size;
+
+                            let local_block_id = block_y * RENDER_BLOCK_SIZE + block_x;
+                            let local_id = (start_pixel + local_block_id) as usize;
+
+                            pixels[local_id * 4] = (result.x * 255.0) as u8;
+                            pixels[local_id * 4 + 1] = (result.y * 255.0) as u8;
+                            pixels[local_id * 4 + 2] = (result.z * 255.0) as u8;
+                            pixels[local_id * 4 + 3] = 255;
+                        }
+                    }
                 }
-            })
-            .collect::<Vec<_>>();
+            }
+        }
+
+        // let _ = (0..(num_rows * width))
+        //     .collect::<Vec<u32>>()
+        //     .iter()
+        //     .map(|i| {
+        //         let local_y = i / width;
+        //         let local_x = i % width;
+        //         let x = local_x;
+        //         let y = local_y + start_row;
+        //         let uv = Vec2::new(
+        //             (x as f32 + 0.5) / width as f32,
+        //             (y as f32 + 0.5) / height as f32,
+        //         ) * 2.0
+        //             - 1.0;
+
+        //         let result = self.render_pixel(&uv, &camera_matrices);
+
+        //         if let Ok(mut pixels) = self.pixels.lock() {
+        //             pixels[(local_y * width + local_x) as usize * 4] = (result.x * 255.0) as u8;
+        //             pixels[(local_y * width + local_x) as usize * 4 + 1] = (result.y * 255.0) as u8;
+        //             pixels[(local_y * width + local_x) as usize * 4 + 2] = (result.z * 255.0) as u8;
+        //             pixels[(local_y * width + local_x) as usize * 4 + 3] = 255;
+        //         }
+        //     })
+        //     .collect::<Vec<_>>();
 
         // for local_y in 0..num_rows {
         //     for local_x in 0..width {
