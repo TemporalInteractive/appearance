@@ -83,7 +83,7 @@ pub struct StartRenderData {
 
 pub enum HostToNodeMessage {
     StartRender(StartRenderData),
-    VisibleWorldAction(VisibleWorldAction),
+    VisibleWorldAction(u32),
 }
 
 impl HostToNodeMessage {
@@ -94,10 +94,10 @@ impl HostToNodeMessage {
                 bytes.append(&mut bytemuck::bytes_of(&data).to_vec());
                 bytes
             }
-            HostToNodeMessage::VisibleWorldAction(mut data) => {
+            HostToNodeMessage::VisibleWorldAction(data) => {
                 let mut bytes = bytemuck::bytes_of(&1u32).to_vec();
-                bytes.append(&mut bytemuck::bytes_of(&data.ty).to_vec());
-                bytes.append(&mut data.data);
+                bytes.append(&mut bytemuck::bytes_of(&data).to_vec());
+                //bytes.append(&mut data.data);
                 bytes
             }
         }
@@ -117,8 +117,8 @@ impl HostToNodeMessage {
             ))),
             1 => {
                 let ty = *bytemuck::from_bytes::<u32>(&bytes[4..8]);
-                let data = bytes[8..bytes.len()].to_vec();
-                Ok(Self::VisibleWorldAction(VisibleWorldAction { ty, data }))
+                //let data = bytes[8..bytes.len()].to_vec();
+                Ok(Self::VisibleWorldAction(ty))
             }
             _ => Err(anyhow::Error::msg(
                 "Failed to convert bytes to host-to-node message.",
@@ -266,21 +266,21 @@ impl Host {
     }
 
     pub fn send_visible_world_actions(&mut self, visible_world_actions: Vec<VisibleWorldAction>) {
-        // let packet_sender = self.socket.packet_sender();
+        let packet_sender = self.socket.packet_sender();
 
-        // for visible_world_action in visible_world_actions {
-        //     let message = HostToNodeMessage::VisibleWorldAction(visible_world_action);
-        //     let message_bytes = message.to_bytes();
+        for visible_world_action in visible_world_actions {
+            let message = HostToNodeMessage::VisibleWorldAction(69);
+            let message_bytes = message.to_bytes();
 
-        //     if let Ok(connected_nodes) = self.connected_nodes.lock() {
-        //         for node in connected_nodes.iter() {
-        //             packet_sender
-        //                 .send_barrier(*node, message_bytes.clone())
-        //                 .unwrap();
-        //             println!("Send action");
-        //         }
-        //     }
-        // }
+            if let Ok(connected_nodes) = self.connected_nodes.lock() {
+                for node in connected_nodes.iter() {
+                    packet_sender
+                        .send_barrier(*node, message_bytes.clone())
+                        .unwrap();
+                    println!("Send action");
+                }
+            }
+        }
     }
 
     /// Returns if there were any new connections since the last time this function was called

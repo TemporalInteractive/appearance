@@ -165,14 +165,14 @@ impl<T: NodeRenderer + 'static> Node<T> {
                                 self.start_render(data, packet.addr());
                             }
                             HostToNodeMessage::VisibleWorldAction(data) => {
-                                println!("Action: {:?}", data.ty);
-                                let visible_world_action =
-                                    VisibleWorldActionType::from_ty_and_bytes(
-                                        data.ty,
-                                        data.data.as_ref(),
-                                    );
+                                println!("Action: {:?}", data);
+                                // let visible_world_action =
+                                //     VisibleWorldActionType::from_ty_and_bytes(
+                                //         data.ty,
+                                //         data.data.as_ref(),
+                                //     );
 
-                                self.renderer.visible_world_action(&visible_world_action);
+                                // self.renderer.visible_world_action(&visible_world_action);
                             }
                         }
                     } else {
