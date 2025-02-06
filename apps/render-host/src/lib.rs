@@ -22,9 +22,13 @@ use appearance::Appearance;
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    /// Host port
+    /// Host port on which to listen for connections
     #[arg(long, default_value_t = 34234)]
     host_port: u16,
+
+    /// Node port to receive events
+    #[arg(long, default_value_t = 34235)]
+    node_port: u16,
 }
 
 pub struct HostRenderLoop {
@@ -57,7 +61,7 @@ impl RenderLoop for HostRenderLoop {
         _window: Arc<Window>,
     ) -> Self {
         let args = Args::parse();
-        let host = Host::new(args.host_port, config.width, config.height).unwrap();
+        let host = Host::new(args.host_port, args.node_port, config.width, config.height).unwrap();
 
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("texture"),
