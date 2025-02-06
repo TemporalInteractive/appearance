@@ -15,6 +15,7 @@ appearance-build = { version = "0.1.0", path = "crates/appearance-build" }
 appearance-camera = { version = "0.1.0", path = "crates/appearance-camera" }
 appearance-input = { version = "0.1.0", path = "crates/appearance-input" }
 appearance-model = { version = "0.1.0", path = "crates/appearance-model" }
+appearance-path-tracer = { version = "0.1.0", path = "crates/appearance-path-tracer" }
 appearance-profiling = { version = "0.1.0", path = "crates/appearance-profiling", features = ["superluminal"] }
 appearance-render-loop = { version = "0.1.0", path = "crates/appearance-render-loop" }
 appearance-time = { version = "0.1.0", path = "crates/appearance-time" }
@@ -59,6 +60,7 @@ members = [
     "crates/appearance-camera",
     "crates/appearance-input",
     "crates/appearance-model",
+    "crates/appearance-path-tracer",
     "crates/appearance-profiling",
     "crates/appearance-render-loop",
     "crates/appearance-time",
