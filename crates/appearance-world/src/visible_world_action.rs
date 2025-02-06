@@ -115,12 +115,23 @@ impl VisibleWorldActionType {
             Self::Clear(data) => bytemuck::bytes_of(data),
         }
     }
+
+    pub fn must_sync(&self) -> bool {
+        match &self {
+            Self::CameraUpdate(_) => false,
+            Self::SpawnModel(_) => true,
+            Self::TransformModel(_) => false,
+            Self::DestroyModel(_) => true,
+            Self::Clear(_) => true,
+        }
+    }
 }
 
 /// A visible action in the world, used to notify render nodes how the world changes
 pub struct VisibleWorldAction {
     pub ty: u32,
     pub data: Vec<u8>,
+    pub must_sync: bool,
 }
 
 impl VisibleWorldAction {
@@ -128,6 +139,10 @@ impl VisibleWorldAction {
         let ty = action.into();
         let data = action.as_bytes().to_vec();
 
-        Self { ty, data }
+        Self {
+            ty,
+            data,
+            must_sync: action.must_sync(),
+        }
     }
 }

@@ -1,79 +1,145 @@
-use core::sync::atomic::{AtomicBool, Ordering};
+use anyhow::Result;
+use appearance_world::visible_world_action::VisibleWorldAction;
+use core::{
+    net::{Ipv4Addr, SocketAddr, SocketAddrV4},
+    sync::atomic::{AtomicBool, Ordering},
+};
+use crossbeam::channel::Receiver;
 use std::{
-    io::{Read, Write},
-    net::{TcpListener, TcpStream},
     sync::{Arc, Mutex},
     thread,
 };
 
-use anyhow::Result;
-use appearance_world::visible_world_action::VisibleWorldAction;
+use unreliable::{Socket, SocketEvent};
 
-fn vec_remove_multiple<T>(vec: &mut Vec<T>, indices: &mut [usize]) {
-    indices.sort();
-    for (j, i) in indices.iter().enumerate() {
-        vec.remove(i - j);
+/// Size of each rendered block is a multiple of 8x8, as this is the minimum size jpeg is able to compress.
+pub const RENDER_BLOCK_SIZE: u32 = 64;
+pub const BYTES_PER_PIXEL: usize = 4;
+pub const NODE_BYTES_PER_PIXEL: usize = 3;
+pub const NODE_PIXEL_FORMAT: turbojpeg::PixelFormat = turbojpeg::PixelFormat::RGB;
+
+pub struct RenderPartialFinishedData {
+    pub row: u32,
+    pub column_block: u32,
+    pub compressed_pixel_bytes: Vec<u8>,
+}
+
+pub struct RenderFinishedData {
+    pub frame_idx: u32,
+}
+
+pub enum NodeToHostMessage {
+    RenderPartialFinished(RenderPartialFinishedData),
+}
+
+impl NodeToHostMessage {
+    pub fn to_bytes(self) -> Vec<u8> {
+        match self {
+            NodeToHostMessage::RenderPartialFinished(mut data) => {
+                let mut bytes = bytemuck::bytes_of(&0u32).to_vec();
+                bytes.append(&mut bytemuck::bytes_of(&data.row).to_vec());
+                bytes.append(&mut bytemuck::bytes_of(&data.column_block).to_vec());
+                bytes.append(&mut data.compressed_pixel_bytes);
+
+                let padded_size = bytes.len().div_ceil(4) * 4;
+                bytes.resize(padded_size, 0u8);
+
+                bytes
+            }
+        }
     }
-}
 
-#[derive(bytemuck::NoUninit, Clone, Copy)]
-#[repr(u32)]
-pub enum HostMessageType {
-    StartRender,
-    VisibleWorldAction,
-}
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
+        if bytes.len() < 4 {
+            return Err(anyhow::Error::msg(
+                "Failed to convert bytes to node-to-host message. (Empty bytes)",
+            ));
+        }
 
-impl From<u32> for HostMessageType {
-    fn from(value: u32) -> Self {
-        match value {
-            0 => HostMessageType::StartRender,
-            1 => HostMessageType::VisibleWorldAction,
-            _ => panic!("{} cannot be converted into a HostMessageType", value),
+        let ty = *bytemuck::from_bytes::<u32>(&bytes[0..4]);
+        match ty {
+            0 => {
+                let row = *bytemuck::from_bytes::<u32>(&bytes[4..8]);
+                let column_block = *bytemuck::from_bytes::<u32>(&bytes[8..12]);
+                let compressed_pixel_bytes = bytes[12..bytes.len()].to_vec();
+                Ok(Self::RenderPartialFinished(RenderPartialFinishedData {
+                    row,
+                    column_block,
+                    compressed_pixel_bytes,
+                }))
+            }
+            _ => Err(anyhow::Error::msg(
+                "Failed to convert bytes to node-to-host message.",
+            )),
         }
     }
 }
 
 #[derive(bytemuck::NoUninit, bytemuck::AnyBitPattern, Clone, Copy, Default, Debug)]
 #[repr(C)]
-pub struct HostMessage {
-    ty: u32,
+pub struct StartRenderData {
     pub width: u32,
     pub height: u32,
-    pub assigned_rows: [u32; 2],
-    pub visible_world_action_ty: u32,
+    pub row_start: u32,
+    pub row_end: u32,
 }
 
-impl HostMessage {
-    pub fn ty(&self) -> HostMessageType {
-        self.ty.into()
+pub enum HostToNodeMessage {
+    StartRender(StartRenderData),
+    VisibleWorldAction(VisibleWorldAction),
+}
+
+impl HostToNodeMessage {
+    pub fn to_bytes(self) -> Vec<u8> {
+        match self {
+            HostToNodeMessage::StartRender(data) => {
+                let mut bytes = bytemuck::bytes_of(&0u32).to_vec();
+                bytes.append(&mut bytemuck::bytes_of(&data).to_vec());
+                bytes
+            }
+            HostToNodeMessage::VisibleWorldAction(mut data) => {
+                let mut bytes = bytemuck::bytes_of(&1u32).to_vec();
+                bytes.append(&mut bytemuck::bytes_of(&data.ty).to_vec());
+                bytes.append(&mut bytemuck::bytes_of(&(data.must_sync as u32)).to_vec());
+                bytes.append(&mut data.data);
+                bytes
+            }
+        }
     }
-}
 
-#[derive(Debug, PartialEq, Eq)]
-enum NodeState {
-    Rendering,
-    Finished,
-}
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
+        if bytes.len() < 4 {
+            return Err(anyhow::Error::msg(
+                "Failed to convert bytes to host-to-node message. (Empty bytes)",
+            ));
+        }
 
-struct ConnectedNode {
-    tcp_stream: TcpStream,
-    state: NodeState,
-    pending_rows: Option<[u32; 2]>,
-}
-
-impl ConnectedNode {
-    fn new(tcp_stream: TcpStream) -> Arc<Mutex<Self>> {
-        Arc::new(Mutex::new(Self {
-            tcp_stream,
-            state: NodeState::Finished,
-            pending_rows: None,
-        }))
+        let ty = *bytemuck::from_bytes::<u32>(&bytes[0..4]);
+        match ty {
+            0 => Ok(Self::StartRender(*bytemuck::from_bytes::<StartRenderData>(
+                &bytes[4..bytes.len()],
+            ))),
+            1 => {
+                let ty = *bytemuck::from_bytes::<u32>(&bytes[4..8]);
+                let must_sync = (*bytemuck::from_bytes::<u32>(&bytes[8..12])) != 0;
+                let data = bytes[12..bytes.len()].to_vec();
+                Ok(Self::VisibleWorldAction(VisibleWorldAction {
+                    ty,
+                    data,
+                    must_sync,
+                }))
+            }
+            _ => Err(anyhow::Error::msg(
+                "Failed to convert bytes to host-to-node message.",
+            )),
+        }
     }
 }
 
 pub struct Host {
-    nodes: Arc<Mutex<Vec<Arc<Mutex<ConnectedNode>>>>>,
+    connected_nodes: Arc<Mutex<Vec<SocketAddr>>>,
     has_received_new_connections: Arc<AtomicBool>,
+    socket: Socket,
 
     width: u32,
     height: u32,
@@ -81,23 +147,36 @@ pub struct Host {
 }
 
 impl Host {
-    pub fn new(host_addr: String, width: u32, height: u32) -> Result<Self> {
-        let pixels = Arc::new(Mutex::new(vec![0; (width * height * 4) as usize]));
-        let nodes = Arc::new(Mutex::new(Vec::new()));
+    pub fn new(port: u16, width: u32, height: u32) -> Result<Self> {
+        let connected_nodes = Arc::new(Mutex::new(Vec::new()));
         let has_received_new_connections = Arc::new(AtomicBool::new(false));
+        let pixels = Arc::new(Mutex::new(vec![
+            0;
+            (width * height) as usize * BYTES_PER_PIXEL
+        ]));
 
-        #[allow(clippy::redundant_closure_call)] // TODO: ?
-        (|host_addr, nodes, has_received_new_connections| {
-            thread::spawn(move || Self::listen(host_addr, nodes, has_received_new_connections));
-        })(
-            host_addr.clone(),
-            nodes.clone(),
-            has_received_new_connections.clone(),
-        );
+        let addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), port));
+        let mut socket = Socket::new(addr)?;
+
+        let receive_events_event_receiver = socket.event_receiver().clone();
+        let recieve_events_connected_nodes = connected_nodes.clone();
+        let recieve_events_has_received_new_connections = has_received_new_connections.clone();
+        let recieve_events_pixels = pixels.clone();
+        let recieve_events_width = width;
+        thread::spawn(move || {
+            Self::receive_events(
+                receive_events_event_receiver,
+                recieve_events_connected_nodes,
+                recieve_events_has_received_new_connections,
+                recieve_events_pixels,
+                recieve_events_width,
+            )
+        });
 
         Ok(Self {
-            nodes,
+            connected_nodes,
             has_received_new_connections,
+            socket,
 
             width,
             height,
@@ -105,191 +184,184 @@ impl Host {
         })
     }
 
-    fn handle_node_result(
-        width: u32,
-        height: u32,
+    fn receive_events(
+        event_receiver: Receiver<SocketEvent>,
+        connected_nodes: Arc<Mutex<Vec<SocketAddr>>>,
+        has_received_new_connections: Arc<AtomicBool>,
         pixels: Arc<Mutex<Vec<u8>>>,
-        node: Arc<Mutex<ConnectedNode>>,
+        width: u32,
     ) {
-        let mut buffered_pixels = vec![0u8; (4 * width * height) as usize];
+        loop {
+            if let Ok(socket_event) = event_receiver.recv() {
+                match socket_event {
+                    SocketEvent::Packet(packet) => {
+                        if !packet.is_barrier() {
+                            if let Ok(message) = NodeToHostMessage::from_bytes(packet.payload()) {
+                                match message {
+                                    NodeToHostMessage::RenderPartialFinished(data) => {
+                                        let image = turbojpeg::decompress(
+                                            &data.compressed_pixel_bytes,
+                                            NODE_PIXEL_FORMAT,
+                                        )
+                                        .unwrap();
 
-        if let Ok(mut node) = node.lock() {
-            if let Ok(len) = node.tcp_stream.read(buffered_pixels.as_mut()) {
-                // Node can send data with size of 0 when in the process of disconnecting
-                if len != 0 {
-                    node.state = NodeState::Finished;
+                                        if let Ok(mut pixels) = pixels.lock() {
+                                            for local_y in 0..RENDER_BLOCK_SIZE {
+                                                for local_x in 0..RENDER_BLOCK_SIZE {
+                                                    let x = local_x
+                                                        + (data.column_block * RENDER_BLOCK_SIZE);
+                                                    let y = local_y + data.row;
 
-                    if let Ok(mut pixels) = pixels.lock() {
-                        if let Some(pending_rows) = &node.pending_rows {
-                            let start_row = pending_rows[0];
+                                                    let id = (y * width + x) as usize;
+                                                    let local_id = (local_y * RENDER_BLOCK_SIZE
+                                                        + local_x)
+                                                        as usize;
 
-                            unsafe {
-                                let dst_ptr =
-                                    &mut pixels[(start_row * width * 4) as usize] as *mut u8;
-                                let src_ptr = &mut buffered_pixels[0] as *mut u8;
+                                                    for i in 0..NODE_BYTES_PER_PIXEL {
+                                                        pixels[id * BYTES_PER_PIXEL + i] = image
+                                                            .pixels
+                                                            [local_id * NODE_BYTES_PER_PIXEL + i];
+                                                    }
+                                                    pixels[id * BYTES_PER_PIXEL
+                                                        + BYTES_PER_PIXEL
+                                                        - 1] = 255;
+                                                }
+                                            }
+                                        }
 
-                                let num_bytes =
-                                    ((pending_rows[1] - pending_rows[0]) * width * 4) as usize;
-                                assert_eq!(len, num_bytes);
+                                        // TODO: in the future the 8x8 blocks can be memcpied, however this will require a more advanced blit pass to display correctly
+                                        // let first_dst_pixel = (data.row * width) + data.row_start;
 
-                                std::ptr::copy_nonoverlapping(src_ptr, dst_ptr, num_bytes);
+                                        // if let Ok(mut pixels) = pixels.lock() {
+                                        //     let dst_ptr = &mut pixels
+                                        //         [(first_dst_pixel * 4) as usize]
+                                        //         as *mut u8;
+                                        //     let src_ptr = &mut data.pixels[0] as *mut u8;
+
+                                        //     std::ptr::copy_nonoverlapping(
+                                        //         src_ptr,
+                                        //         dst_ptr,
+                                        //         data.pixels.len(),
+                                        //     );
+                                        // }
+                                    }
+                                }
+                            } else {
+                                log::warn!("Failed to read message from {}.", packet.addr());
                             }
                         }
                     }
-                }
-            }
-        }
-    }
-
-    fn listen(
-        host_addr: String,
-        nodes: Arc<Mutex<Vec<Arc<Mutex<ConnectedNode>>>>>,
-        has_received_new_connections: Arc<AtomicBool>,
-    ) -> Result<()> {
-        let tcp_listener = TcpListener::bind(host_addr)?;
-
-        for stream in tcp_listener.incoming() {
-            match stream {
-                Ok(stream) => {
-                    if let Ok(mut nodes) = nodes.lock() {
-                        log::info!("New render node connected!");
-                        nodes.push(ConnectedNode::new(stream));
-                        has_received_new_connections.store(true, Ordering::Relaxed);
-                    }
-                }
-                Err(_) => {
-                    log::warn!("Failed to handle new node connection.");
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    pub fn send_visible_world_actions(&mut self, visible_world_actions: &[VisibleWorldAction]) {
-        if let Ok(mut nodes) = self.nodes.lock() {
-            let mut disconnected_node_indices = vec![];
-
-            for (i, node) in nodes.iter_mut().enumerate() {
-                if let Ok(mut node) = node.lock() {
-                    for visible_world_action in visible_world_actions {
-                        // Send message type, this way the node knows how to interpret the data package
-                        let message = HostMessage {
-                            ty: HostMessageType::VisibleWorldAction as u32,
-                            visible_world_action_ty: visible_world_action.ty,
-                            ..Default::default()
-                        };
-
-                        if node
-                            .tcp_stream
-                            .write_all(bytemuck::bytes_of(&message))
-                            .is_err()
-                        {
-                            disconnected_node_indices.push(i);
-                            continue;
+                    SocketEvent::Connect(addr) => {
+                        log::info!("Node connected at {:?}", addr);
+                        if let Ok(mut connected_nodes) = connected_nodes.lock() {
+                            connected_nodes.push(addr);
+                            has_received_new_connections.store(true, Ordering::SeqCst);
                         }
-
-                        if node
-                            .tcp_stream
-                            .write_all(visible_world_action.data.as_slice())
-                            .is_err()
-                        {
-                            disconnected_node_indices.push(i);
+                    }
+                    SocketEvent::Disconnect(addr) => {
+                        log::info!("Node disconnected at {:?}...", addr);
+                        if let Ok(mut connected_nodes) = connected_nodes.lock() {
+                            let mut node_idx = 0;
+                            for (i, node) in connected_nodes.iter().enumerate() {
+                                if *node == addr {
+                                    node_idx = i;
+                                    break;
+                                }
+                            }
+                            connected_nodes.remove(node_idx);
                         }
                     }
                 }
             }
 
-            vec_remove_multiple(&mut nodes, &mut disconnected_node_indices);
+            thread::yield_now();
+        }
+    }
+
+    pub fn send_visible_world_actions(&mut self, visible_world_actions: Vec<VisibleWorldAction>) {
+        let packet_sender = self.socket.packet_sender();
+
+        for visible_world_action in visible_world_actions {
+            let must_sync = visible_world_action.must_sync;
+
+            let message = HostToNodeMessage::VisibleWorldAction(visible_world_action);
+            let message_bytes = message.to_bytes();
+
+            if let Ok(connected_nodes) = self.connected_nodes.lock() {
+                for node in connected_nodes.iter() {
+                    if must_sync {
+                        packet_sender
+                            .send_barrier(*node, message_bytes.clone())
+                            .unwrap();
+                    } else {
+                        packet_sender
+                            .send_unreliable(*node, message_bytes.clone())
+                            .unwrap();
+                    }
+                }
+            }
         }
     }
 
     /// Returns if there were any new connections since the last time this function was called
-    pub fn handle_new_connections(&self) -> bool {
-        let has_received_new_connections =
-            self.has_received_new_connections.load(Ordering::Relaxed);
+    pub fn handle_new_connections(&mut self) -> bool {
+        let has_received_new_connections = self.has_received_new_connections.load(Ordering::SeqCst);
         self.has_received_new_connections
-            .store(false, Ordering::Relaxed);
+            .store(false, Ordering::SeqCst);
         has_received_new_connections
     }
 
     pub fn render<F: Fn(&[u8])>(&mut self, result_callback: F) {
-        // Notify all nodes to start rendering
-        if let Ok(mut nodes) = self.nodes.lock() {
+        if let Ok(connected_nodes) = self.connected_nodes.lock() {
             // Return pink when no nodes connected, this should be a visual warning to the host
-            if nodes.is_empty() {
+            if connected_nodes.is_empty() {
                 if let Ok(mut pixels) = self.pixels.lock() {
                     for x in 0..self.width {
                         for y in 0..self.height {
-                            pixels[(y * self.width + x) as usize * 4] = 255;
-                            pixels[(y * self.width + x) as usize * 4 + 1] = 0;
-                            pixels[(y * self.width + x) as usize * 4 + 2] = 255;
-                            pixels[(y * self.width + x) as usize * 4 + 3] = 255;
+                            pixels[(y * self.width + x) as usize * BYTES_PER_PIXEL] = 255;
+                            pixels[(y * self.width + x) as usize * BYTES_PER_PIXEL + 1] = 0;
+                            pixels[(y * self.width + x) as usize * BYTES_PER_PIXEL + 2] = 255;
+                            pixels[(y * self.width + x) as usize * BYTES_PER_PIXEL + 3] = 255;
                         }
                     }
-
-                    result_callback(pixels.as_ref());
                 }
+            } else {
+                let barrier = self.socket.barrier().fetch_add(1, Ordering::SeqCst) + 1;
 
-                return;
-            }
+                let num_nodes = connected_nodes.len() as u32;
+                let rows_per_node = self.height / num_nodes;
 
-            let mut disconnected_node_indices = vec![];
+                let packet_sender = self.socket.packet_sender();
 
-            let num_nodes = nodes.len() as u32;
-            let rows_per_node = self.height / num_nodes;
-
-            for (i, node) in nodes.iter_mut().enumerate() {
-                if let Ok(mut node) = node.lock() {
-                    let rows_start = rows_per_node * i as u32;
-                    let rows_end = if i as u32 == num_nodes - 1 {
+                // Notify all connected nodes to start rendering their assigned part of the screen
+                for (i, node) in connected_nodes.iter().enumerate() {
+                    let row_start = rows_per_node * i as u32;
+                    let row_end = if i as u32 == num_nodes - 1 {
                         self.height
                     } else {
                         rows_per_node * (i as u32 + 1)
                     };
 
-                    let assigned_rows = [rows_start, rows_end];
-                    node.pending_rows = Some(assigned_rows);
+                    assert!((row_end - row_start) % RENDER_BLOCK_SIZE == 0);
 
-                    let message = HostMessage {
-                        ty: HostMessageType::StartRender as u32,
+                    let message = HostToNodeMessage::StartRender(StartRenderData {
                         width: self.width,
                         height: self.height,
-                        assigned_rows,
-                        ..Default::default()
-                    };
-                    if node
-                        .tcp_stream
-                        .write_all(bytemuck::bytes_of(&message))
-                        .is_err()
-                    {
-                        disconnected_node_indices.push(i);
-                    }
-
-                    node.state = NodeState::Rendering;
+                        row_start,
+                        row_end,
+                    });
+                    packet_sender
+                        .send_barrier(*node, message.to_bytes())
+                        .unwrap();
                 }
-            }
 
-            vec_remove_multiple(&mut nodes, &mut disconnected_node_indices);
-
-            let mut join_handles = vec![];
-            for node in nodes.iter() {
-                let cloned_node = node.clone();
-                let cloned_pixels = self.pixels.clone();
-                let width = self.width;
-                let height = self.height;
-
-                join_handles.push(
-                    thread::Builder::new()
-                        .spawn(move || {
-                            Self::handle_node_result(width, height, cloned_pixels, cloned_node)
-                        })
-                        .unwrap(),
-                );
-            }
-
-            for join_handle in join_handles {
-                join_handle.join().unwrap();
+                // Wait for all nodes to finish rendering
+                loop {
+                    if self.socket.barrier().load(Ordering::SeqCst) == barrier + 1 {
+                        break;
+                    }
+                    thread::yield_now();
+                }
             }
         }
 

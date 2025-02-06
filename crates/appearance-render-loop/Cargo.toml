@@ -16,4 +16,9 @@ anyhow.workspace = true
 bytemuck.workspace = true
 futures.workspace = true
 log.workspace = true
+rayon.workspace = true
+turbojpeg.workspace = true
+unreliable.workspace = true
 winit.workspace = true
+
+crossbeam = "0.8.4"

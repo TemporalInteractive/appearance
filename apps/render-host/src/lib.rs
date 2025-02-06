@@ -5,6 +5,7 @@ use appearance::appearance_render_loop::winit::keyboard::KeyCode;
 use appearance::appearance_transform::{Transform, RIGHT};
 use appearance::appearance_world::components::{ModelComponent, TransformComponent};
 use appearance::appearance_world::{specs, World};
+use clap::Parser;
 use glam::{Quat, Vec3};
 use std::sync::Arc;
 
@@ -17,6 +18,14 @@ use appearance::appearance_time::Timer;
 use appearance::appearance_wgpu::helper_passes::blit_pass;
 use appearance::appearance_wgpu::wgpu::{self, Extent3d, Origin3d};
 use appearance::Appearance;
+
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    /// Host port
+    #[arg(long, default_value_t = 34234)]
+    host_port: u16,
+}
 
 pub struct HostRenderLoop {
     host: Host,
@@ -47,7 +56,8 @@ impl RenderLoop for HostRenderLoop {
         _queue: &wgpu::Queue,
         _window: Arc<Window>,
     ) -> Self {
-        let host = Host::new("127.0.0.1:34234".to_owned(), config.width, config.height).unwrap();
+        let args = Args::parse();
+        let host = Host::new(args.host_port, config.width, config.height).unwrap();
 
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("texture"),
@@ -129,7 +139,7 @@ impl RenderLoop for HostRenderLoop {
     ) -> bool {
         let delta_time = self.timer.elapsed();
         self.timer.reset();
-        log::info!("FPS {}", 1.0 / delta_time);
+        log::info!("{}ms ({} fps)", delta_time * 1000.0, 1.0 / delta_time);
 
         if let Some(duck_entity) = self.duck_entity {
             let mut transforms_mut = self.world.entities_mut::<TransformComponent>();
@@ -212,7 +222,7 @@ pub fn internal_main() -> Result<()> {
     let _ = Appearance::new("Render Host");
     RenderLoopHandler::<HostRenderLoop>::new(&RenderLoopWindowDesc {
         title: "Render Host".to_owned(),
-        width: 720,
+        width: 1024,
         height: 512,
         resizeable: false,
         maximized: false,

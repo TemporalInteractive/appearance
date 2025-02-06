@@ -64,7 +64,7 @@ pub struct World {
     entities_marked_for_destroy: Vec<specs::Entity>,
     camera: Camera,
 
-    visible_world_actions: Vec<VisibleWorldAction>,
+    visible_world_actions: Option<Vec<VisibleWorldAction>>,
 }
 
 impl Default for World {
@@ -89,7 +89,7 @@ impl World {
                 100.0,
                 1.0,
             ),
-            visible_world_actions: Vec::new(),
+            visible_world_actions: Some(Vec::new()),
         }
     }
 
@@ -106,7 +106,7 @@ impl World {
 
         let entity = {
             let builder = builder_pattern(EntityBuilder::new(
-                &mut self.visible_world_actions,
+                self.visible_world_actions.as_mut().unwrap(),
                 &mut self.ecs,
                 name,
                 transform,
@@ -147,15 +147,18 @@ impl World {
     pub fn camera_mut<F: FnMut(&mut Camera)>(&mut self, mut callback: F) {
         callback(&mut self.camera);
 
-        self.visible_world_actions.push(VisibleWorldAction::new(
-            VisibleWorldActionType::CameraUpdate(CameraUpdateData {
-                fov: self.camera.get_fov(),
-                near: self.camera.get_near(),
-                far: self.camera.get_far(),
-                transform_matrix_bytes: self.camera.transform.get_matrix(),
-                _padding: 0,
-            }),
-        ));
+        self.visible_world_actions
+            .as_mut()
+            .unwrap()
+            .push(VisibleWorldAction::new(
+                VisibleWorldActionType::CameraUpdate(CameraUpdateData {
+                    fov: self.camera.get_fov(),
+                    near: self.camera.get_near(),
+                    far: self.camera.get_far(),
+                    transform_matrix_bytes: self.camera.transform.get_matrix(),
+                    _padding: 0,
+                }),
+            ));
     }
 
     /// WARNING - This is very expensive!
@@ -163,8 +166,9 @@ impl World {
     pub fn resync_all_visible_world_actions(&mut self) {
         appearance_profiling::profile_function!();
 
-        self.visible_world_actions =
-            vec![VisibleWorldAction::new(VisibleWorldActionType::Clear(0))];
+        self.visible_world_actions = Some(vec![VisibleWorldAction::new(
+            VisibleWorldActionType::Clear(0),
+        )]);
 
         let (transform, model): (
             specs::ReadStorage<'_, TransformComponent>,
@@ -172,13 +176,16 @@ impl World {
         ) = self.ecs.system_data();
 
         for (transform_component, model_component) in (&transform, &model).join() {
-            self.visible_world_actions.push(VisibleWorldAction::new(
-                VisibleWorldActionType::SpawnModel(SpawnModelData::new(
-                    transform_component.transform.get_matrix(),
-                    *transform_component.uuid(),
-                    &model_component.model,
-                )),
-            ));
+            self.visible_world_actions
+                .as_mut()
+                .unwrap()
+                .push(VisibleWorldAction::new(VisibleWorldActionType::SpawnModel(
+                    SpawnModelData::new(
+                        transform_component.transform.get_matrix(),
+                        *transform_component.uuid(),
+                        &model_component.model,
+                    ),
+                )));
         }
     }
 
@@ -192,9 +199,11 @@ impl World {
             specs::ReadStorage<'_, ModelComponent>,
         ) = self.ecs.system_data();
 
+        let visible_world_actions = self.visible_world_actions.as_mut().unwrap();
+
         for (transform_component, _model_component) in (&transform, &model).join() {
             if transform_component.marked_for_destroy {
-                self.visible_world_actions.push(VisibleWorldAction::new(
+                visible_world_actions.push(VisibleWorldAction::new(
                     VisibleWorldActionType::DestroyModel(DestroyModelData {
                         entity_uuid: *transform_component.uuid(),
                     }),
@@ -207,7 +216,7 @@ impl World {
                 .transform
                 .handle_has_changed_this_frame()
             {
-                self.visible_world_actions.push(VisibleWorldAction::new(
+                visible_world_actions.push(VisibleWorldAction::new(
                     VisibleWorldActionType::TransformModel(TransformModelData {
                         transform_matrix: transform_component.transform.get_matrix(),
                         entity_uuid: *transform_component.uuid(),
@@ -218,8 +227,8 @@ impl World {
     }
 
     /// Receive all visible world actions which occured since the last world update.
-    pub fn get_visible_world_actions(&self) -> &[VisibleWorldAction] {
-        &self.visible_world_actions
+    pub fn get_visible_world_actions(&mut self) -> Vec<VisibleWorldAction> {
+        self.visible_world_actions.take().unwrap()
     }
 
     /// Should be called once at the end of each frame.
@@ -227,7 +236,7 @@ impl World {
     pub fn update(&mut self) {
         appearance_profiling::profile_function!();
 
-        self.visible_world_actions.clear();
+        self.visible_world_actions = Some(Vec::new());
 
         for entity in &self.entities_marked_for_destroy {
             self.ecs.delete_entity(*entity).unwrap();

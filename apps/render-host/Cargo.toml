@@ -12,6 +12,7 @@ appearance.workspace = true
 
 anyhow.workspace = true
 bytemuck.workspace = true
+clap.workspace = true
 glam.workspace = true
 log.workspace = true
 

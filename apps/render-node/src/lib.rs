@@ -1,6 +1,9 @@
+use appearance::appearance_render_loop::host::{NODE_BYTES_PER_PIXEL, RENDER_BLOCK_SIZE};
+use core::net::SocketAddr;
+use core::ops::FnMut;
+use core::str::FromStr;
 use std::collections::HashMap;
-use std::rc::Rc;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
 use appearance::appearance_asset_database::AssetDatabase;
@@ -9,6 +12,7 @@ use appearance::appearance_model::Model;
 use appearance::appearance_render_loop::node::{Node, NodeRenderer};
 use appearance::appearance_world::visible_world_action::VisibleWorldActionType;
 use appearance::Appearance;
+use clap::{arg, command, Parser};
 use glam::{Mat4, Vec2, Vec3, Vec4, Vec4Swizzles};
 use tinybvh::{vec_helpers::Vec3Helpers, Ray};
 use tinybvh::{BlasInstance, Bvh, BvhBase, Intersection};
@@ -20,7 +24,7 @@ struct CameraMatrices {
 }
 
 struct Renderer {
-    pixels: Vec<u8>,
+    pixels: Arc<Mutex<Vec<u8>>>,
     frame_idx: u32,
 
     models: HashMap<String, (Arc<Model>, Vec<Uuid>)>,
@@ -38,7 +42,7 @@ impl Renderer {
         let model_assets = AssetDatabase::<Model>::new();
 
         Self {
-            pixels: Vec::new(),
+            pixels: Arc::new(Mutex::new(Vec::new())),
             frame_idx: 0,
             models: HashMap::new(),
             model_instances: HashMap::new(),
@@ -58,14 +62,14 @@ impl Renderer {
         mut blas_idx: u32,
         blas_idx_offset: u32,
         blas_instances: &mut Vec<BlasInstance>,
-        blasses: &mut Option<&mut Vec<Rc<dyn BvhBase>>>,
+        blasses: &mut Option<&mut Vec<Arc<dyn BvhBase>>>,
         blas_idx_to_mesh_mapping: &mut HashMap<u32, (String, u32, Mat4)>,
     ) -> u32 {
         let transform = parent_transform * model.nodes[node as usize].transform.get_matrix();
 
         if let Some(mesh) = &model.nodes[node as usize].mesh {
             if let Some(blasses) = blasses {
-                blasses.push(mesh.blas.clone() as Rc<dyn BvhBase>);
+                blasses.push(mesh.blas.clone() as Arc<dyn BvhBase>);
             }
 
             let inv_trans_transform = transform.inverse().transpose();
@@ -200,7 +204,7 @@ impl Renderer {
         (position.xyz(), normal, tex_coord)
     }
 
-    fn render_pixel(&mut self, uv: &Vec2, camera_matrices: &CameraMatrices) -> Vec3 {
+    fn render_pixel(&self, uv: &Vec2, camera_matrices: &CameraMatrices) -> Vec3 {
         let corrected_uv = Vec2::new(uv.x, -uv.y);
         let origin = camera_matrices.inv_view * Vec4::new(0.0, 0.0, 0.0, 1.0);
         let target = camera_matrices.inv_proj * Vec4::from((corrected_uv, 1.0, 1.0));
@@ -208,7 +212,9 @@ impl Renderer {
 
         let mut ray = Ray::new(origin.xyz(), direction.xyz());
 
-        self.tlas.intersect(&mut ray);
+        for _ in 0..1 {
+            self.tlas.intersect(&mut ray);
+        }
         if ray.hit.t != 1e30 {
             let (_position, normal, _tex_coord) = self.get_hit_data(&ray.hit);
 
@@ -261,11 +267,24 @@ impl NodeRenderer for Renderer {
         }
     }
 
-    fn render(&mut self, width: u32, height: u32, assigned_rows: [u32; 2]) -> &[u8] {
-        let start_row = assigned_rows[0];
-        let end_row = assigned_rows[1];
+    fn render<F: FnMut(&[u8])>(
+        &mut self,
+        width: u32,
+        height: u32,
+        start_row: u32,
+        end_row: u32,
+        mut result_callback: F,
+    ) {
         let num_rows = end_row - start_row;
-        self.pixels.resize((width * num_rows * 4) as usize, 0);
+        let num_blocks_x = width / RENDER_BLOCK_SIZE;
+        let num_blocks_y = num_rows / RENDER_BLOCK_SIZE;
+
+        if let Ok(mut pixels) = self.pixels.lock() {
+            pixels.resize((width * num_rows) as usize * NODE_BYTES_PER_PIXEL, 128);
+
+            // result_callback(pixels.as_ref());
+            // return;
+        }
 
         self.camera.set_aspect_ratio(width as f32 / height as f32);
 
@@ -276,37 +295,68 @@ impl NodeRenderer for Renderer {
 
         self.rebuild_tlas();
 
-        for local_y in 0..num_rows {
-            for local_x in 0..width {
-                let x = local_x;
-                let y = local_y + start_row;
-                let uv = Vec2::new(
-                    (x as f32 + 0.5) / width as f32,
-                    (y as f32 + 0.5) / height as f32,
-                ) * 2.0
-                    - 1.0;
+        for local_block_y in 0..num_blocks_y {
+            for local_block_x in 0..num_blocks_x {
+                for block_y in 0..RENDER_BLOCK_SIZE {
+                    for block_x in 0..RENDER_BLOCK_SIZE {
+                        let local_x = (local_block_x * RENDER_BLOCK_SIZE) + block_x;
+                        let local_y = (local_block_y * RENDER_BLOCK_SIZE) + block_y;
 
-                let result = self.render_pixel(&uv, &camera_matrices);
+                        let x = local_x;
+                        let y = local_y + start_row;
 
-                self.pixels[(local_y * width + local_x) as usize * 4] = (result.x * 255.0) as u8;
-                self.pixels[(local_y * width + local_x) as usize * 4 + 1] =
-                    (result.y * 255.0) as u8;
-                self.pixels[(local_y * width + local_x) as usize * 4 + 2] =
-                    (result.z * 255.0) as u8;
-                self.pixels[(local_y * width + local_x) as usize * 4 + 3] = 255;
+                        let uv = Vec2::new(
+                            (x as f32 + 0.5) / width as f32,
+                            (y as f32 + 0.5) / height as f32,
+                        ) * 2.0
+                            - 1.0;
+
+                        let result = self.render_pixel(&uv, &camera_matrices);
+
+                        if let Ok(mut pixels) = self.pixels.lock() {
+                            let block_size = RENDER_BLOCK_SIZE * RENDER_BLOCK_SIZE;
+                            let start_pixel = (local_block_y * block_size * num_blocks_x)
+                                + local_block_x * block_size;
+
+                            let local_block_id = block_y * RENDER_BLOCK_SIZE + block_x;
+                            let local_id = (start_pixel + local_block_id) as usize;
+
+                            pixels[local_id * NODE_BYTES_PER_PIXEL] = (result.x * 255.0) as u8;
+                            pixels[local_id * NODE_BYTES_PER_PIXEL + 1] = (result.y * 255.0) as u8;
+                            pixels[local_id * NODE_BYTES_PER_PIXEL + 2] = (result.z * 255.0) as u8;
+                        }
+                    }
+                }
             }
         }
 
         self.frame_idx += 1;
 
-        &self.pixels
+        if let Ok(pixels) = self.pixels.lock() {
+            result_callback(pixels.as_ref());
+        }
     }
+}
+
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    /// Ip 169.254.187.239
+    #[arg(long, default_value_t = String::from("169.254.187.239"))]
+    host_ip: String,
+
+    /// Host port
+    #[arg(long, default_value_t = 34234)]
+    host_port: u16,
 }
 
 pub fn internal_main() -> Result<()> {
     let _appearance = Appearance::new("Render Node");
 
-    let node = Node::new(Renderer::new(), "127.0.0.1:34234")?;
+    let args = Args::parse();
+    let addr = SocketAddr::from_str(&format!("{}:{}", args.host_ip, args.host_port)).unwrap();
+
+    let node = Node::new(Renderer::new(), addr)?;
     node.run();
 
     Ok(())

@@ -1,117 +1,119 @@
-use std::io::{Read, Write};
-use std::net::TcpStream;
+use core::{net::SocketAddr, ops::FnMut, sync::atomic::Ordering};
+use std::thread;
 
 use anyhow::Result;
 use appearance_world::visible_world_action::VisibleWorldActionType;
-use std::thread;
+use unreliable::{Socket, SocketEvent};
 
-use crate::host::{HostMessage, HostMessageType};
+use crate::host::{
+    HostToNodeMessage, NodeToHostMessage, RenderPartialFinishedData, StartRenderData,
+    NODE_BYTES_PER_PIXEL, NODE_PIXEL_FORMAT, RENDER_BLOCK_SIZE,
+};
 
 pub trait NodeRenderer {
     // TODO: world manipulation
     fn visible_world_action(&mut self, action: &VisibleWorldActionType);
 
-    fn render(&mut self, width: u32, height: u32, assigned_rows: [u32; 2]) -> &[u8];
-}
-
-#[derive(Debug, Clone, Copy)]
-enum ExpectedPackage {
-    Message,
-    VisibleWorldActionData(u32),
+    fn render<F: FnMut(&[u8])>(
+        &mut self,
+        width: u32,
+        height: u32,
+        start_row: u32,
+        end_row: u32,
+        result_callback: F,
+    );
 }
 
 pub struct Node<T: NodeRenderer> {
-    host_addr: String,
-    tcp_stream: Option<TcpStream>,
-    expected_package: ExpectedPackage,
-
+    socket: Socket,
     renderer: T,
 }
 
 impl<T: NodeRenderer + 'static> Node<T> {
-    pub fn new(renderer: T, host_addr: &str) -> Result<Self> {
-        Ok(Self {
-            host_addr: host_addr.to_owned(),
-            tcp_stream: None,
-            expected_package: ExpectedPackage::Message,
-            renderer,
-        })
+    pub fn new(renderer: T, host_addr: SocketAddr) -> Result<Self> {
+        let socket = Socket::new(host_addr)?;
+
+        Ok(Self { socket, renderer })
     }
 
-    fn handle_message(&mut self, host_message: HostMessage) -> Result<()> {
-        match host_message.ty() {
-            HostMessageType::StartRender => {
-                if let Some(tcp_stream) = &mut self.tcp_stream {
-                    let pixels = self.renderer.render(
-                        host_message.width,
-                        host_message.height,
-                        host_message.assigned_rows,
-                    );
+    fn start_render(&mut self, data: StartRenderData, addr: &SocketAddr) {
+        log::info!("start render: {:?}", data);
 
-                    tcp_stream.write_all(pixels)?;
+        self.renderer.render(
+            data.width,
+            data.height,
+            data.row_start,
+            data.row_end,
+            |pixels| {
+                let num_blocks_x = data.width / RENDER_BLOCK_SIZE;
+                let num_blocks_y = (data.row_end - data.row_start) / RENDER_BLOCK_SIZE;
+
+                for local_block_y in 0..num_blocks_y {
+                    for local_block_x in 0..num_blocks_x {
+                        let block_size = RENDER_BLOCK_SIZE * RENDER_BLOCK_SIZE;
+                        let start_pixel = (local_block_y * block_size * num_blocks_x)
+                            + local_block_x * block_size;
+                        let end_pixel = start_pixel + block_size;
+
+                        let block_pixels = &pixels[(start_pixel as usize * NODE_BYTES_PER_PIXEL)
+                            ..(end_pixel as usize * NODE_BYTES_PER_PIXEL)];
+
+                        let image = turbojpeg::Image {
+                            pixels: block_pixels,
+                            width: RENDER_BLOCK_SIZE as usize,
+                            height: RENDER_BLOCK_SIZE as usize,
+                            pitch: RENDER_BLOCK_SIZE as usize * NODE_BYTES_PER_PIXEL,
+                            format: NODE_PIXEL_FORMAT,
+                        };
+                        let compressed_pixel_bytes =
+                            turbojpeg::compress(image, 80, turbojpeg::Subsamp::Sub2x2).unwrap();
+
+                        let message =
+                            NodeToHostMessage::RenderPartialFinished(RenderPartialFinishedData {
+                                row: (local_block_y * RENDER_BLOCK_SIZE) + data.row_start,
+                                column_block: local_block_x,
+                                compressed_pixel_bytes: compressed_pixel_bytes.to_vec(),
+                            });
+
+                        self.socket
+                            .packet_sender()
+                            .send_unreliable(*addr, message.to_bytes())
+                            .unwrap();
+                    }
                 }
-            }
-            HostMessageType::VisibleWorldAction => {
-                self.expected_package =
-                    ExpectedPackage::VisibleWorldActionData(host_message.visible_world_action_ty)
-            }
-        }
 
-        Ok(())
-    }
-
-    fn disconnect(&mut self) {
-        log::info!("Disconnected");
-        self.tcp_stream = None;
+                self.socket.barrier().fetch_add(1, Ordering::SeqCst);
+                self.socket
+                    .packet_sender()
+                    .send_barrier(*addr, vec![])
+                    .unwrap();
+            },
+        );
     }
 
     pub fn run(mut self) {
-        let mut buf = vec![0u8; 1];
-
         loop {
-            // Try to connect to host if not connected yet
-            if self.tcp_stream.is_none() {
-                if let Ok(tcp_stream) = TcpStream::connect(&self.host_addr) {
-                    log::info!("Connected");
-                    self.tcp_stream = Some(tcp_stream);
-                }
-            }
+            #[allow(clippy::collapsible_match)]
+            if let Ok(socket_event) = self.socket.event_receiver().try_recv() {
+                if let SocketEvent::Packet(packet) = socket_event {
+                    if let Ok(message) = HostToNodeMessage::from_bytes(packet.payload()) {
+                        match message {
+                            HostToNodeMessage::StartRender(data) => {
+                                self.start_render(data, packet.addr());
+                            }
+                            HostToNodeMessage::VisibleWorldAction(data) => {
+                                let visible_world_action =
+                                    VisibleWorldActionType::from_ty_and_bytes(
+                                        data.ty,
+                                        data.data.as_ref(),
+                                    );
 
-            if let Some(tcp_stream) = &mut self.tcp_stream {
-                match self.expected_package {
-                    ExpectedPackage::Message => {
-                        buf.resize(std::mem::size_of::<HostMessage>(), 0);
-                    }
-                    ExpectedPackage::VisibleWorldActionData(visible_world_action_type) => {
-                        buf.resize(
-                            VisibleWorldActionType::data_size_from_ty(visible_world_action_type),
-                            0,
-                        );
-                    }
-                }
-
-                if let Ok(_len) = tcp_stream.read(buf.as_mut()) {
-                    match self.expected_package {
-                        ExpectedPackage::Message => {
-                            let host_message = *bytemuck::from_bytes::<HostMessage>(buf.as_ref());
-
-                            if self.handle_message(host_message).is_err() {
-                                self.disconnect();
+                                self.renderer.visible_world_action(&visible_world_action);
                             }
                         }
-                        ExpectedPackage::VisibleWorldActionData(visible_world_action_type) => {
-                            let visible_world_action = VisibleWorldActionType::from_ty_and_bytes(
-                                visible_world_action_type,
-                                buf.as_ref(),
-                            );
-
-                            self.renderer.visible_world_action(&visible_world_action);
-
-                            self.expected_package = ExpectedPackage::Message;
-                        }
+                    } else {
+                        log::warn!("Failed to read message from {}.", packet.addr());
                     }
-                } else {
-                    self.disconnect();
                 }
             }
 
