@@ -13,7 +13,10 @@ use std::{
 use unreliable::{Socket, SocketEvent};
 
 /// Size of each rendered block is 8x8, as this is the minimum size jpeg is able to compress.
-pub const RENDER_BLOCK_SIZE: u32 = 32;
+pub const RENDER_BLOCK_SIZE: u32 = 64;
+pub const BYTES_PER_PIXEL: usize = 4;
+pub const TRANSFER_BYTES_PER_PIXEL: usize = 4;
+pub const NODE_PIXEL_FORMAT: turbojpeg::PixelFormat = turbojpeg::PixelFormat::RGB;
 
 pub struct RenderPartialFinishedData {
     pub row: u32,
@@ -147,7 +150,10 @@ impl Host {
     pub fn new(port: u16, width: u32, height: u32) -> Result<Self> {
         let connected_nodes = Arc::new(Mutex::new(Vec::new()));
         let has_received_new_connections = Arc::new(AtomicBool::new(false));
-        let pixels = Arc::new(Mutex::new(vec![0; (width * height * 4) as usize]));
+        let pixels = Arc::new(Mutex::new(vec![
+            0;
+            (width * height) as usize * BYTES_PER_PIXEL
+        ]));
 
         let addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), port));
         let mut socket = Socket::new(addr)?;
@@ -214,10 +220,15 @@ impl Host {
                                                         + local_x)
                                                         as usize;
 
-                                                    for i in 0..4 {
-                                                        pixels[id * 4 + i] =
-                                                            image.pixels[local_id * 4 + i];
+                                                    for i in 0..BYTES_PER_PIXEL {
+                                                        pixels[id * BYTES_PER_PIXEL + i] = image
+                                                            .pixels[local_id
+                                                            * TRANSFER_BYTES_PER_PIXEL
+                                                            + i];
                                                     }
+                                                    pixels[id * BYTES_PER_PIXEL
+                                                        + BYTES_PER_PIXEL
+                                                        - 1] = 255;
                                                 }
                                             }
                                         }
@@ -311,10 +322,10 @@ impl Host {
                 if let Ok(mut pixels) = self.pixels.lock() {
                     for x in 0..self.width {
                         for y in 0..self.height {
-                            pixels[(y * self.width + x) as usize * 4] = 255;
-                            pixels[(y * self.width + x) as usize * 4 + 1] = 0;
-                            pixels[(y * self.width + x) as usize * 4 + 2] = 255;
-                            pixels[(y * self.width + x) as usize * 4 + 3] = 255;
+                            pixels[(y * self.width + x) as usize * BYTES_PER_PIXEL] = 255;
+                            pixels[(y * self.width + x) as usize * BYTES_PER_PIXEL + 1] = 0;
+                            pixels[(y * self.width + x) as usize * BYTES_PER_PIXEL + 2] = 255;
+                            pixels[(y * self.width + x) as usize * BYTES_PER_PIXEL + 3] = 255;
                         }
                     }
                 }
