@@ -26,14 +26,19 @@ pub trait NodeRenderer {
 
 pub struct Node<T: NodeRenderer> {
     socket: Socket,
+    host_port: u16,
     renderer: T,
 }
 
 impl<T: NodeRenderer + 'static> Node<T> {
-    pub fn new(renderer: T, host_addr: SocketAddr) -> Result<Self> {
-        let socket = Socket::new(host_addr)?;
+    pub fn new(renderer: T, host_addr: SocketAddr, receiving_port: u16) -> Result<Self> {
+        let socket = Socket::new(Some(host_addr), receiving_port)?;
 
-        Ok(Self { socket, renderer })
+        Ok(Self {
+            socket,
+            host_port: host_addr.port(),
+            renderer,
+        })
     }
 
     fn start_render(&mut self, data: StartRenderData, addr: &SocketAddr) {
@@ -75,9 +80,11 @@ impl<T: NodeRenderer + 'static> Node<T> {
                                 compressed_pixel_bytes: compressed_pixel_bytes.to_vec(),
                             });
 
+                        let mut addr = *addr;
+                        addr.set_port(self.host_port);
                         self.socket
                             .packet_sender()
-                            .send_unreliable(*addr, message.to_bytes())
+                            .send_unreliable(addr, message.to_bytes())
                             .unwrap();
                     }
                 }
@@ -95,24 +102,32 @@ impl<T: NodeRenderer + 'static> Node<T> {
         loop {
             #[allow(clippy::collapsible_match)]
             if let Ok(socket_event) = self.socket.event_receiver().try_recv() {
-                if let SocketEvent::Packet(packet) = socket_event {
-                    if let Ok(message) = HostToNodeMessage::from_bytes(packet.payload()) {
-                        match message {
-                            HostToNodeMessage::StartRender(data) => {
-                                self.start_render(data, packet.addr());
-                            }
-                            HostToNodeMessage::VisibleWorldAction(data) => {
-                                let visible_world_action =
-                                    VisibleWorldActionType::from_ty_and_bytes(
-                                        data.ty,
-                                        data.data.as_ref(),
-                                    );
+                match socket_event {
+                    SocketEvent::Packet(packet) => {
+                        if let Ok(message) = HostToNodeMessage::from_bytes(packet.payload()) {
+                            match message {
+                                HostToNodeMessage::StartRender(data) => {
+                                    self.start_render(data, packet.addr());
+                                }
+                                HostToNodeMessage::VisibleWorldAction(data) => {
+                                    let visible_world_action =
+                                        VisibleWorldActionType::from_ty_and_bytes(
+                                            data.ty,
+                                            data.data.as_ref(),
+                                        );
 
-                                self.renderer.visible_world_action(&visible_world_action);
+                                    self.renderer.visible_world_action(&visible_world_action);
+                                }
                             }
+                        } else {
+                            log::warn!("Failed to read message from {}.", packet.addr());
                         }
-                    } else {
-                        log::warn!("Failed to read message from {}.", packet.addr());
+                    }
+                    SocketEvent::Connect(addr) => {
+                        log::info!("Node connected at {:?}", addr);
+                    }
+                    SocketEvent::Disconnect(addr) => {
+                        log::info!("Node disconnected at {:?}...", addr);
                     }
                 }
             }

@@ -1,7 +1,7 @@
 use anyhow::Result;
 use appearance_world::visible_world_action::VisibleWorldAction;
 use core::{
-    net::{Ipv4Addr, SocketAddr, SocketAddrV4},
+    net::SocketAddr,
     sync::atomic::{AtomicBool, Ordering},
 };
 use crossbeam::channel::Receiver;
@@ -140,6 +140,7 @@ pub struct Host {
     connected_nodes: Arc<Mutex<Vec<SocketAddr>>>,
     has_received_new_connections: Arc<AtomicBool>,
     socket: Socket,
+    node_port: u16,
 
     width: u32,
     height: u32,
@@ -147,7 +148,7 @@ pub struct Host {
 }
 
 impl Host {
-    pub fn new(port: u16, width: u32, height: u32) -> Result<Self> {
+    pub fn new(host_port: u16, node_port: u16, width: u32, height: u32) -> Result<Self> {
         let connected_nodes = Arc::new(Mutex::new(Vec::new()));
         let has_received_new_connections = Arc::new(AtomicBool::new(false));
         let pixels = Arc::new(Mutex::new(vec![
@@ -155,8 +156,7 @@ impl Host {
             (width * height) as usize * BYTES_PER_PIXEL
         ]));
 
-        let addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), port));
-        let mut socket = Socket::new(addr)?;
+        let mut socket = Socket::new(None, host_port)?;
 
         let receive_events_event_receiver = socket.event_receiver().clone();
         let recieve_events_connected_nodes = connected_nodes.clone();
@@ -177,6 +177,7 @@ impl Host {
             connected_nodes,
             has_received_new_connections,
             socket,
+            node_port,
 
             width,
             height,
@@ -294,8 +295,12 @@ impl Host {
                             .send_barrier(*node, message_bytes.clone())
                             .unwrap();
                     } else {
+                        // Incoming connection addresses can provide a different port than the port they actively listen on
+                        // This doesn't matter for tcp as it works with handshakes, but for udp it does
+                        let mut addr = *node;
+                        addr.set_port(self.node_port);
                         packet_sender
-                            .send_unreliable(*node, message_bytes.clone())
+                            .send_unreliable(addr, message_bytes.clone())
                             .unwrap();
                     }
                 }

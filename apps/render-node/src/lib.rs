@@ -342,12 +342,16 @@ impl NodeRenderer for Renderer {
 #[command(version, about, long_about = None)]
 struct Args {
     /// Ip 169.254.187.239
-    #[arg(long, default_value_t = String::from("169.254.187.239"))]
+    #[arg(long, default_value_t = String::from("127.0.0.1"))]
     host_ip: String,
 
-    /// Host port
+    /// Host port to connect to the host
     #[arg(long, default_value_t = 34234)]
     host_port: u16,
+
+    /// Node port to receive events
+    #[arg(long, default_value_t = 34235)]
+    node_port: u16,
 }
 
 pub fn internal_main() -> Result<()> {
@@ -356,7 +360,7 @@ pub fn internal_main() -> Result<()> {
     let args = Args::parse();
     let addr = SocketAddr::from_str(&format!("{}:{}", args.host_ip, args.host_port)).unwrap();
 
-    let node = Node::new(Renderer::new(), addr)?;
+    let node = Node::new(Renderer::new(), addr, args.node_port)?;
     node.run();
 
     Ok(())
