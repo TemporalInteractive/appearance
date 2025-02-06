@@ -2,6 +2,8 @@ use core::ops::Mul;
 
 pub mod coord_system;
 pub use coord_system::*;
+pub mod interaction;
+pub use interaction::*;
 pub mod normal;
 pub use normal::*;
 pub mod spherical_geometry;

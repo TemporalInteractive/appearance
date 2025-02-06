@@ -1,17 +1,20 @@
+#![allow(dead_code)]
+#![allow(unused_imports)]
+
 use std::sync::{Arc, Mutex};
 
 use appearance_camera::Camera;
 
 mod geometry_resources;
 mod path_tracer;
+mod radiometry;
 use glam::Vec2;
-use path_tracer::*;
 mod math;
-use math::*;
 
 use appearance_render_loop::host::{NODE_BYTES_PER_PIXEL, RENDER_BLOCK_SIZE};
 use appearance_world::visible_world_action::VisibleWorldActionType;
 use geometry_resources::*;
+use path_tracer::CameraMatrices;
 
 pub struct PathTracer {
     pixels: Arc<Mutex<Vec<u8>>>,
