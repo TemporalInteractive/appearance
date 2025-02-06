@@ -1,8 +1,14 @@
+use core::convert::Into;
+use std::rc::Rc;
+
 use glam::{FloatExt, Vec3, Vec4};
 
 use crate::math::Vec4Extensions;
 
-use super::{black_body_emission, cie_x, cie_y, cie_z, Rgb, RgbColorSpace, Xyz, CIE_Y_INTEGRAL};
+use super::{
+    black_body_emission, cie_x, cie_y, cie_z, Rgb, RgbColorSpace, RgbSigmoidPolynomial, Xyz,
+    CIE_Y_INTEGRAL,
+};
 
 /// Minimum wavelength of visible light for humans.
 pub const LAMBDA_MIN: f32 = 360.0;
@@ -11,6 +17,7 @@ pub const LAMBDA_MIN: f32 = 360.0;
 pub const LAMBDA_MAX: f32 = 830.0;
 
 /// Represent values of the spectral distribution at discrete wavelengths.
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SampledSpectrum(Vec4);
 
 impl From<Vec4> for SampledSpectrum {
@@ -61,6 +68,7 @@ impl SampledSpectrum {
 }
 
 /// Stores the wavelengths for which a SampledSpectrum stores samples.
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SampledWavelengths {
     lambda: Vec4,
     pdf: Vec4,
@@ -106,7 +114,7 @@ impl SampledWavelengths {
 }
 
 /// Represents a range of spectral sample values.
-pub trait Spectrum {
+pub trait Spectrum: std::fmt::Debug {
     fn spectral_distribution(&self, lambda: f32) -> f32;
     fn max_spectral_distribution(&self) -> f32;
 
@@ -131,6 +139,7 @@ pub fn spectrum_inner_product(a: &dyn Spectrum, b: &dyn Spectrum) -> f32 {
 }
 
 /// Represents a constant spectral distribution over all wavelengths.
+#[derive(Debug, Clone)]
 pub struct ConstantSpectrum {
     spectral_distribution: f32,
 }
@@ -154,6 +163,7 @@ impl Spectrum for ConstantSpectrum {
 }
 
 /// Stores a spectral distribution sampled at 1 nm intervals over a given range of integer wavelengths.
+#[derive(Debug, Clone)]
 pub struct DenselySampledSpectrum {
     lambda_min: u32,
     lambda_max: u32,
@@ -212,6 +222,7 @@ impl Spectrum for DenselySampledSpectrum {
 }
 
 /// Gives the spectral distribution of a blackbody emitter at a specified temperature.
+#[derive(Debug, Clone)]
 pub struct BlackBodySpectrum {
     t: f32,
     normalization_factor: f32,
@@ -236,5 +247,108 @@ impl Spectrum for BlackBodySpectrum {
 
     fn max_spectral_distribution(&self) -> f32 {
         1.0
+    }
+}
+
+/// Handles rgb values in the range of [0, 1] in a given rgb color space
+#[derive(Debug, Clone)]
+pub struct RgbAlbedoSpectrum {
+    polynomial: RgbSigmoidPolynomial,
+}
+
+impl RgbAlbedoSpectrum {
+    pub fn new(rgb: Rgb, color_space: &RgbColorSpace) -> Self {
+        let polynomial = color_space.rgb_to_polynomial(rgb);
+
+        Self { polynomial }
+    }
+}
+
+impl Spectrum for RgbAlbedoSpectrum {
+    fn spectral_distribution(&self, lambda: f32) -> f32 {
+        self.polynomial.evaluate(lambda)
+    }
+
+    fn max_spectral_distribution(&self) -> f32 {
+        self.polynomial.max_value()
+    }
+}
+
+/// Handles rgb values in the range of [0, INF] in a given rgb color space
+#[derive(Debug, Clone)]
+pub struct RgbUnboundedSpectrum {
+    polynomial: RgbSigmoidPolynomial,
+    scale: f32,
+}
+
+impl RgbUnboundedSpectrum {
+    pub fn new(rgb: Rgb, color_space: &RgbColorSpace) -> Self {
+        let m = Vec3::from(rgb).max_element();
+        let scale = 2.0 * m;
+        let polynomial = if scale != 0.0 {
+            color_space.rgb_to_polynomial(Rgb::new(Vec3::from(rgb) / scale))
+        } else {
+            color_space.rgb_to_polynomial(Rgb::new(Vec3::ZERO))
+        };
+
+        Self { scale, polynomial }
+    }
+}
+
+impl Spectrum for RgbUnboundedSpectrum {
+    fn spectral_distribution(&self, lambda: f32) -> f32 {
+        self.scale * self.polynomial.evaluate(lambda)
+    }
+
+    fn max_spectral_distribution(&self) -> f32 {
+        self.scale * self.polynomial.max_value()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct RgbIlluminantSpectrum {
+    polynomial: RgbSigmoidPolynomial,
+    scale: f32,
+    illuminant: Rc<dyn Spectrum>,
+}
+
+impl RgbIlluminantSpectrum {
+    pub fn new(rgb: Rgb, color_space: &RgbColorSpace, illuminant: Rc<dyn Spectrum>) -> Self {
+        let m = Vec3::from(rgb).max_element();
+        let scale = 2.0 * m;
+        let polynomial = if scale != 0.0 {
+            color_space.rgb_to_polynomial(Rgb::new(Vec3::from(rgb) / scale))
+        } else {
+            color_space.rgb_to_polynomial(Rgb::new(Vec3::ZERO))
+        };
+
+        Self {
+            scale,
+            polynomial,
+            illuminant,
+        }
+    }
+}
+
+impl Spectrum for RgbIlluminantSpectrum {
+    fn spectral_distribution(&self, lambda: f32) -> f32 {
+        self.scale
+            * self.polynomial.evaluate(lambda)
+            * self.illuminant.spectral_distribution(lambda)
+    }
+
+    fn max_spectral_distribution(&self) -> f32 {
+        self.scale * self.polynomial.max_value() * self.illuminant.max_spectral_distribution()
+    }
+
+    fn sample(&self, sampled_wavelengths: &SampledWavelengths) -> SampledSpectrum {
+        SampledSpectrum::new(
+            Vec4::new(
+                self.spectral_distribution(sampled_wavelengths.lambda[0]),
+                self.spectral_distribution(sampled_wavelengths.lambda[1]),
+                self.spectral_distribution(sampled_wavelengths.lambda[2]),
+                self.spectral_distribution(sampled_wavelengths.lambda[3]),
+            ) * Vec4::from(self.illuminant.sample(sampled_wavelengths)),
+        )
     }
 }

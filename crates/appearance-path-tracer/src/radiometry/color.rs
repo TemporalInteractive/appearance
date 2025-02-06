@@ -1,8 +1,8 @@
-use std::sync::OnceLock;
+use std::{rc::Rc, sync::OnceLock};
 
-use glam::{Mat3, Vec2, Vec3};
+use glam::{FloatExt, Mat3, Vec2, Vec3};
 
-use crate::math::sqr;
+use crate::math::{find_interval, lerp, sqr, Vec3Extensions};
 
 use super::{
     data_tables::{CIE_X, CIE_Y, CIE_Z},
@@ -47,6 +47,7 @@ pub fn cie_z() -> &'static DenselySampledSpectrum {
 }
 
 /// XYZ color space, a device-independent color space, which means that it does not describe the characteristics of a particular display or color measurement device.
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Xyz(Vec3);
 
 impl From<Vec3> for Xyz {
@@ -96,6 +97,7 @@ impl Xyz {
 }
 
 /// RGB color space defined by using the chromaticities of red, green, and blue color primaries.
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Rgb(Vec3);
 
 impl From<Vec3> for Rgb {
@@ -117,6 +119,8 @@ impl Rgb {
 }
 
 pub struct RgbColorSpace {
+    rgb_to_spectrum_table: RgbToSpectrumTable,
+    illuminant: Rc<dyn Spectrum>,
     xyz_from_rgb: Mat3,
     rgb_from_xyz: Mat3,
 
@@ -127,8 +131,14 @@ pub struct RgbColorSpace {
 }
 
 impl RgbColorSpace {
-    pub fn new(r_xy: Vec2, g_xy: Vec2, b_xy: Vec2, illuminant: &dyn Spectrum) -> Self {
-        let w = Xyz::from_spectrum(illuminant);
+    fn new(
+        r_xy: Vec2,
+        g_xy: Vec2,
+        b_xy: Vec2,
+        illuminant: Rc<dyn Spectrum>,
+        rgb_to_spectrum_table: RgbToSpectrumTable,
+    ) -> Self {
+        let w = Xyz::from_spectrum(illuminant.as_ref());
         let w_xy = w.to_xy();
 
         let r = Xyz::from_xy(r_xy);
@@ -143,6 +153,8 @@ impl RgbColorSpace {
         let rgb_from_xyz = xyz_from_rgb.inverse();
 
         Self {
+            rgb_to_spectrum_table,
+            illuminant,
             xyz_from_rgb,
             rgb_from_xyz,
             r: r_xy,
@@ -159,8 +171,13 @@ impl RgbColorSpace {
     pub fn rgb_to_xyz(&self, rgb: Rgb) -> Xyz {
         Xyz::new(self.xyz_from_rgb * rgb.0)
     }
+
+    pub fn rgb_to_polynomial(&self, rgb: Rgb) -> RgbSigmoidPolynomial {
+        self.rgb_to_spectrum_table.rgb_to_polynomial(rgb)
+    }
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct RgbSigmoidPolynomial {
     c0: f32,
     c1: f32,
@@ -168,7 +185,7 @@ pub struct RgbSigmoidPolynomial {
 }
 
 impl RgbSigmoidPolynomial {
-    pub fn new(c0: f32, c1: f32, c2: f32) -> Self {
+    fn new(c0: f32, c1: f32, c2: f32) -> Self {
         Self { c0, c1, c2 }
     }
 
@@ -194,6 +211,75 @@ impl RgbSigmoidPolynomial {
             result.max(self.evaluate(lambda))
         } else {
             result
+        }
+    }
+}
+
+pub type RgbSpectrumCoefficientArray = [[[[[f32; 3]; RgbToSpectrumTable::RESOLUTION];
+    RgbToSpectrumTable::RESOLUTION];
+    RgbToSpectrumTable::RESOLUTION]; 3];
+
+/// Retreives a RgbSigmoidPolynomial based on rgb values
+pub struct RgbToSpectrumTable {
+    z_nodes: Box<[f32]>,
+    coefficients: Box<RgbSpectrumCoefficientArray>,
+}
+
+impl RgbToSpectrumTable {
+    pub const RESOLUTION: usize = 64;
+
+    fn new(z_nodes: Box<[f32]>, coefficients: Box<RgbSpectrumCoefficientArray>) -> Self {
+        Self {
+            z_nodes,
+            coefficients,
+        }
+    }
+
+    pub fn rgb_to_polynomial(&self, rgb: Rgb) -> RgbSigmoidPolynomial {
+        if rgb.0.x == rgb.0.y && rgb.0.y == rgb.0.z {
+            RgbSigmoidPolynomial::new(
+                0.0,
+                0.0,
+                (rgb.0.x - 0.5) / (rgb.0.x * (1.0 - rgb.0.x)).sqrt(),
+            )
+        } else {
+            let i = rgb.0.max_element_idx();
+
+            let z = rgb.0[i];
+            let x = rgb.0[(i + 1) % 3] * (Self::RESOLUTION as f32 - 1.0) / z;
+            let y = rgb.0[(i + 2) % 3] * (Self::RESOLUTION as f32 - 1.0) / z;
+
+            let xi = (x as i32).min(Self::RESOLUTION as i32 - 2);
+            let yi = (y as i32).min(Self::RESOLUTION as i32 - 2);
+            let zi = find_interval(Self::RESOLUTION, |i| self.z_nodes[i] < z);
+
+            let dx = x - xi as f32;
+            let dy = y - yi as f32;
+            let dz = (z - self.z_nodes[zi]) / (self.z_nodes[zi + 1] - self.z_nodes[zi]);
+
+            let mut c = Vec3::ZERO;
+            for j in 0..3 {
+                let coefficient_lookup = |dx: usize, dy: usize, dz: usize| -> f32 {
+                    self.coefficients[i][zi + dz][yi as usize + dy][xi as usize + dx][j]
+                };
+
+                // TODO: rewrite with glam lerp
+                c[i] = lerp(
+                    dz,
+                    lerp(
+                        dy,
+                        lerp(dx, coefficient_lookup(0, 0, 0), coefficient_lookup(1, 0, 0)),
+                        lerp(dx, coefficient_lookup(0, 1, 0), coefficient_lookup(1, 1, 0)),
+                    ),
+                    lerp(
+                        dy,
+                        lerp(dx, coefficient_lookup(0, 0, 1), coefficient_lookup(1, 0, 1)),
+                        lerp(dx, coefficient_lookup(0, 1, 1), coefficient_lookup(1, 1, 1)),
+                    ),
+                );
+            }
+
+            RgbSigmoidPolynomial::new(c.x, c.y, c.z)
         }
     }
 }
