@@ -1,8 +1,7 @@
-use appearance::appearance_render_loop::host::{RENDER_BLOCK_SIZE, NODE_BYTES_PER_PIXEL};
+use appearance::appearance_render_loop::host::{NODE_BYTES_PER_PIXEL, RENDER_BLOCK_SIZE};
 use core::net::SocketAddr;
 use core::ops::FnMut;
 use core::str::FromStr;
-use rayon::prelude::*;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -323,61 +322,13 @@ impl NodeRenderer for Renderer {
                             let local_id = (start_pixel + local_block_id) as usize;
 
                             pixels[local_id * NODE_BYTES_PER_PIXEL] = (result.x * 255.0) as u8;
-                            pixels[local_id * NODE_BYTES_PER_PIXEL + 1] =
-                                (result.y * 255.0) as u8;
-                            pixels[local_id * NODE_BYTES_PER_PIXEL + 2] =
-                                (result.z * 255.0) as u8;
+                            pixels[local_id * NODE_BYTES_PER_PIXEL + 1] = (result.y * 255.0) as u8;
+                            pixels[local_id * NODE_BYTES_PER_PIXEL + 2] = (result.z * 255.0) as u8;
                         }
                     }
                 }
             }
         }
-
-        // let _ = (0..(num_rows * width))
-        //     .collect::<Vec<u32>>()
-        //     .iter()
-        //     .map(|i| {
-        //         let local_y = i / width;
-        //         let local_x = i % width;
-        //         let x = local_x;
-        //         let y = local_y + start_row;
-        //         let uv = Vec2::new(
-        //             (x as f32 + 0.5) / width as f32,
-        //             (y as f32 + 0.5) / height as f32,
-        //         ) * 2.0
-        //             - 1.0;
-
-        //         let result = self.render_pixel(&uv, &camera_matrices);
-
-        //         if let Ok(mut pixels) = self.pixels.lock() {
-        //             pixels[(local_y * width + local_x) as usize * 4] = (result.x * 255.0) as u8;
-        //             pixels[(local_y * width + local_x) as usize * 4 + 1] = (result.y * 255.0) as u8;
-        //             pixels[(local_y * width + local_x) as usize * 4 + 2] = (result.z * 255.0) as u8;
-        //             pixels[(local_y * width + local_x) as usize * 4 + 3] = 255;
-        //         }
-        //     })
-        //     .collect::<Vec<_>>();
-
-        // for local_y in 0..num_rows {
-        //     for local_x in 0..width {
-        //         let x = local_x;
-        //         let y = local_y + start_row;
-        //         let uv = Vec2::new(
-        //             (x as f32 + 0.5) / width as f32,
-        //             (y as f32 + 0.5) / height as f32,
-        //         ) * 2.0
-        //             - 1.0;
-
-        //         let result = self.render_pixel(&uv, &camera_matrices);
-
-        //         if let Ok(mut pixels) = self.pixels.lock() {
-        //             pixels[(local_y * width + local_x) as usize * 4] = (result.x * 255.0) as u8;
-        //             pixels[(local_y * width + local_x) as usize * 4 + 1] = (result.y * 255.0) as u8;
-        //             pixels[(local_y * width + local_x) as usize * 4 + 2] = (result.z * 255.0) as u8;
-        //             pixels[(local_y * width + local_x) as usize * 4 + 3] = 255;
-        //         }
-        //     }
-        // }
 
         self.frame_idx += 1;
 

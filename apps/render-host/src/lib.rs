@@ -141,12 +141,12 @@ impl RenderLoop for HostRenderLoop {
         self.timer.reset();
         log::info!("{}ms ({} fps)", delta_time * 1000.0, 1.0 / delta_time);
 
-        // if let Some(duck_entity) = self.duck_entity {
-        //     let mut transforms_mut = self.world.entities_mut::<TransformComponent>();
+        if let Some(duck_entity) = self.duck_entity {
+            let mut transforms_mut = self.world.entities_mut::<TransformComponent>();
 
-        //     let duck_transform = transforms_mut.get_mut(duck_entity).unwrap();
-        //     duck_transform.transform.translate(RIGHT * delta_time * 0.5);
-        // }
+            let duck_transform = transforms_mut.get_mut(duck_entity).unwrap();
+            duck_transform.transform.translate(RIGHT * delta_time * 0.5);
+        }
 
         if self.input_handler.key(KeyCode::KeyX) {
             if let Some(duck_entity) = self.duck_entity.take() {

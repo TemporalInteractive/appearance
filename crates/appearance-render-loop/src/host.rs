@@ -12,7 +12,7 @@ use std::{
 
 use unreliable::{Socket, SocketEvent};
 
-/// Size of each rendered block is 8x8, as this is the minimum size jpeg is able to compress.
+/// Size of each rendered block is a multiple of 8x8, as this is the minimum size jpeg is able to compress.
 pub const RENDER_BLOCK_SIZE: u32 = 64;
 pub const BYTES_PER_PIXEL: usize = 4;
 pub const NODE_BYTES_PER_PIXEL: usize = 3;
@@ -199,14 +199,11 @@ impl Host {
                             if let Ok(message) = NodeToHostMessage::from_bytes(packet.payload()) {
                                 match message {
                                     NodeToHostMessage::RenderPartialFinished(data) => {
-                                        // decompress
                                         let image = turbojpeg::decompress(
                                             &data.compressed_pixel_bytes,
                                             NODE_PIXEL_FORMAT,
                                         )
                                         .unwrap();
-
-                                        //let decompressed_pixels = data.pixels;
 
                                         if let Ok(mut pixels) = pixels.lock() {
                                             for local_y in 0..RENDER_BLOCK_SIZE {
