@@ -1,6 +1,8 @@
-use glam::{FloatExt, Vec4};
+use glam::{FloatExt, Vec3, Vec4};
 
-use super::black_body_emission;
+use crate::math::Vec4Extensions;
+
+use super::{black_body_emission, cie_x, cie_y, cie_z, Xyz, CIE_Y_INTEGRAL};
 
 /// Minimum wavelength of visible light for humans.
 pub const LAMBDA_MIN: f32 = 360.0;
@@ -32,6 +34,20 @@ impl SampledSpectrum {
 
     pub fn has_contribution(&self) -> bool {
         self.0.length_squared() > 0.0
+    }
+
+    pub fn to_xyz(&self, sampled_wavelengths: &SampledWavelengths) -> Xyz {
+        let x = cie_x().sample(sampled_wavelengths);
+        let y = cie_y().sample(sampled_wavelengths);
+        let z = cie_z().sample(sampled_wavelengths);
+
+        let xyz = Vec3::new(
+            (x.0 * self.0).safe_div(sampled_wavelengths.pdf).avg(),
+            (y.0 * self.0).safe_div(sampled_wavelengths.pdf).avg(),
+            (z.0 * self.0).safe_div(sampled_wavelengths.pdf).avg(),
+        ) / CIE_Y_INTEGRAL;
+
+        Xyz::new(xyz)
     }
 }
 
@@ -84,6 +100,25 @@ impl SampledWavelengths {
 pub trait Spectrum {
     fn spectral_distribution(&self, lambda: f32) -> f32;
     fn max_spectral_distribution(&self) -> f32;
+
+    fn sample(&self, sampled_wavelengths: &SampledWavelengths) -> SampledSpectrum {
+        SampledSpectrum::new(Vec4::new(
+            self.spectral_distribution(sampled_wavelengths.lambda[0]),
+            self.spectral_distribution(sampled_wavelengths.lambda[1]),
+            self.spectral_distribution(sampled_wavelengths.lambda[2]),
+            self.spectral_distribution(sampled_wavelengths.lambda[3]),
+        ))
+    }
+}
+
+pub fn spectrum_inner_product(a: &dyn Spectrum, b: &dyn Spectrum) -> f32 {
+    let mut integral = 0.0;
+
+    for lambda in LAMBDA_MIN as u32..LAMBDA_MAX as u32 {
+        integral += a.spectral_distribution(lambda as f32) * b.spectral_distribution(lambda as f32);
+    }
+
+    integral
 }
 
 /// Represents a constant spectral distribution over all wavelengths.
@@ -117,7 +152,7 @@ pub struct DenselySampledSpectrum {
 }
 
 impl DenselySampledSpectrum {
-    pub fn empty(lambda_min: u32, lambda_max: u32) -> Self {
+    pub fn new(lambda_min: u32, lambda_max: u32) -> Self {
         Self {
             lambda_min,
             lambda_max,
@@ -125,13 +160,25 @@ impl DenselySampledSpectrum {
         }
     }
 
-    pub fn new(spectrum: &dyn Spectrum, lambda_min: u32, lambda_max: u32) -> Self {
+    pub fn new_from_spectrum(spectrum: &dyn Spectrum, lambda_min: u32, lambda_max: u32) -> Self {
         let mut spectral_distribution = Vec::with_capacity((lambda_max - lambda_min) as usize);
 
         for lambda in lambda_min..lambda_max {
             spectral_distribution.push(spectrum.spectral_distribution(lambda as f32));
         }
 
+        Self {
+            lambda_min,
+            lambda_max,
+            spectral_distribution,
+        }
+    }
+
+    pub fn new_from_spectral_distribution(
+        spectral_distribution: Vec<f32>,
+        lambda_min: u32,
+        lambda_max: u32,
+    ) -> Self {
         Self {
             lambda_min,
             lambda_max,

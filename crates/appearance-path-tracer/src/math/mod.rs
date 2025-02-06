@@ -8,9 +8,19 @@ pub mod normal;
 pub use normal::*;
 pub mod spherical_geometry;
 pub use spherical_geometry::*;
+pub mod vec_extensions;
+pub use vec_extensions::*;
 
 pub fn sqr<T: Mul<Output = T> + Clone + Copy>(x: T) -> T {
     x * x
+}
+
+pub fn safe_div(x: f32, y: f32) -> f32 {
+    if y == 0.0 {
+        0.0
+    } else {
+        x / y
+    }
 }
 
 pub fn safe_sqrt(x: f32) -> f32 {
