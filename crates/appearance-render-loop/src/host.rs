@@ -1,7 +1,7 @@
 use anyhow::Result;
 use appearance_world::visible_world_action::VisibleWorldAction;
 use core::{
-    net::{Ipv4Addr, SocketAddr, SocketAddrV4},
+    net::SocketAddr,
     sync::atomic::{AtomicBool, Ordering},
 };
 use crossbeam::channel::Receiver;
@@ -156,7 +156,6 @@ impl Host {
             (width * height) as usize * BYTES_PER_PIXEL
         ]));
 
-        //let addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), port));
         let mut socket = Socket::new(None, host_port)?;
 
         let receive_events_event_receiver = socket.event_receiver().clone();
@@ -253,19 +252,14 @@ impl Host {
                             }
                         }
                     }
-                    SocketEvent::Connect(mut addr) => {
-                        println!("{}", addr);
-                        //addr.set_port(node_port);
-
+                    SocketEvent::Connect(addr) => {
                         log::info!("Node connected at {:?}", addr);
                         if let Ok(mut connected_nodes) = connected_nodes.lock() {
                             connected_nodes.push(addr);
                             has_received_new_connections.store(true, Ordering::SeqCst);
                         }
                     }
-                    SocketEvent::Disconnect(mut addr) => {
-                        //addr.set_port(node_port);
-
+                    SocketEvent::Disconnect(addr) => {
                         log::info!("Node disconnected at {:?}...", addr);
                         if let Ok(mut connected_nodes) = connected_nodes.lock() {
                             let mut node_idx = 0;
