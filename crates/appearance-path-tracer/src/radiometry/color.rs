@@ -90,7 +90,7 @@ impl Xyz {
         }
     }
 
-    pub fn to_xy(&self) -> Vec2 {
+    pub fn to_xy(self) -> Vec2 {
         let sum = self.0.element_sum();
         Vec2::new(self.0.x / sum, self.0.y / sum)
     }

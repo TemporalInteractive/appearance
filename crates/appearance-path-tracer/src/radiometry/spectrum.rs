@@ -43,7 +43,7 @@ impl SampledSpectrum {
         self.0.length_squared() > 0.0
     }
 
-    pub fn to_xyz(&self, sampled_wavelengths: &SampledWavelengths) -> Xyz {
+    pub fn to_xyz(self, sampled_wavelengths: &SampledWavelengths) -> Xyz {
         let x = cie_x().sample(sampled_wavelengths);
         let y = cie_y().sample(sampled_wavelengths);
         let z = cie_z().sample(sampled_wavelengths);
@@ -58,7 +58,7 @@ impl SampledSpectrum {
     }
 
     pub fn to_rgb(
-        &self,
+        self,
         sampled_wavelengths: &SampledWavelengths,
         rgb_color_space: &RgbColorSpace,
     ) -> Rgb {
