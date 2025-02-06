@@ -2,7 +2,7 @@ use glam::{FloatExt, Vec3, Vec4};
 
 use crate::math::Vec4Extensions;
 
-use super::{black_body_emission, cie_x, cie_y, cie_z, Xyz, CIE_Y_INTEGRAL};
+use super::{black_body_emission, cie_x, cie_y, cie_z, Rgb, RgbColorSpace, Xyz, CIE_Y_INTEGRAL};
 
 /// Minimum wavelength of visible light for humans.
 pub const LAMBDA_MIN: f32 = 360.0;
@@ -48,6 +48,15 @@ impl SampledSpectrum {
         ) / CIE_Y_INTEGRAL;
 
         Xyz::new(xyz)
+    }
+
+    pub fn to_rgb(
+        &self,
+        sampled_wavelengths: &SampledWavelengths,
+        rgb_color_space: &RgbColorSpace,
+    ) -> Rgb {
+        let xyz = self.to_xyz(sampled_wavelengths);
+        rgb_color_space.xyz_to_rgb(xyz)
     }
 }
 
