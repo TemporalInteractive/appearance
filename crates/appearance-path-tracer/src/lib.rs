@@ -6,6 +6,8 @@ mod geometry_resources;
 mod path_tracer;
 use glam::Vec2;
 use path_tracer::*;
+mod math;
+use math::*;
 
 use appearance_render_loop::host::{NODE_BYTES_PER_PIXEL, RENDER_BLOCK_SIZE};
 use appearance_world::visible_world_action::VisibleWorldActionType;
