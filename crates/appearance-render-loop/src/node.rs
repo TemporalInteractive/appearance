@@ -8,7 +8,7 @@ use unreliable::{Socket, SocketEvent, MAX_PACKET_PAYLOAD_SIZE};
 
 use crate::host::{
     HostToNodeMessage, NodeToHostMessage, RenderPartialFinishedData, StartRenderData,
-    NODE_PIXEL_FORMAT, RENDER_BLOCK_SIZE, TRANSFER_BYTES_PER_PIXEL,
+    NODE_BYTES_PER_PIXEL, NODE_PIXEL_FORMAT, RENDER_BLOCK_SIZE,
 };
 
 pub trait NodeRenderer {
@@ -75,15 +75,15 @@ impl<T: NodeRenderer + 'static> Node<T> {
                             + local_block_x * block_size;
                         let end_pixel = start_pixel + block_size;
 
-                        let block_pixels = &pixels[(start_pixel as usize * TRANSFER_BYTES_PER_PIXEL)
-                            ..(end_pixel as usize * TRANSFER_BYTES_PER_PIXEL)];
+                        let block_pixels = &pixels[(start_pixel as usize * NODE_BYTES_PER_PIXEL)
+                            ..(end_pixel as usize * NODE_BYTES_PER_PIXEL)];
 
                         // TODO: compress
                         let image = turbojpeg::Image {
                             pixels: block_pixels,
                             width: RENDER_BLOCK_SIZE as usize,
                             height: RENDER_BLOCK_SIZE as usize,
-                            pitch: RENDER_BLOCK_SIZE as usize * TRANSFER_BYTES_PER_PIXEL,
+                            pitch: RENDER_BLOCK_SIZE as usize * NODE_BYTES_PER_PIXEL,
                             format: NODE_PIXEL_FORMAT,
                         };
                         let compressed_pixel_bytes =

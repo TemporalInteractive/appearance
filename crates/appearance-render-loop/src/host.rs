@@ -15,7 +15,7 @@ use unreliable::{Socket, SocketEvent};
 /// Size of each rendered block is 8x8, as this is the minimum size jpeg is able to compress.
 pub const RENDER_BLOCK_SIZE: u32 = 64;
 pub const BYTES_PER_PIXEL: usize = 4;
-pub const TRANSFER_BYTES_PER_PIXEL: usize = 4;
+pub const NODE_BYTES_PER_PIXEL: usize = 3;
 pub const NODE_PIXEL_FORMAT: turbojpeg::PixelFormat = turbojpeg::PixelFormat::RGB;
 
 pub struct RenderPartialFinishedData {
@@ -202,7 +202,7 @@ impl Host {
                                         // decompress
                                         let image = turbojpeg::decompress(
                                             &data.compressed_pixel_bytes,
-                                            turbojpeg::PixelFormat::RGBA,
+                                            NODE_PIXEL_FORMAT,
                                         )
                                         .unwrap();
 
@@ -220,11 +220,10 @@ impl Host {
                                                         + local_x)
                                                         as usize;
 
-                                                    for i in 0..BYTES_PER_PIXEL {
+                                                    for i in 0..NODE_BYTES_PER_PIXEL {
                                                         pixels[id * BYTES_PER_PIXEL + i] = image
-                                                            .pixels[local_id
-                                                            * TRANSFER_BYTES_PER_PIXEL
-                                                            + i];
+                                                            .pixels
+                                                            [local_id * NODE_BYTES_PER_PIXEL + i];
                                                     }
                                                     pixels[id * BYTES_PER_PIXEL
                                                         + BYTES_PER_PIXEL

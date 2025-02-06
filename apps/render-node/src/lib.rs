@@ -1,4 +1,4 @@
-use appearance::appearance_render_loop::host::{RENDER_BLOCK_SIZE, TRANSFER_BYTES_PER_PIXEL};
+use appearance::appearance_render_loop::host::{RENDER_BLOCK_SIZE, NODE_BYTES_PER_PIXEL};
 use core::net::SocketAddr;
 use core::ops::FnMut;
 use core::str::FromStr;
@@ -281,7 +281,7 @@ impl NodeRenderer for Renderer {
         let num_blocks_y = num_rows / RENDER_BLOCK_SIZE;
 
         if let Ok(mut pixels) = self.pixels.lock() {
-            pixels.resize((width * num_rows) as usize * TRANSFER_BYTES_PER_PIXEL, 128);
+            pixels.resize((width * num_rows) as usize * NODE_BYTES_PER_PIXEL, 128);
 
             // result_callback(pixels.as_ref());
             // return;
@@ -322,10 +322,10 @@ impl NodeRenderer for Renderer {
                             let local_block_id = block_y * RENDER_BLOCK_SIZE + block_x;
                             let local_id = (start_pixel + local_block_id) as usize;
 
-                            pixels[local_id * TRANSFER_BYTES_PER_PIXEL] = (result.x * 255.0) as u8;
-                            pixels[local_id * TRANSFER_BYTES_PER_PIXEL + 1] =
+                            pixels[local_id * NODE_BYTES_PER_PIXEL] = (result.x * 255.0) as u8;
+                            pixels[local_id * NODE_BYTES_PER_PIXEL + 1] =
                                 (result.y * 255.0) as u8;
-                            pixels[local_id * TRANSFER_BYTES_PER_PIXEL + 2] =
+                            pixels[local_id * NODE_BYTES_PER_PIXEL + 2] =
                                 (result.z * 255.0) as u8;
                         }
                     }
