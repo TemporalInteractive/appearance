@@ -8,7 +8,7 @@ use appearance_camera::Camera;
 mod geometry_resources;
 mod path_tracer;
 mod radiometry;
-use glam::Vec2;
+use glam::{Vec2, Vec3};
 mod math;
 
 use appearance_render_loop::host::{NODE_BYTES_PER_PIXEL, RENDER_BLOCK_SIZE};
@@ -17,8 +17,26 @@ use geometry_resources::*;
 use path_tracer::CameraMatrices;
 use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 
+/// Enables access to pixel data from multiple threads without any safety checks.
+struct PixelDataPtr(*mut u8);
+
+impl PixelDataPtr {
+    fn new(pixels: &mut Vec<u8>) -> Self {
+        Self(pixels.as_mut_ptr())
+    }
+
+    unsafe fn write_pixel(&self, i: usize, color: Vec3) {
+        *self.0.add(i * NODE_BYTES_PER_PIXEL) = (color.x * 255.0) as u8;
+        *self.0.add(i * NODE_BYTES_PER_PIXEL + 1) = (color.y * 255.0) as u8;
+        *self.0.add(i * NODE_BYTES_PER_PIXEL + 2) = (color.z * 255.0) as u8;
+    }
+}
+
+unsafe impl Send for PixelDataPtr {}
+unsafe impl Sync for PixelDataPtr {}
+
 pub struct PathTracer {
-    pixels: Arc<Mutex<Vec<u8>>>,
+    pixels: Vec<u8>,
     frame_idx: u32,
     camera: Camera,
 
@@ -34,7 +52,7 @@ impl Default for PathTracer {
 impl PathTracer {
     pub fn new() -> Self {
         Self {
-            pixels: Arc::new(Mutex::new(Vec::new())),
+            pixels: Vec::new(),
             frame_idx: 0,
             camera: Camera::default(),
             geometry_resources: GeometryResources::new(),
@@ -67,9 +85,8 @@ impl PathTracer {
         let num_blocks_x = width / RENDER_BLOCK_SIZE;
         let num_blocks_y = num_rows / RENDER_BLOCK_SIZE;
 
-        if let Ok(mut pixels) = self.pixels.lock() {
-            pixels.resize((width * num_rows) as usize * NODE_BYTES_PER_PIXEL, 128);
-        }
+        self.pixels
+            .resize((width * num_rows) as usize * NODE_BYTES_PER_PIXEL, 128);
 
         self.camera.set_aspect_ratio(width as f32 / height as f32);
 
@@ -79,6 +96,8 @@ impl PathTracer {
         };
 
         self.geometry_resources.rebuild_tlas();
+
+        let pixel_data_ptr = PixelDataPtr::new(&mut self.pixels);
 
         let flat_block_indices = (0..(num_blocks_y * num_blocks_x)).collect::<Vec<u32>>();
         flat_block_indices
@@ -107,17 +126,16 @@ impl PathTracer {
                             &self.geometry_resources,
                         );
 
-                        if let Ok(mut pixels) = self.pixels.lock() {
-                            let block_size = RENDER_BLOCK_SIZE * RENDER_BLOCK_SIZE;
-                            let start_pixel = (local_block_y * block_size * num_blocks_x)
-                                + local_block_x * block_size;
+                        let block_size = RENDER_BLOCK_SIZE * RENDER_BLOCK_SIZE;
+                        let start_pixel = (local_block_y * block_size * num_blocks_x)
+                            + local_block_x * block_size;
 
-                            let local_block_id = block_y * RENDER_BLOCK_SIZE + block_x;
-                            let local_id = (start_pixel + local_block_id) as usize;
+                        let local_block_id = block_y * RENDER_BLOCK_SIZE + block_x;
+                        let local_id = (start_pixel + local_block_id) as usize;
 
-                            pixels[local_id * NODE_BYTES_PER_PIXEL] = (result.x * 255.0) as u8;
-                            pixels[local_id * NODE_BYTES_PER_PIXEL + 1] = (result.y * 255.0) as u8;
-                            pixels[local_id * NODE_BYTES_PER_PIXEL + 2] = (result.z * 255.0) as u8;
+                        // A lot of performance is safed by not using a mutex for pixel access from multiple threads
+                        unsafe {
+                            pixel_data_ptr.write_pixel(local_id, result);
                         }
                     }
                 }
@@ -125,8 +143,6 @@ impl PathTracer {
 
         self.frame_idx += 1;
 
-        if let Ok(pixels) = self.pixels.lock() {
-            result_callback(pixels.as_ref());
-        }
+        result_callback(self.pixels.as_ref());
     }
 }
