@@ -15,6 +15,7 @@ use appearance_render_loop::host::{NODE_BYTES_PER_PIXEL, RENDER_BLOCK_SIZE};
 use appearance_world::visible_world_action::VisibleWorldActionType;
 use geometry_resources::*;
 use path_tracer::CameraMatrices;
+use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 
 pub struct PathTracer {
     pixels: Arc<Mutex<Vec<u8>>>,
@@ -79,8 +80,13 @@ impl PathTracer {
 
         self.geometry_resources.rebuild_tlas();
 
-        for local_block_y in 0..num_blocks_y {
-            for local_block_x in 0..num_blocks_x {
+        let flat_block_indices = (0..(num_blocks_y * num_blocks_x)).collect::<Vec<u32>>();
+        flat_block_indices
+            .into_par_iter()
+            .for_each(|flat_block_idx| {
+                let local_block_y = flat_block_idx / num_blocks_x;
+                let local_block_x = flat_block_idx % num_blocks_x;
+
                 for block_y in 0..RENDER_BLOCK_SIZE {
                     for block_x in 0..RENDER_BLOCK_SIZE {
                         let local_x = (local_block_x * RENDER_BLOCK_SIZE) + block_x;
@@ -115,8 +121,7 @@ impl PathTracer {
                         }
                     }
                 }
-            }
-        }
+            });
 
         self.frame_idx += 1;
 
