@@ -87,8 +87,8 @@ impl RenderLoop for HostRenderLoop {
             });
         let _ = world.create_entity(
             "Buggy",
-            Transform::new(Vec3::new(3.0, 0.0, 0.0), Quat::IDENTITY, Vec3::splat(0.02)),
-            |builder| builder.with(ModelComponent::new("assets/Buggy.glb")),
+            Transform::new(Vec3::new(3.0, 0.0, 0.0), Quat::IDENTITY, Vec3::splat(1.0)),
+            |builder| builder.with(ModelComponent::new("assets/Sponza.glb")),
         );
 
         Self {
