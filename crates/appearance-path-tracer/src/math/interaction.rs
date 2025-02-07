@@ -1,6 +1,6 @@
 use glam::Vec3;
 
-use super::Normal;
+use super::normal::Normal;
 
 pub struct SurfaceInteraction {
     dpdu: Vec3,

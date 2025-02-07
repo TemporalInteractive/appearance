@@ -1,7 +1,11 @@
 use glam::{Mat4, Vec2, Vec3, Vec4, Vec4Swizzles};
 use tinybvh::{vec_helpers::Vec3Helpers, Ray};
 
-use crate::geometry_resources::GeometryResources;
+use crate::{
+    geometry_resources::GeometryResources,
+    math::random::random_f32,
+    radiometry::{RgbColorSpace, SampledSpectrum, SampledWavelengths},
+};
 
 pub struct CameraMatrices {
     pub inv_view: Mat4,
@@ -10,6 +14,7 @@ pub struct CameraMatrices {
 
 pub fn render_pixel(
     uv: &Vec2,
+    mut rng: u32,
     camera_matrices: &CameraMatrices,
     geometry_resources: &GeometryResources,
 ) -> Vec3 {
@@ -17,6 +22,10 @@ pub fn render_pixel(
     let origin = camera_matrices.inv_view * Vec4::new(0.0, 0.0, 0.0, 1.0);
     let target = camera_matrices.inv_proj * Vec4::from((corrected_uv, 1.0, 1.0));
     let direction = camera_matrices.inv_view * Vec4::from((target.xyz().normalize(), 0.0));
+
+    let color_space = RgbColorSpace::srgb();
+
+    let wavelengths = SampledWavelengths::sample_uniform(random_f32(&mut rng));
 
     let mut ray = Ray::new(origin.xyz(), direction.xyz());
 

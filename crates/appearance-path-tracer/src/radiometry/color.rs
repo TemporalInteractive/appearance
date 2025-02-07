@@ -95,6 +95,7 @@ impl Rgb {
 
 static SRGB_COLOR_SPACE: OnceLock<RgbColorSpace> = OnceLock::new();
 
+#[derive(Clone)]
 pub struct RgbColorSpace {
     rgb_to_spectrum_table: RgbToSpectrumTable,
     illuminant: Arc<dyn Spectrum>,
@@ -213,6 +214,7 @@ impl RgbSigmoidPolynomial {
 }
 
 /// Retreives a RgbSigmoidPolynomial based on rgb values
+#[derive(Clone)]
 pub struct RgbToSpectrumTable {
     z_nodes: Arc<Box<[f32]>>,
     coefficients: Arc<RgbSpectrumCoefficientArray>,

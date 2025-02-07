@@ -1,9 +1,10 @@
+use super::macros::include_bytes_align_as;
 use std::sync::{Arc, OnceLock};
 
 pub type RgbSpectrumCoefficientArray = [[[[[f32; 3]; 64]; 64]; 64]; 3];
 
-const SRGB_TO_SPECTRUM_SCALE_BYTES: &[u8] = include_bytes!("../../../acs/srgb.acss");
-const SRGB_TO_SPECTRUM_COEFF_BYTES: &[u8] = include_bytes!("../../../acs/srgb.acsc");
+const SRGB_TO_SPECTRUM_SCALE_BYTES: &[u8] = include_bytes_align_as!(f32, "../../../acs/srgb.acss");
+const SRGB_TO_SPECTRUM_COEFF_BYTES: &[u8] = include_bytes_align_as!(f32, "../../../acs/srgb.acsc");
 
 static SRGB_TO_SPECTRUM_SCALE: OnceLock<Arc<Box<[f32]>>> = OnceLock::new();
 static SRGB_TO_SPECTRUM_COEFF: OnceLock<Arc<RgbSpectrumCoefficientArray>> = OnceLock::new();

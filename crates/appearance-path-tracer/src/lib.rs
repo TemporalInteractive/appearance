@@ -14,7 +14,9 @@ mod math;
 use appearance_render_loop::host::{NODE_BYTES_PER_PIXEL, RENDER_BLOCK_SIZE};
 use appearance_world::visible_world_action::VisibleWorldActionType;
 use geometry_resources::*;
+use math::random::{pcg_hash, splitmix_64, xor_shift_u32};
 use path_tracer::CameraMatrices;
+use radiometry::RgbColorSpace;
 use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 
 /// Enables access to pixel data from multiple threads without any safety checks.
@@ -51,6 +53,11 @@ impl Default for PathTracer {
 
 impl PathTracer {
     pub fn new() -> Self {
+        rayon::ThreadPoolBuilder::new()
+            .stack_size(1024 * 1024 * 512)
+            .build_global()
+            .unwrap();
+
         Self {
             pixels: Vec::new(),
             frame_idx: 0,
@@ -111,6 +118,13 @@ impl PathTracer {
                         let local_x = (local_block_x * RENDER_BLOCK_SIZE) + block_x;
                         let local_y = (local_block_y * RENDER_BLOCK_SIZE) + block_y;
 
+                        let block_size = RENDER_BLOCK_SIZE * RENDER_BLOCK_SIZE;
+                        let start_pixel = (local_block_y * block_size * num_blocks_x)
+                            + local_block_x * block_size;
+
+                        let local_block_id = block_y * RENDER_BLOCK_SIZE + block_x;
+                        let local_id = (start_pixel + local_block_id) as usize;
+
                         let x = local_x;
                         let y = local_y + start_row;
 
@@ -120,18 +134,15 @@ impl PathTracer {
                         ) * 2.0
                             - 1.0;
 
+                        let mut seed = local_id as u64;
+                        let rng = splitmix_64(&mut seed) as u32;
+
                         let result = path_tracer::render_pixel(
                             &uv,
+                            rng,
                             &camera_matrices,
                             &self.geometry_resources,
                         );
-
-                        let block_size = RENDER_BLOCK_SIZE * RENDER_BLOCK_SIZE;
-                        let start_pixel = (local_block_y * block_size * num_blocks_x)
-                            + local_block_x * block_size;
-
-                        let local_block_id = block_y * RENDER_BLOCK_SIZE + block_x;
-                        let local_id = (start_pixel + local_block_id) as usize;
 
                         // A lot of performance is safed by not using a mutex for pixel access from multiple threads
                         unsafe {
