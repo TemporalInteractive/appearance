@@ -1,50 +1,19 @@
-use std::{rc::Rc, sync::OnceLock};
+use std::{
+    rc::Rc,
+    sync::{Arc, OnceLock},
+};
 
 use glam::{FloatExt, Mat3, Vec2, Vec3};
 
 use crate::math::{find_interval, lerp, sqr, Vec3Extensions};
 
 use super::{
-    data_tables::{CIE_X, CIE_Y, CIE_Z},
+    data_tables::cie::{CIE_X, CIE_Y, CIE_Z},
     spectrum_inner_product, DenselySampledSpectrum, SampledSpectrum, Spectrum, LAMBDA_MAX,
     LAMBDA_MIN,
 };
 
 pub const CIE_Y_INTEGRAL: f32 = 106.856895;
-
-static CIE_X_SPECTRUM: OnceLock<DenselySampledSpectrum> = OnceLock::new();
-static CIE_Y_SPECTRUM: OnceLock<DenselySampledSpectrum> = OnceLock::new();
-static CIE_Z_SPECTRUM: OnceLock<DenselySampledSpectrum> = OnceLock::new();
-
-pub fn cie_x() -> &'static DenselySampledSpectrum {
-    CIE_X_SPECTRUM.get_or_init(|| {
-        DenselySampledSpectrum::new_from_spectral_distribution(
-            CIE_X.to_vec(),
-            LAMBDA_MIN as u32,
-            LAMBDA_MAX as u32,
-        )
-    })
-}
-
-pub fn cie_y() -> &'static DenselySampledSpectrum {
-    CIE_Y_SPECTRUM.get_or_init(|| {
-        DenselySampledSpectrum::new_from_spectral_distribution(
-            CIE_Y.to_vec(),
-            LAMBDA_MIN as u32,
-            LAMBDA_MAX as u32,
-        )
-    })
-}
-
-pub fn cie_z() -> &'static DenselySampledSpectrum {
-    CIE_Z_SPECTRUM.get_or_init(|| {
-        DenselySampledSpectrum::new_from_spectral_distribution(
-            CIE_Z.to_vec(),
-            LAMBDA_MIN as u32,
-            LAMBDA_MAX as u32,
-        )
-    })
-}
 
 /// XYZ color space, a device-independent color space, which means that it does not describe the characteristics of a particular display or color measurement device.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -69,9 +38,9 @@ impl Xyz {
 
     pub fn from_spectrum(spectrum: &dyn Spectrum) -> Self {
         let xyz = Vec3::new(
-            spectrum_inner_product(cie_x(), spectrum),
-            spectrum_inner_product(cie_y(), spectrum),
-            spectrum_inner_product(cie_z(), spectrum),
+            spectrum_inner_product(DenselySampledSpectrum::cie_x(), spectrum),
+            spectrum_inner_product(DenselySampledSpectrum::cie_y(), spectrum),
+            spectrum_inner_product(DenselySampledSpectrum::cie_z(), spectrum),
         ) / CIE_Y_INTEGRAL;
 
         Self::new(xyz)
@@ -118,9 +87,11 @@ impl Rgb {
     }
 }
 
+static SRGB_COLOR_SPACE: OnceLock<RgbColorSpace> = OnceLock::new();
+
 pub struct RgbColorSpace {
     rgb_to_spectrum_table: RgbToSpectrumTable,
-    illuminant: Rc<dyn Spectrum>,
+    illuminant: Arc<dyn Spectrum>,
     xyz_from_rgb: Mat3,
     rgb_from_xyz: Mat3,
 
@@ -135,7 +106,7 @@ impl RgbColorSpace {
         r_xy: Vec2,
         g_xy: Vec2,
         b_xy: Vec2,
-        illuminant: Rc<dyn Spectrum>,
+        illuminant: Arc<dyn Spectrum>,
         rgb_to_spectrum_table: RgbToSpectrumTable,
     ) -> Self {
         let w = Xyz::from_spectrum(illuminant.as_ref());

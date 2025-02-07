@@ -19,3 +19,6 @@ glam.workspace = true
 log.workspace = true
 tinybvh.workspace = true
 uuid.workspace = true
+
+[build-dependencies]
+appearance-color-spaces.workspace = true

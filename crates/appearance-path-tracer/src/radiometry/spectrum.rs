@@ -1,13 +1,17 @@
 use core::convert::Into;
-use std::rc::Rc;
+use std::{
+    rc::Rc,
+    sync::{Arc, OnceLock},
+};
 
 use glam::{FloatExt, Vec3, Vec4};
 
-use crate::math::Vec4Extensions;
+use crate::math::{find_interval, Vec4Extensions};
 
 use super::{
-    black_body_emission, cie_x, cie_y, cie_z, Rgb, RgbColorSpace, RgbSigmoidPolynomial, Xyz,
-    CIE_Y_INTEGRAL,
+    black_body_emission,
+    data_tables::cie::{CIE_X, CIE_Y, CIE_Z},
+    Rgb, RgbColorSpace, RgbSigmoidPolynomial, Xyz, CIE_Y_INTEGRAL,
 };
 
 /// Minimum wavelength of visible light for humans.
@@ -44,9 +48,9 @@ impl SampledSpectrum {
     }
 
     pub fn to_xyz(self, sampled_wavelengths: &SampledWavelengths) -> Xyz {
-        let x = cie_x().sample(sampled_wavelengths);
-        let y = cie_y().sample(sampled_wavelengths);
-        let z = cie_z().sample(sampled_wavelengths);
+        let x = DenselySampledSpectrum::cie_x().sample(sampled_wavelengths);
+        let y = DenselySampledSpectrum::cie_y().sample(sampled_wavelengths);
+        let z = DenselySampledSpectrum::cie_z().sample(sampled_wavelengths);
 
         let xyz = Vec3::new(
             (x.0 * self.0).safe_div(sampled_wavelengths.pdf).avg(),
@@ -114,7 +118,7 @@ impl SampledWavelengths {
 }
 
 /// Represents a range of spectral sample values.
-pub trait Spectrum: std::fmt::Debug {
+pub trait Spectrum: std::fmt::Debug + Sync + Send {
     fn spectral_distribution(&self, lambda: f32) -> f32;
     fn max_spectral_distribution(&self) -> f32;
 
@@ -162,6 +166,71 @@ impl Spectrum for ConstantSpectrum {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct PiecewiseLinearSpectrum {
+    reflectance: Vec<f32>,
+    wavelengths: Vec<f32>,
+    max_reflectance: f32,
+}
+
+impl PiecewiseLinearSpectrum {
+    pub fn new(reflectance: Vec<f32>, wavelengths: Vec<f32>) -> Self {
+        assert!(reflectance.len() == wavelengths.len());
+        let max_reflectance = reflectance.iter().cloned().fold(0.0, f32::max);
+
+        Self {
+            reflectance,
+            wavelengths,
+            max_reflectance,
+        }
+    }
+
+    pub fn from_interleaved(reflectance_and_wavelengths: Vec<f32>) -> Self {
+        assert!(reflectance_and_wavelengths.len() % 2 == 0);
+        let num_wavelengths = reflectance_and_wavelengths.len() / 2;
+
+        let mut reflectance = Vec::with_capacity(num_wavelengths);
+        let mut wavelengths = Vec::with_capacity(num_wavelengths);
+        for i in 0..num_wavelengths {
+            reflectance[i] = reflectance_and_wavelengths[i * 2];
+            wavelengths[i] = reflectance_and_wavelengths[i * 2 + 1];
+        }
+
+        let max_reflectance = reflectance.iter().cloned().fold(0.0, f32::max);
+
+        Self {
+            reflectance,
+            wavelengths,
+            max_reflectance,
+        }
+    }
+}
+
+impl Spectrum for PiecewiseLinearSpectrum {
+    fn spectral_distribution(&self, lambda: f32) -> f32 {
+        if self.wavelengths.is_empty()
+            || lambda < *self.wavelengths.first().unwrap()
+            || lambda > *self.wavelengths.last().unwrap()
+        {
+            0.0
+        } else {
+            let o = find_interval(self.wavelengths.len(), |i| self.wavelengths[i] <= lambda);
+
+            let t =
+                (lambda - self.wavelengths[o]) / (self.wavelengths[o + 1] - self.wavelengths[o]);
+            self.reflectance[o].lerp(self.reflectance[o + 1], t)
+        }
+    }
+
+    fn max_spectral_distribution(&self) -> f32 {
+        self.max_reflectance
+    }
+}
+
+static CIE_X_SPECTRUM: OnceLock<DenselySampledSpectrum> = OnceLock::new();
+static CIE_Y_SPECTRUM: OnceLock<DenselySampledSpectrum> = OnceLock::new();
+static CIE_Z_SPECTRUM: OnceLock<DenselySampledSpectrum> = OnceLock::new();
+
 /// Stores a spectral distribution sampled at 1 nm intervals over a given range of integer wavelengths.
 #[derive(Debug, Clone)]
 pub struct DenselySampledSpectrum {
@@ -203,6 +272,36 @@ impl DenselySampledSpectrum {
             lambda_max,
             spectral_distribution,
         }
+    }
+
+    pub fn cie_x() -> &'static DenselySampledSpectrum {
+        CIE_X_SPECTRUM.get_or_init(|| {
+            DenselySampledSpectrum::new_from_spectral_distribution(
+                CIE_X.to_vec(),
+                LAMBDA_MIN as u32,
+                LAMBDA_MAX as u32,
+            )
+        })
+    }
+
+    pub fn cie_y() -> &'static DenselySampledSpectrum {
+        CIE_Y_SPECTRUM.get_or_init(|| {
+            DenselySampledSpectrum::new_from_spectral_distribution(
+                CIE_Y.to_vec(),
+                LAMBDA_MIN as u32,
+                LAMBDA_MAX as u32,
+            )
+        })
+    }
+
+    pub fn cie_z() -> &'static DenselySampledSpectrum {
+        CIE_Z_SPECTRUM.get_or_init(|| {
+            DenselySampledSpectrum::new_from_spectral_distribution(
+                CIE_Z.to_vec(),
+                LAMBDA_MIN as u32,
+                LAMBDA_MAX as u32,
+            )
+        })
     }
 }
 
@@ -309,11 +408,11 @@ impl Spectrum for RgbUnboundedSpectrum {
 pub struct RgbIlluminantSpectrum {
     polynomial: RgbSigmoidPolynomial,
     scale: f32,
-    illuminant: Rc<dyn Spectrum>,
+    illuminant: Arc<dyn Spectrum>,
 }
 
 impl RgbIlluminantSpectrum {
-    pub fn new(rgb: Rgb, color_space: &RgbColorSpace, illuminant: Rc<dyn Spectrum>) -> Self {
+    pub fn new(rgb: Rgb, color_space: &RgbColorSpace, illuminant: Arc<dyn Spectrum>) -> Self {
         let m = Vec3::from(rgb).max_element();
         let scale = 2.0 * m;
         let polynomial = if scale != 0.0 {

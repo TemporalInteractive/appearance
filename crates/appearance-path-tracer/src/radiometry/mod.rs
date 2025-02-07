@@ -2,7 +2,7 @@ pub mod color;
 pub use color::*;
 pub mod spectrum;
 pub use spectrum::*;
-mod data_tables;
+pub mod data_tables;
 
 /// Speed of light (m/s)
 pub const C: f32 = 299_792_458.0;
