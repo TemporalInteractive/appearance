@@ -8,8 +8,14 @@ use glam::{FloatExt, Mat3, Vec2, Vec3};
 use crate::math::{find_interval, lerp, sqr, Vec3Extensions};
 
 use super::{
-    data_tables::cie::{CIE_X, CIE_Y, CIE_Z},
-    spectrum_inner_product, DenselySampledSpectrum, SampledSpectrum, Spectrum, LAMBDA_MAX,
+    data_tables::{
+        self,
+        cie::{CIE_ILLUM_D6500, CIE_X, CIE_Y, CIE_Z},
+        rgb_color_space::{
+            srgb_to_spectrum_coeffs, srgb_to_spectrum_scales, RgbSpectrumCoefficientArray,
+        },
+    },
+    DenselySampledSpectrum, PiecewiseLinearSpectrum, SampledSpectrum, Spectrum, LAMBDA_MAX,
     LAMBDA_MIN,
 };
 
@@ -38,9 +44,9 @@ impl Xyz {
 
     pub fn from_spectrum(spectrum: &dyn Spectrum) -> Self {
         let xyz = Vec3::new(
-            spectrum_inner_product(DenselySampledSpectrum::cie_x(), spectrum),
-            spectrum_inner_product(DenselySampledSpectrum::cie_y(), spectrum),
-            spectrum_inner_product(DenselySampledSpectrum::cie_z(), spectrum),
+            DenselySampledSpectrum::cie_x().inner_product(spectrum),
+            DenselySampledSpectrum::cie_y().inner_product(spectrum),
+            DenselySampledSpectrum::cie_z().inner_product(spectrum),
         ) / CIE_Y_INTEGRAL;
 
         Self::new(xyz)
@@ -135,6 +141,26 @@ impl RgbColorSpace {
         }
     }
 
+    pub fn srgb() -> &'static Self {
+        SRGB_COLOR_SPACE.get_or_init(|| {
+            let std_illum_65 = Arc::new(PiecewiseLinearSpectrum::from_interleaved(
+                CIE_ILLUM_D6500,
+                true,
+            ));
+
+            let srgb_spectrum_table =
+                RgbToSpectrumTable::new(srgb_to_spectrum_scales(), srgb_to_spectrum_coeffs());
+
+            Self::new(
+                Vec2::new(0.64, 0.33),
+                Vec2::new(0.3, 0.6),
+                Vec2::new(0.15, 0.06),
+                std_illum_65,
+                srgb_spectrum_table,
+            )
+        })
+    }
+
     pub fn xyz_to_rgb(&self, xyz: Xyz) -> Rgb {
         Rgb::new(self.rgb_from_xyz * xyz.0)
     }
@@ -186,20 +212,16 @@ impl RgbSigmoidPolynomial {
     }
 }
 
-pub type RgbSpectrumCoefficientArray = [[[[[f32; 3]; RgbToSpectrumTable::RESOLUTION];
-    RgbToSpectrumTable::RESOLUTION];
-    RgbToSpectrumTable::RESOLUTION]; 3];
-
 /// Retreives a RgbSigmoidPolynomial based on rgb values
 pub struct RgbToSpectrumTable {
-    z_nodes: Box<[f32]>,
-    coefficients: Box<RgbSpectrumCoefficientArray>,
+    z_nodes: Arc<Box<[f32]>>,
+    coefficients: Arc<RgbSpectrumCoefficientArray>,
 }
 
 impl RgbToSpectrumTable {
     pub const RESOLUTION: usize = 64;
 
-    fn new(z_nodes: Box<[f32]>, coefficients: Box<RgbSpectrumCoefficientArray>) -> Self {
+    fn new(z_nodes: Arc<Box<[f32]>>, coefficients: Arc<RgbSpectrumCoefficientArray>) -> Self {
         Self {
             z_nodes,
             coefficients,

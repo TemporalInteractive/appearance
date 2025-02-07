@@ -130,16 +130,17 @@ pub trait Spectrum: std::fmt::Debug + Sync + Send {
             self.spectral_distribution(sampled_wavelengths.lambda[3]),
         ))
     }
-}
 
-pub fn spectrum_inner_product(a: &dyn Spectrum, b: &dyn Spectrum) -> f32 {
-    let mut integral = 0.0;
+    fn inner_product(&self, other: &dyn Spectrum) -> f32 {
+        let mut integral = 0.0;
 
-    for lambda in LAMBDA_MIN as u32..LAMBDA_MAX as u32 {
-        integral += a.spectral_distribution(lambda as f32) * b.spectral_distribution(lambda as f32);
+        for lambda in LAMBDA_MIN as u32..LAMBDA_MAX as u32 {
+            integral += self.spectral_distribution(lambda as f32)
+                * other.spectral_distribution(lambda as f32);
+        }
+
+        integral
     }
-
-    integral
 }
 
 /// Represents a constant spectral distribution over all wavelengths.
@@ -185,24 +186,42 @@ impl PiecewiseLinearSpectrum {
         }
     }
 
-    pub fn from_interleaved(reflectance_and_wavelengths: Vec<f32>) -> Self {
+    pub fn from_interleaved(reflectance_and_wavelengths: &[f32], normalize: bool) -> Self {
         assert!(reflectance_and_wavelengths.len() % 2 == 0);
         let num_wavelengths = reflectance_and_wavelengths.len() / 2;
 
         let mut reflectance = Vec::with_capacity(num_wavelengths);
         let mut wavelengths = Vec::with_capacity(num_wavelengths);
+
+        if reflectance_and_wavelengths[0] > LAMBDA_MIN {
+            wavelengths.push(LAMBDA_MIN - 1.0);
+            reflectance.push(reflectance_and_wavelengths[1]);
+        }
         for i in 0..num_wavelengths {
-            reflectance[i] = reflectance_and_wavelengths[i * 2];
-            wavelengths[i] = reflectance_and_wavelengths[i * 2 + 1];
+            reflectance.push(reflectance_and_wavelengths[i * 2]);
+            wavelengths.push(reflectance_and_wavelengths[i * 2 + 1]);
+        }
+        if *wavelengths.last().unwrap() < LAMBDA_MAX {
+            wavelengths.push(LAMBDA_MAX + 1.0);
+            reflectance.push(*reflectance.last().unwrap());
         }
 
         let max_reflectance = reflectance.iter().cloned().fold(0.0, f32::max);
 
-        Self {
+        let mut spectrum = Self {
             reflectance,
             wavelengths,
             max_reflectance,
+        };
+
+        if normalize {
+            let scale = CIE_Y_INTEGRAL * spectrum.inner_product(DenselySampledSpectrum::cie_y());
+            for reflectance in &mut spectrum.reflectance {
+                *reflectance *= scale;
+            }
         }
+
+        spectrum
     }
 }
 
