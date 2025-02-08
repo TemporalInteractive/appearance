@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 
 use appearance_camera::Camera;
 
+mod camera_model;
 mod geometry_resources;
 mod path_tracer;
 mod radiometry;
