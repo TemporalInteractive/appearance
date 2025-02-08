@@ -1,6 +1,7 @@
 pub mod cie;
 pub mod materials;
 pub mod rgb_color_space;
+pub mod swatch_reflectances;
 
 // Source: https://users.rust-lang.org/t/can-i-conveniently-compile-bytes-into-a-rust-program-with-a-specific-alignment/24049/2
 #[macro_use]

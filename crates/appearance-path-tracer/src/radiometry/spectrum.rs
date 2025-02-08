@@ -10,7 +10,10 @@ use crate::math::{find_interval, Vec4Extensions};
 
 use super::{
     black_body_emission,
-    data_tables::cie::{CIE_X, CIE_Y, CIE_Z},
+    data_tables::{
+        cie::{CIE_X, CIE_Y, CIE_Z},
+        swatch_reflectances::SWATCH_REFLECTANCES,
+    },
     Rgb, RgbColorSpace, RgbSigmoidPolynomial, Xyz, CIE_Y_INTEGRAL,
 };
 
@@ -167,6 +170,8 @@ impl Spectrum for ConstantSpectrum {
     }
 }
 
+static SWATCH_REFLECTANCES_SPECTRUM: OnceLock<[PiecewiseLinearSpectrum; 24]> = OnceLock::new();
+
 #[derive(Debug, Clone)]
 pub struct PiecewiseLinearSpectrum {
     reflectance: Vec<f32>,
@@ -222,6 +227,19 @@ impl PiecewiseLinearSpectrum {
         }
 
         spectrum
+    }
+
+    pub fn swatch_reflectances() -> &'static [PiecewiseLinearSpectrum; 24] {
+        SWATCH_REFLECTANCES_SPECTRUM.get_or_init(|| {
+            SWATCH_REFLECTANCES
+                .iter()
+                .map(|swatch_reflectance| {
+                    PiecewiseLinearSpectrum::from_interleaved(swatch_reflectance, false)
+                })
+                .collect::<Vec<PiecewiseLinearSpectrum>>()
+                .try_into()
+                .unwrap()
+        })
     }
 }
 
