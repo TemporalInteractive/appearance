@@ -49,7 +49,11 @@ pub fn render_pixels(
 
     //let _color_space = RgbColorSpace::srgb();
 
-    geometry_resources.tlas().intersect_256(&mut rays);
+    // TODO: waiting for tinybvh patch for using ray packets with TLASES
+    // geometry_resources.tlas().intersect_256(&mut rays);
+    for ray in &mut rays {
+        geometry_resources.tlas().intersect(ray);
+    }
 
     let mut colors = [Vec3::ZERO; RAYS_PER_PACKET];
     for i in 0..RAYS_PER_PACKET {
