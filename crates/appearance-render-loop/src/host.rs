@@ -12,7 +12,7 @@ use std::{
 
 use unreliable::{Socket, SocketEvent};
 
-/// Size of each rendered block is a multiple of 8x8, as this is the minimum size jpeg is able to compress.
+/// Size of each rendered block is a multiple of 8x8, as this is the minimum size jpeg is able to compress. This must also be a multiple of `PATH_TRACER_RAY_PACKET_SIZE`, which is 16.
 pub const RENDER_BLOCK_SIZE: u32 = 64;
 pub const BYTES_PER_PIXEL: usize = 4;
 pub const NODE_BYTES_PER_PIXEL: usize = 3;

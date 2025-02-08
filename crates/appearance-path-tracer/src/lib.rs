@@ -15,7 +15,7 @@ use appearance_render_loop::host::{NODE_BYTES_PER_PIXEL, RENDER_BLOCK_SIZE};
 use appearance_world::visible_world_action::VisibleWorldActionType;
 use geometry_resources::*;
 use math::random::{pcg_hash, splitmix_64, xor_shift_u32};
-use path_tracer::CameraMatrices;
+use path_tracer::{CameraMatrices, PATH_TRACER_RAY_PACKET_SIZE, RAYS_PER_PACKET};
 use radiometry::RgbColorSpace;
 use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 
@@ -106,6 +106,7 @@ impl PathTracer {
 
         let pixel_data_ptr = PixelDataPtr::new(&mut self.pixels);
 
+        // Loop over the number of blocks, flattened to allow for better multithreading utilization
         let flat_block_indices = (0..(num_blocks_y * num_blocks_x)).collect::<Vec<u32>>();
         flat_block_indices
             .into_par_iter()
@@ -113,43 +114,115 @@ impl PathTracer {
                 let local_block_y = flat_block_idx / num_blocks_x;
                 let local_block_x = flat_block_idx % num_blocks_x;
 
-                for block_y in 0..RENDER_BLOCK_SIZE {
-                    for block_x in 0..RENDER_BLOCK_SIZE {
-                        let local_x = (local_block_x * RENDER_BLOCK_SIZE) + block_x;
-                        let local_y = (local_block_y * RENDER_BLOCK_SIZE) + block_y;
+                // Loop over the block size, divided by the number of rays per packet
+                for block_y in 0..(RENDER_BLOCK_SIZE / PATH_TRACER_RAY_PACKET_SIZE) {
+                    for block_x in 0..(RENDER_BLOCK_SIZE / PATH_TRACER_RAY_PACKET_SIZE) {
+                        let mut ray_uvs = [Vec2::ZERO; RAYS_PER_PACKET];
+                        let mut ray_rngs = [0u32; RAYS_PER_PACKET];
 
-                        let block_size = RENDER_BLOCK_SIZE * RENDER_BLOCK_SIZE;
-                        let start_pixel = (local_block_y * block_size * num_blocks_x)
-                            + local_block_x * block_size;
+                        // Loop over the ray packets
+                        for ray_block_y in 0..PATH_TRACER_RAY_PACKET_SIZE {
+                            for ray_block_x in 0..PATH_TRACER_RAY_PACKET_SIZE {
+                                let block_y = block_y * PATH_TRACER_RAY_PACKET_SIZE + ray_block_y;
+                                let block_x = block_x * PATH_TRACER_RAY_PACKET_SIZE + ray_block_x;
 
-                        let local_block_id = block_y * RENDER_BLOCK_SIZE + block_x;
-                        let local_id = (start_pixel + local_block_id) as usize;
+                                let local_x = (local_block_x * RENDER_BLOCK_SIZE) + block_x;
+                                let local_y = (local_block_y * RENDER_BLOCK_SIZE) + block_y;
 
-                        let x = local_x;
-                        let y = local_y + start_row;
+                                let block_size = RENDER_BLOCK_SIZE * RENDER_BLOCK_SIZE;
+                                let start_pixel = (local_block_y * block_size * num_blocks_x)
+                                    + local_block_x * block_size;
 
-                        let uv = Vec2::new(
-                            (x as f32 + 0.5) / width as f32,
-                            (y as f32 + 0.5) / height as f32,
-                        ) * 2.0
-                            - 1.0;
+                                let local_block_id = block_y * RENDER_BLOCK_SIZE + block_x;
+                                let local_id = (start_pixel + local_block_id) as usize;
 
-                        let mut seed = local_id as u64;
-                        let rng = splitmix_64(&mut seed) as u32;
+                                let x = local_x;
+                                let y = local_y + start_row;
 
-                        let result = path_tracer::render_pixel(
-                            &uv,
-                            rng,
+                                let uv = Vec2::new(
+                                    (x as f32 + 0.5) / width as f32,
+                                    (y as f32 + 0.5) / height as f32,
+                                ) * 2.0
+                                    - 1.0;
+
+                                let mut seed = local_id as u64;
+                                let rng = splitmix_64(&mut seed) as u32;
+
+                                let i = (ray_block_y * PATH_TRACER_RAY_PACKET_SIZE + ray_block_x)
+                                    as usize;
+                                ray_uvs[i] = uv;
+                                ray_rngs[i] = rng;
+                            }
+                        }
+
+                        let result = path_tracer::render_pixels(
+                            ray_uvs,
+                            ray_rngs,
                             &camera_matrices,
                             &self.geometry_resources,
                         );
 
-                        // A lot of performance is safed by not using a mutex for pixel access from multiple threads
-                        unsafe {
-                            pixel_data_ptr.write_pixel(local_id, result);
+                        for ray_block_y in 0..PATH_TRACER_RAY_PACKET_SIZE {
+                            for ray_block_x in 0..PATH_TRACER_RAY_PACKET_SIZE {
+                                let block_y = block_y * PATH_TRACER_RAY_PACKET_SIZE + ray_block_y;
+                                let block_x = block_x * PATH_TRACER_RAY_PACKET_SIZE + ray_block_x;
+
+                                let block_size = RENDER_BLOCK_SIZE * RENDER_BLOCK_SIZE;
+                                let start_pixel = (local_block_y * block_size * num_blocks_x)
+                                    + local_block_x * block_size;
+
+                                let local_block_id = block_y * RENDER_BLOCK_SIZE + block_x;
+                                let local_id = (start_pixel + local_block_id) as usize;
+
+                                let i = (ray_block_y * PATH_TRACER_RAY_PACKET_SIZE + ray_block_x)
+                                    as usize;
+
+                                // A lot of performance is safed by not using a mutex for pixel access from multiple threads
+                                unsafe {
+                                    pixel_data_ptr.write_pixel(local_id, result[i]);
+                                }
+                            }
                         }
                     }
                 }
+
+                // for block_y in 0..RENDER_BLOCK_SIZE {
+                //     for block_x in 0..RENDER_BLOCK_SIZE {
+                //         let local_x = (local_block_x * RENDER_BLOCK_SIZE) + block_x;
+                //         let local_y = (local_block_y * RENDER_BLOCK_SIZE) + block_y;
+
+                //         let block_size = RENDER_BLOCK_SIZE * RENDER_BLOCK_SIZE;
+                //         let start_pixel = (local_block_y * block_size * num_blocks_x)
+                //             + local_block_x * block_size;
+
+                //         let local_block_id = block_y * RENDER_BLOCK_SIZE + block_x;
+                //         let local_id = (start_pixel + local_block_id) as usize;
+
+                //         let x = local_x;
+                //         let y = local_y + start_row;
+
+                //         let uv = Vec2::new(
+                //             (x as f32 + 0.5) / width as f32,
+                //             (y as f32 + 0.5) / height as f32,
+                //         ) * 2.0
+                //             - 1.0;
+
+                //         let mut seed = local_id as u64;
+                //         let rng = splitmix_64(&mut seed) as u32;
+
+                //         let result = path_tracer::render_pixel(
+                //             &uv,
+                //             rng,
+                //             &camera_matrices,
+                //             &self.geometry_resources,
+                //         );
+
+                //         // A lot of performance is safed by not using a mutex for pixel access from multiple threads
+                //         unsafe {
+                //             pixel_data_ptr.write_pixel(local_id, result);
+                //         }
+                //     }
+                // }
             });
 
         self.frame_idx += 1;
