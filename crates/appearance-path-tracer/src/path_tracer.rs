@@ -4,7 +4,9 @@ use tinybvh::{vec_helpers::Vec3Helpers, Ray};
 use crate::{
     geometry_resources::GeometryResources,
     math::random::random_f32,
-    radiometry::{RgbColorSpace, SampledSpectrum, SampledWavelengths},
+    radiometry::{
+        Rgb, RgbAlbedoSpectrum, RgbColorSpace, SampledSpectrum, SampledWavelengths, Spectrum,
+    },
 };
 
 /// All packets will be 16x16 because a packet of 256 rays can be traced with greater performance.
@@ -17,12 +19,18 @@ pub struct CameraMatrices {
     pub inv_proj: Mat4,
 }
 
+#[derive(Default, Clone, Copy)]
+pub struct SamplePixelResult {
+    pub sampled_spectrum: SampledSpectrum,
+    pub sampled_wavelengths: SampledWavelengths,
+}
+
 pub fn render_pixels(
     uv: [Vec2; RAYS_PER_PACKET],
-    _rng: [u32; RAYS_PER_PACKET],
+    mut rng: [u32; RAYS_PER_PACKET],
     camera_matrices: &CameraMatrices,
     geometry_resources: &GeometryResources,
-) -> [Vec3; RAYS_PER_PACKET] {
+) -> [SamplePixelResult; RAYS_PER_PACKET] {
     let mut rays = vec![];
 
     for y in 0..PATH_TRACER_RAY_PACKET_SIZE {
@@ -47,7 +55,7 @@ pub fn render_pixels(
         )
     });
 
-    //let _color_space = RgbColorSpace::srgb();
+    let mut results = [SamplePixelResult::default(); RAYS_PER_PACKET];
 
     // TODO: waiting for tinybvh patch for using ray packets with TLASES
     // geometry_resources.tlas().intersect_256(&mut rays);
@@ -55,19 +63,26 @@ pub fn render_pixels(
         geometry_resources.tlas().intersect(ray);
     }
 
-    let mut colors = [Vec3::ZERO; RAYS_PER_PACKET];
-    for i in 0..RAYS_PER_PACKET {
-        let ray = &rays[i];
+    for (i, ray) in rays.iter().enumerate() {
+        let rng = &mut rng[i];
 
-        if ray.hit.t != 1e30 {
+        let sampled_wavelengths = SampledWavelengths::sample_visible(random_f32(rng));
+
+        let rgb = if ray.hit.t != 1e30 {
             let hit_data = geometry_resources.get_hit_data(&ray.hit);
 
-            colors[i] = hit_data.normal * 0.5 + 0.5;
+            Rgb::new(hit_data.normal * 0.5 + 0.5)
         } else {
             let a = 0.5 * (ray.D.y() + 1.0);
-            colors[i] = (1.0 - a) * Vec3::new(1.0, 1.0, 1.0) + a * Vec3::new(0.5, 0.7, 1.0);
-        }
+            Rgb::new((1.0 - a) * Vec3::new(1.0, 1.0, 1.0) + a * Vec3::new(0.5, 0.7, 1.0))
+        };
+
+        let spectrum = RgbAlbedoSpectrum::new(rgb, RgbColorSpace::srgb().as_ref());
+        let sampled_spectrum = spectrum.sample(&sampled_wavelengths);
+
+        results[i].sampled_wavelengths = sampled_wavelengths;
+        results[i].sampled_spectrum = sampled_spectrum;
     }
 
-    colors
+    results
 }

@@ -25,7 +25,7 @@ pub const LAMBDA_MIN: f32 = 360.0;
 pub const LAMBDA_MAX: f32 = 830.0;
 
 /// Represent values of the spectral distribution at discrete wavelengths.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct SampledSpectrum(pub Vec4);
 
 impl From<Vec4> for SampledSpectrum {
@@ -76,7 +76,7 @@ impl SampledSpectrum {
 }
 
 /// Stores the wavelengths for which a SampledSpectrum stores samples.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct SampledWavelengths {
     lambda: Vec4,
     pdf: Vec4,

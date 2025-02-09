@@ -22,28 +22,9 @@ use path_tracer::{CameraMatrices, PATH_TRACER_RAY_PACKET_SIZE, RAYS_PER_PACKET};
 use radiometry::{PiecewiseLinearSpectrum, RgbColorSpace};
 use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 
-/// Enables access to pixel data from multiple threads without any safety checks.
-struct PixelDataPtr(*mut u8);
-
-impl PixelDataPtr {
-    fn new(pixels: &mut Vec<u8>) -> Self {
-        Self(pixels.as_mut_ptr())
-    }
-
-    unsafe fn write_pixel(&self, i: usize, color: Vec3) {
-        *self.0.add(i * NODE_BYTES_PER_PIXEL) = (color.x * 255.0) as u8;
-        *self.0.add(i * NODE_BYTES_PER_PIXEL + 1) = (color.y * 255.0) as u8;
-        *self.0.add(i * NODE_BYTES_PER_PIXEL + 2) = (color.z * 255.0) as u8;
-    }
-}
-
-unsafe impl Send for PixelDataPtr {}
-unsafe impl Sync for PixelDataPtr {}
-
 pub struct PathTracer {
     film: Film,
 
-    pixels: Vec<u8>,
     frame_idx: u32,
     camera: Camera,
 
@@ -75,7 +56,6 @@ impl PathTracer {
 
         Self {
             film,
-            pixels: Vec::new(),
             frame_idx: 0,
             camera: Camera::default(),
             geometry_resources: GeometryResources::new(),
@@ -121,8 +101,6 @@ impl PathTracer {
         };
 
         self.geometry_resources.rebuild_tlas();
-
-        let pixel_data_ptr = PixelDataPtr::new(&mut self.pixels);
 
         // Loop over the number of blocks, flattened to allow for better multithreading utilization
         let flat_block_indices = (0..(num_blocks_y * num_blocks_x)).collect::<Vec<u32>>();
@@ -197,7 +175,11 @@ impl PathTracer {
 
                                 // A lot of performance is safed by not using a mutex for pixel access from multiple threads
                                 unsafe {
-                                    pixel_data_ptr.write_pixel(local_id, result[i]);
+                                    self.film.add_sample(
+                                        local_id,
+                                        &result[i].sampled_spectrum,
+                                        &result[i].sampled_wavelengths,
+                                    );
                                 }
                             }
                         }
@@ -207,6 +189,6 @@ impl PathTracer {
 
         self.frame_idx += 1;
 
-        result_callback(self.pixels.as_ref());
+        result_callback(self.film.pixels());
     }
 }

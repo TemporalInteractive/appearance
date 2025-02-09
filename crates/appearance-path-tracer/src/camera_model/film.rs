@@ -21,6 +21,9 @@ impl PixelDataPtr {
     }
 }
 
+unsafe impl Send for PixelDataPtr {}
+unsafe impl Sync for PixelDataPtr {}
+
 pub struct Film {
     resolution: UVec2,
     sensor: PixelSensor,
@@ -56,10 +59,10 @@ impl Film {
     pub unsafe fn add_sample(
         &self,
         pixel_idx: usize,
-        uv_film: Vec2,
+        //uv_film: Vec2,
         sampled_spectrum: &SampledSpectrum,
         wavelengths: &SampledWavelengths,
-        _weight: f32,
+        //weight: f32,
     ) {
         let rgb = self.sensor.to_sensor_rgb(sampled_spectrum, wavelengths);
 
