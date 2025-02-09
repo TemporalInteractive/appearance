@@ -66,6 +66,8 @@ impl Film {
     ) {
         let rgb = self.sensor.to_sensor_rgb(sampled_spectrum, wavelengths);
 
+        let rgb = Rgb::new(rgb.0 / 100.0);
+
         // TODO: optionally clamp rgb
 
         // TODO: accumulate samples instead of overwriting!

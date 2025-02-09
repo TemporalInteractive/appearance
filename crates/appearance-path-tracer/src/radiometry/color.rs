@@ -267,7 +267,7 @@ impl RgbToSpectrumTable {
                 };
 
                 // TODO: rewrite with glam lerp
-                c[i] = lerp(
+                c[j] = lerp(
                     dz,
                     lerp(
                         dy,

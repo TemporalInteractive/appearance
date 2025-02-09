@@ -273,8 +273,8 @@ impl PiecewiseLinearSpectrum {
             reflectance.push(reflectance_and_wavelengths[1]);
         }
         for i in 0..num_wavelengths {
-            reflectance.push(reflectance_and_wavelengths[i * 2]);
-            wavelengths.push(reflectance_and_wavelengths[i * 2 + 1]);
+            wavelengths.push(reflectance_and_wavelengths[i * 2]);
+            reflectance.push(reflectance_and_wavelengths[i * 2 + 1]);
         }
         if *wavelengths.last().unwrap() < LAMBDA_MAX {
             wavelengths.push(LAMBDA_MAX + 1.0);

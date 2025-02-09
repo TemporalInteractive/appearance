@@ -141,7 +141,8 @@ impl PathTracer {
                                 ) * 2.0
                                     - 1.0;
 
-                                let mut seed = local_id as u64;
+                                // TODO: improve seed
+                                let mut seed = local_id as u64 + (self.frame_idx as u64 * 100000);
                                 let rng = splitmix_64(&mut seed) as u32;
 
                                 let i = (ray_block_y * PATH_TRACER_RAY_PACKET_SIZE + ray_block_x)
