@@ -12,7 +12,7 @@ use super::{
     black_body_emission,
     data_tables::{
         camera::{CANON_EOS_100D_B, CANON_EOS_100D_G, CANON_EOS_100D_R},
-        cie::{CIE_ILLUM_D6500, CIE_X, CIE_Y, CIE_Z},
+        cie::{CIE_ILLUM_D6500, CIE_LAMBDA, CIE_X, CIE_Y, CIE_Z},
         swatch_reflectances::SWATCH_REFLECTANCES,
     },
     Rgb, RgbColorSpace, RgbSigmoidPolynomial, Xyz, CIE_Y_INTEGRAL,
@@ -236,6 +236,10 @@ impl Spectrum for ConstantSpectrum {
 
 static SWATCH_REFLECTANCES_SPECTRUM: OnceLock<[PiecewiseLinearSpectrum; 24]> = OnceLock::new();
 
+static CIE_X_SPECTRUM_LPW: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+static CIE_Y_SPECTRUM_LPW: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+static CIE_Z_SPECTRUM_LPW: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+
 static CIE_ILLUM_D6500_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
 
 static CANON_EOS_100D_R_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
@@ -310,6 +314,21 @@ impl PiecewiseLinearSpectrum {
                 .try_into()
                 .unwrap()
         })
+    }
+
+    pub fn cie_x() -> &'static PiecewiseLinearSpectrum {
+        CIE_X_SPECTRUM_LPW
+            .get_or_init(|| PiecewiseLinearSpectrum::new(CIE_X.to_vec(), CIE_LAMBDA.to_vec()))
+    }
+
+    pub fn cie_y() -> &'static PiecewiseLinearSpectrum {
+        CIE_Y_SPECTRUM_LPW
+            .get_or_init(|| PiecewiseLinearSpectrum::new(CIE_Y.to_vec(), CIE_LAMBDA.to_vec()))
+    }
+
+    pub fn cie_z() -> &'static PiecewiseLinearSpectrum {
+        CIE_Z_SPECTRUM_LPW
+            .get_or_init(|| PiecewiseLinearSpectrum::new(CIE_Z.to_vec(), CIE_LAMBDA.to_vec()))
     }
 
     pub fn cie_illum_d6500() -> &'static PiecewiseLinearSpectrum {
@@ -403,8 +422,8 @@ impl DenselySampledSpectrum {
 
     pub fn cie_x() -> &'static DenselySampledSpectrum {
         CIE_X_SPECTRUM.get_or_init(|| {
-            DenselySampledSpectrum::new_from_spectral_distribution(
-                CIE_X.to_vec(),
+            DenselySampledSpectrum::new_from_spectrum(
+                PiecewiseLinearSpectrum::cie_x(),
                 LAMBDA_MIN as u32,
                 LAMBDA_MAX as u32,
             )
@@ -413,8 +432,8 @@ impl DenselySampledSpectrum {
 
     pub fn cie_y() -> &'static DenselySampledSpectrum {
         CIE_Y_SPECTRUM.get_or_init(|| {
-            DenselySampledSpectrum::new_from_spectral_distribution(
-                CIE_Y.to_vec(),
+            DenselySampledSpectrum::new_from_spectrum(
+                PiecewiseLinearSpectrum::cie_y(),
                 LAMBDA_MIN as u32,
                 LAMBDA_MAX as u32,
             )
@@ -423,8 +442,8 @@ impl DenselySampledSpectrum {
 
     pub fn cie_z() -> &'static DenselySampledSpectrum {
         CIE_Z_SPECTRUM.get_or_init(|| {
-            DenselySampledSpectrum::new_from_spectral_distribution(
-                CIE_Z.to_vec(),
+            DenselySampledSpectrum::new_from_spectrum(
+                PiecewiseLinearSpectrum::cie_z(),
                 LAMBDA_MIN as u32,
                 LAMBDA_MAX as u32,
             )
