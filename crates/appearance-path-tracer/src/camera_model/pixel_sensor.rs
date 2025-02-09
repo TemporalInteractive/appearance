@@ -11,18 +11,18 @@ use crate::{
 
 pub struct PixelSensor {
     xyz_from_sensor_rgb: Mat3,
-    r: DenselySampledSpectrum,
-    g: DenselySampledSpectrum,
-    b: DenselySampledSpectrum,
+    r: PiecewiseLinearSpectrum,
+    g: PiecewiseLinearSpectrum,
+    b: PiecewiseLinearSpectrum,
     imaging_ratio: f32,
 }
 
 impl PixelSensor {
     pub fn new(
-        r: DenselySampledSpectrum,
-        g: DenselySampledSpectrum,
-        b: DenselySampledSpectrum,
-        output_color_space: RgbColorSpace,
+        r: PiecewiseLinearSpectrum,
+        g: PiecewiseLinearSpectrum,
+        b: PiecewiseLinearSpectrum,
+        output_color_space: &RgbColorSpace,
         sensor_illum: &dyn Spectrum,
         imaging_ratio: f32,
     ) -> Self {

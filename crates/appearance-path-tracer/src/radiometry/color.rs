@@ -93,7 +93,7 @@ impl Rgb {
     }
 }
 
-static SRGB_COLOR_SPACE: OnceLock<RgbColorSpace> = OnceLock::new();
+static SRGB_COLOR_SPACE: OnceLock<Arc<RgbColorSpace>> = OnceLock::new();
 
 #[derive(Clone)]
 pub struct RgbColorSpace {
@@ -142,24 +142,24 @@ impl RgbColorSpace {
         }
     }
 
-    pub fn srgb() -> &'static Self {
-        SRGB_COLOR_SPACE.get_or_init(|| {
-            let std_illum_65 = Arc::new(PiecewiseLinearSpectrum::from_interleaved(
-                CIE_ILLUM_D6500,
-                true,
-            ));
+    pub fn srgb() -> Arc<Self> {
+        SRGB_COLOR_SPACE
+            .get_or_init(|| {
+                // TODO: clean all them arcs everywhere
+                let std_illum_65 = Arc::new(PiecewiseLinearSpectrum::cie_illum_d6500().clone());
 
-            let srgb_spectrum_table =
-                RgbToSpectrumTable::new(srgb_to_spectrum_scales(), srgb_to_spectrum_coeffs());
+                let srgb_spectrum_table =
+                    RgbToSpectrumTable::new(srgb_to_spectrum_scales(), srgb_to_spectrum_coeffs());
 
-            Self::new(
-                Vec2::new(0.64, 0.33),
-                Vec2::new(0.3, 0.6),
-                Vec2::new(0.15, 0.06),
-                std_illum_65,
-                srgb_spectrum_table,
-            )
-        })
+                Arc::new(Self::new(
+                    Vec2::new(0.64, 0.33),
+                    Vec2::new(0.3, 0.6),
+                    Vec2::new(0.15, 0.06),
+                    std_illum_65,
+                    srgb_spectrum_table,
+                ))
+            })
+            .clone()
     }
 
     pub fn rgb_from_xyz_mat3(&self) -> &Mat3 {

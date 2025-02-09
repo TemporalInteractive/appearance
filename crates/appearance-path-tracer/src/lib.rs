@@ -10,7 +10,8 @@ mod geometry_resources;
 mod path_tracer;
 mod radiometry;
 mod sampling;
-use glam::{Vec2, Vec3};
+use camera_model::{film::Film, pixel_sensor::PixelSensor};
+use glam::{UVec2, Vec2, Vec3};
 mod math;
 
 use appearance_render_loop::host::{NODE_BYTES_PER_PIXEL, RENDER_BLOCK_SIZE};
@@ -18,7 +19,7 @@ use appearance_world::visible_world_action::VisibleWorldActionType;
 use geometry_resources::*;
 use math::random::{pcg_hash, splitmix_64, xor_shift_u32};
 use path_tracer::{CameraMatrices, PATH_TRACER_RAY_PACKET_SIZE, RAYS_PER_PACKET};
-use radiometry::RgbColorSpace;
+use radiometry::{PiecewiseLinearSpectrum, RgbColorSpace};
 use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 
 /// Enables access to pixel data from multiple threads without any safety checks.
@@ -40,6 +41,8 @@ unsafe impl Send for PixelDataPtr {}
 unsafe impl Sync for PixelDataPtr {}
 
 pub struct PathTracer {
+    film: Film,
+
     pixels: Vec<u8>,
     frame_idx: u32,
     camera: Camera,
@@ -60,7 +63,18 @@ impl PathTracer {
             .build_global()
             .unwrap();
 
+        let pixel_sensor = PixelSensor::new(
+            PiecewiseLinearSpectrum::canon_eos_100d_r().clone(),
+            PiecewiseLinearSpectrum::canon_eos_100d_g().clone(),
+            PiecewiseLinearSpectrum::canon_eos_100d_b().clone(),
+            &RgbColorSpace::srgb(),
+            PiecewiseLinearSpectrum::cie_illum_d6500(),
+            1.0,
+        );
+        let film = Film::new(UVec2::new(512, 512), pixel_sensor, RgbColorSpace::srgb());
+
         Self {
+            film,
             pixels: Vec::new(),
             frame_idx: 0,
             camera: Camera::default(),
@@ -94,8 +108,10 @@ impl PathTracer {
         let num_blocks_x = width / RENDER_BLOCK_SIZE;
         let num_blocks_y = num_rows / RENDER_BLOCK_SIZE;
 
-        self.pixels
-            .resize((width * num_rows) as usize * NODE_BYTES_PER_PIXEL, 128);
+        self.film.resize(UVec2::new(width, num_rows));
+
+        // self.pixels
+        //     .resize((width * num_rows) as usize * NODE_BYTES_PER_PIXEL, 128);
 
         self.camera.set_aspect_ratio(width as f32 / height as f32);
 
@@ -187,44 +203,6 @@ impl PathTracer {
                         }
                     }
                 }
-
-                // for block_y in 0..RENDER_BLOCK_SIZE {
-                //     for block_x in 0..RENDER_BLOCK_SIZE {
-                //         let local_x = (local_block_x * RENDER_BLOCK_SIZE) + block_x;
-                //         let local_y = (local_block_y * RENDER_BLOCK_SIZE) + block_y;
-
-                //         let block_size = RENDER_BLOCK_SIZE * RENDER_BLOCK_SIZE;
-                //         let start_pixel = (local_block_y * block_size * num_blocks_x)
-                //             + local_block_x * block_size;
-
-                //         let local_block_id = block_y * RENDER_BLOCK_SIZE + block_x;
-                //         let local_id = (start_pixel + local_block_id) as usize;
-
-                //         let x = local_x;
-                //         let y = local_y + start_row;
-
-                //         let uv = Vec2::new(
-                //             (x as f32 + 0.5) / width as f32,
-                //             (y as f32 + 0.5) / height as f32,
-                //         ) * 2.0
-                //             - 1.0;
-
-                //         let mut seed = local_id as u64;
-                //         let rng = splitmix_64(&mut seed) as u32;
-
-                //         let result = path_tracer::render_pixel(
-                //             &uv,
-                //             rng,
-                //             &camera_matrices,
-                //             &self.geometry_resources,
-                //         );
-
-                //         // A lot of performance is safed by not using a mutex for pixel access from multiple threads
-                //         unsafe {
-                //             pixel_data_ptr.write_pixel(local_id, result);
-                //         }
-                //     }
-                // }
             });
 
         self.frame_idx += 1;

@@ -11,7 +11,8 @@ use crate::math::{find_interval, sqr, Vec4Extensions};
 use super::{
     black_body_emission,
     data_tables::{
-        cie::{CIE_X, CIE_Y, CIE_Z},
+        camera::{CANON_EOS_100D_B, CANON_EOS_100D_G, CANON_EOS_100D_R},
+        cie::{CIE_ILLUM_D6500, CIE_X, CIE_Y, CIE_Z},
         swatch_reflectances::SWATCH_REFLECTANCES,
     },
     Rgb, RgbColorSpace, RgbSigmoidPolynomial, Xyz, CIE_Y_INTEGRAL,
@@ -235,6 +236,12 @@ impl Spectrum for ConstantSpectrum {
 
 static SWATCH_REFLECTANCES_SPECTRUM: OnceLock<[PiecewiseLinearSpectrum; 24]> = OnceLock::new();
 
+static CIE_ILLUM_D6500_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+
+static CANON_EOS_100D_R_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+static CANON_EOS_100D_G_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+static CANON_EOS_100D_B_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+
 #[derive(Debug, Clone)]
 pub struct PiecewiseLinearSpectrum {
     reflectance: Vec<f32>,
@@ -303,6 +310,26 @@ impl PiecewiseLinearSpectrum {
                 .try_into()
                 .unwrap()
         })
+    }
+
+    pub fn cie_illum_d6500() -> &'static PiecewiseLinearSpectrum {
+        CIE_ILLUM_D6500_SPECTRUM
+            .get_or_init(|| PiecewiseLinearSpectrum::from_interleaved(CIE_ILLUM_D6500, true))
+    }
+
+    pub fn canon_eos_100d_r() -> &'static PiecewiseLinearSpectrum {
+        CANON_EOS_100D_R_SPECTRUM
+            .get_or_init(|| PiecewiseLinearSpectrum::from_interleaved(CANON_EOS_100D_R, false))
+    }
+
+    pub fn canon_eos_100d_g() -> &'static PiecewiseLinearSpectrum {
+        CANON_EOS_100D_G_SPECTRUM
+            .get_or_init(|| PiecewiseLinearSpectrum::from_interleaved(CANON_EOS_100D_G, false))
+    }
+
+    pub fn canon_eos_100d_b() -> &'static PiecewiseLinearSpectrum {
+        CANON_EOS_100D_B_SPECTRUM
+            .get_or_init(|| PiecewiseLinearSpectrum::from_interleaved(CANON_EOS_100D_B, false))
     }
 }
 
