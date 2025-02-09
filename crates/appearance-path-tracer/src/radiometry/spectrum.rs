@@ -316,7 +316,7 @@ impl PiecewiseLinearSpectrum {
         };
 
         if normalize {
-            let scale = CIE_Y_INTEGRAL * spectrum.inner_product(DenselySampledSpectrum::cie_y());
+            let scale = CIE_Y_INTEGRAL / spectrum.inner_product(DenselySampledSpectrum::cie_y());
             for reflectance in &mut spectrum.reflectance {
                 *reflectance *= scale;
             }
