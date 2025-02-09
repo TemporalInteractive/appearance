@@ -6,7 +6,7 @@ use std::{
 
 use glam::{FloatExt, Vec3, Vec4};
 
-use crate::math::{find_interval, Vec4Extensions};
+use crate::math::{find_interval, sqr, Vec4Extensions};
 
 use super::{
     black_body_emission,
@@ -100,6 +100,35 @@ impl SampledWavelengths {
         Self { lambda, pdf }
     }
 
+    pub fn sample_visible(u: f32) -> Self {
+        let mut lambda = Vec4::ZERO;
+        let mut pdf = Vec4::ZERO;
+
+        for i in 0..4 {
+            let mut up = u + (i as f32 / 4.0);
+            if up > 1.0 {
+                up -= 1.0;
+            }
+
+            lambda[i] = Self::sample_visible_wavelengths(up);
+            pdf[i] = Self::visible_wavelengths_pdf(lambda[i]);
+        }
+
+        Self { lambda, pdf }
+    }
+
+    fn visible_wavelengths_pdf(wavelength: f32) -> f32 {
+        if !(360.0..=830.0).contains(&wavelength) {
+            0.0
+        } else {
+            0.003_939_804 / sqr((0.0072 * (wavelength - 538.0)).cosh())
+        }
+    }
+
+    fn sample_visible_wavelengths(u: f32) -> f32 {
+        538.0 - 138.888_89 * (0.85691062 - 1.827_502 * u).atanh()
+    }
+
     /// Terminates all but one of the wavelength.
     pub fn terminate_secondary(&mut self) {
         for i in 1..3 {
@@ -144,6 +173,32 @@ pub trait Spectrum: std::fmt::Debug + Sync + Send {
 
         integral
     }
+}
+
+pub fn project_reflectance(
+    refl: &dyn Spectrum,
+    illum: &dyn Spectrum,
+    b1: &dyn Spectrum,
+    b2: &dyn Spectrum,
+    b3: &dyn Spectrum,
+) -> Vec3 {
+    let mut integral = 0.0;
+    let mut result = Vec3::ZERO;
+
+    for lambda in LAMBDA_MIN as u32..LAMBDA_MAX as u32 {
+        let lambda = lambda as f32;
+
+        let illum_spectral_distribution = illum.spectral_distribution(lambda);
+        let refl_illum_spectral_distribution =
+            refl.spectral_distribution(lambda) * illum_spectral_distribution;
+
+        integral += b2.spectral_distribution(lambda) * illum_spectral_distribution;
+        result.x += b1.spectral_distribution(lambda) * refl_illum_spectral_distribution;
+        result.y += b2.spectral_distribution(lambda) * refl_illum_spectral_distribution;
+        result.z += b3.spectral_distribution(lambda) * refl_illum_spectral_distribution;
+    }
+
+    result / integral
 }
 
 /// Represents a constant spectral distribution over all wavelengths.

@@ -1,6 +1,15 @@
-use crate::radiometry::{DenselySampledSpectrum, RgbColorSpace, Spectrum};
+use glam::{Mat3, Vec3};
+
+use crate::{
+    math::Mat3Extensions,
+    radiometry::{
+        data_tables::swatch_reflectances::N_SWATCH_REFLECTANCES, project_reflectance,
+        DenselySampledSpectrum, PiecewiseLinearSpectrum, Rgb, RgbColorSpace, Spectrum, Xyz,
+    },
+};
 
 pub struct PixelSensor {
+    xyz_from_sensor_rgb: Mat3,
     r: DenselySampledSpectrum,
     g: DenselySampledSpectrum,
     b: DenselySampledSpectrum,
@@ -16,7 +25,34 @@ impl PixelSensor {
         sensor_illum: &dyn Spectrum,
         imaging_ratio: f32,
     ) -> Self {
+        let mut rgb_camera = [Vec3::ZERO; N_SWATCH_REFLECTANCES];
+        for (i, rbg_camera) in rgb_camera.iter_mut().enumerate() {
+            *rbg_camera = project_reflectance(
+                &PiecewiseLinearSpectrum::swatch_reflectances()[i],
+                sensor_illum,
+                &r,
+                &g,
+                &b,
+            );
+        }
+
+        let mut xyz_output = [Vec3::ZERO; N_SWATCH_REFLECTANCES];
+        let sensor_white_g = sensor_illum.inner_product(&g);
+        let sensor_white_y = sensor_illum.inner_product(DenselySampledSpectrum::cie_y());
+        for (i, xyz_output) in xyz_output.iter_mut().enumerate() {
+            *xyz_output = project_reflectance(
+                &PiecewiseLinearSpectrum::swatch_reflectances()[i],
+                output_color_space.illuminant().as_ref(),
+                DenselySampledSpectrum::cie_x(),
+                DenselySampledSpectrum::cie_y(),
+                DenselySampledSpectrum::cie_z(),
+            ) * (sensor_white_y / sensor_white_g);
+        }
+
+        let xyz_from_sensor_rgb = Mat3::linear_least_squares(&rgb_camera, &xyz_output);
+
         Self {
+            xyz_from_sensor_rgb,
             r,
             g,
             b,

@@ -1,12 +1,12 @@
 use core::{cmp::Ord, ops::Mul};
 
 pub mod coord_system;
+pub mod glam_extensions;
 pub mod interaction;
 pub mod normal;
 pub mod random;
 pub mod spherical_geometry;
-pub mod vec_extensions;
-pub use vec_extensions::*;
+pub use glam_extensions::*;
 
 pub fn sqr<T: Mul<Output = T> + Clone + Copy>(x: T) -> T {
     x * x

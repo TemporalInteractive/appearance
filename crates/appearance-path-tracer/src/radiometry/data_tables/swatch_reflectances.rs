@@ -1,7 +1,9 @@
+pub const N_SWATCH_REFLECTANCES: usize = 24;
+
 #[rustfmt::skip]
 #[allow(clippy::excessive_precision)]
 #[allow(clippy::approx_constant)]
-pub const SWATCH_REFLECTANCES: [&[f32]; 24] = [
+pub const SWATCH_REFLECTANCES: [&[f32]; N_SWATCH_REFLECTANCES] = [
     &[
         380.0, 0.055, 390.0, 0.058, 400.0, 0.061, 410.0, 0.062, 420.0, 0.062, 430.0,
         0.062, 440.0, 0.062, 450.0, 0.062, 460.0, 0.062, 470.0, 0.062, 480.0, 0.062,

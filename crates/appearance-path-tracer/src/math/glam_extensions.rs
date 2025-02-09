@@ -1,6 +1,6 @@
 use std::env::var;
 
-use glam::{Vec3, Vec4};
+use glam::{Mat3, Vec3, Vec4};
 
 use super::safe_div;
 
@@ -41,5 +41,34 @@ impl Vec4Extensions for Vec4 {
 
     fn avg(&self) -> f32 {
         self.element_sum() / 4.0
+    }
+}
+
+pub trait Mat3Extensions {
+    fn linear_least_squares(a: &[Vec3], b: &[Vec3]) -> Mat3;
+}
+
+impl Mat3Extensions for Mat3 {
+    fn linear_least_squares(a: &[Vec3], b: &[Vec3]) -> Mat3 {
+        debug_assert_eq!(a.len(), b.len());
+        let rows = a.len();
+
+        let mut at_a = [[0.0; 3]; 3];
+        let mut at_b = [[0.0; 3]; 3];
+
+        for i in 0..3 {
+            for j in 0..3 {
+                for r in 0..rows {
+                    at_a[i][j] += a[r][i] * a[r][j];
+                    at_b[i][j] += a[r][i] * b[r][j];
+                }
+            }
+        }
+
+        let at_a = Mat3::from_cols_array_2d(&at_a);
+        let at_b = Mat3::from_cols_array_2d(&at_b);
+
+        let at_ai = at_a.inverse();
+        (at_ai * at_b).transpose()
     }
 }

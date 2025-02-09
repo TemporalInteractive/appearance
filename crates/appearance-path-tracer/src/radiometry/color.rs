@@ -173,6 +173,10 @@ impl RgbColorSpace {
     pub fn rgb_to_polynomial(&self, rgb: Rgb) -> RgbSigmoidPolynomial {
         self.rgb_to_spectrum_table.rgb_to_polynomial(rgb)
     }
+
+    pub fn illuminant(&self) -> &Arc<dyn Spectrum> {
+        &self.illuminant
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
