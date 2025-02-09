@@ -187,7 +187,7 @@ pub trait Spectrum: std::fmt::Debug + Sync + Send {
     fn inner_product(&self, other: &dyn Spectrum) -> f32 {
         let mut integral = 0.0;
 
-        for lambda in LAMBDA_MIN as u32..LAMBDA_MAX as u32 {
+        for lambda in LAMBDA_MIN as u32..=LAMBDA_MAX as u32 {
             integral += self.spectral_distribution(lambda as f32)
                 * other.spectral_distribution(lambda as f32);
         }
@@ -206,7 +206,7 @@ pub fn project_reflectance(
     let mut integral = 0.0;
     let mut result = Vec3::ZERO;
 
-    for lambda in LAMBDA_MIN as u32..LAMBDA_MAX as u32 {
+    for lambda in LAMBDA_MIN as u32..=LAMBDA_MAX as u32 {
         let lambda = lambda as f32;
 
         let illum_spectral_distribution = illum.spectral_distribution(lambda);
@@ -552,7 +552,7 @@ impl DenselySampledSpectrum {
             let black_body_spectrum = BlackBodySpectrum::new(temperature);
 
             let mut reflectance = vec![];
-            for lambda in LAMBDA_MIN as u32..LAMBDA_MAX as u32 {
+            for lambda in LAMBDA_MIN as u32..=LAMBDA_MAX as u32 {
                 reflectance.push(black_body_spectrum.spectral_distribution(lambda as f32));
             }
 

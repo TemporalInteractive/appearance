@@ -124,7 +124,8 @@ impl RgbColorSpace {
         let b = Xyz::from_xy(b_xy);
         let rgb = Mat3::from_cols_array(&[
             r.0.x, g.0.x, b.0.x, r.0.y, g.0.y, b.0.y, r.0.z, g.0.z, b.0.z,
-        ]);
+        ])
+        .transpose();
 
         let c = Xyz::new(rgb.inverse() * w.0);
         let xyz_from_rgb = rgb * Mat3::from_diagonal(c.0);

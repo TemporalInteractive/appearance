@@ -65,8 +65,8 @@ impl Mat3Extensions for Mat3 {
             }
         }
 
-        let at_a = Mat3::from_cols_array_2d(&at_a);
-        let at_b = Mat3::from_cols_array_2d(&at_b);
+        let at_a = Mat3::from_cols_array_2d(&at_a).transpose();
+        let at_b = Mat3::from_cols_array_2d(&at_b).transpose();
 
         let at_ai = at_a.inverse();
         (at_ai * at_b).transpose()

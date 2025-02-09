@@ -68,7 +68,7 @@ impl Film {
         let rgb = self.sensor.to_sensor_rgb(sampled_spectrum, wavelengths);
 
         // Should be done, but use different sensor color space? Should be applied after adding all samples together
-        //let rgb = Rgb::new(self.output_rgb_from_sensor_rgb * rgb.0);
+        let rgb = Rgb::new(self.output_rgb_from_sensor_rgb * rgb.0);
 
         // Reinhard tone mapping
         //let rgb = Rgb::new(rgb.0 / (rgb.0 + Vec3::ONE));
