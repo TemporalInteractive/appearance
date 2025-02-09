@@ -23,7 +23,7 @@ pub const CIE_Y_INTEGRAL: f32 = 106.856895;
 
 /// XYZ color space, a device-independent color space, which means that it does not describe the characteristics of a particular display or color measurement device.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Xyz(Vec3);
+pub struct Xyz(pub Vec3);
 
 impl From<Vec3> for Xyz {
     fn from(v: Vec3) -> Self {
@@ -73,7 +73,7 @@ impl Xyz {
 
 /// RGB color space defined by using the chromaticities of red, green, and blue color primaries.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Rgb(Vec3);
+pub struct Rgb(pub Vec3);
 
 impl From<Vec3> for Rgb {
     fn from(v: Vec3) -> Self {
@@ -160,6 +160,10 @@ impl RgbColorSpace {
                 srgb_spectrum_table,
             )
         })
+    }
+
+    pub fn rgb_from_xyz_mat3(&self) -> &Mat3 {
+        &self.rgb_from_xyz
     }
 
     pub fn xyz_to_rgb(&self, xyz: Xyz) -> Rgb {

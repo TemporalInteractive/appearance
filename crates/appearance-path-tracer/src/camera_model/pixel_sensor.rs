@@ -1,10 +1,11 @@
-use glam::{Mat3, Vec3};
+use glam::{Mat3, Vec3, Vec4};
 
 use crate::{
-    math::Mat3Extensions,
+    math::{safe_div, Mat3Extensions, Vec4Extensions},
     radiometry::{
         data_tables::swatch_reflectances::N_SWATCH_REFLECTANCES, project_reflectance,
-        DenselySampledSpectrum, PiecewiseLinearSpectrum, Rgb, RgbColorSpace, Spectrum, Xyz,
+        DenselySampledSpectrum, PiecewiseLinearSpectrum, Rgb, RgbColorSpace, SampledSpectrum,
+        SampledWavelengths, Spectrum, Xyz,
     },
 };
 
@@ -58,5 +59,30 @@ impl PixelSensor {
             b,
             imaging_ratio,
         }
+    }
+
+    pub fn xyz_from_sensor_rgb_mat3(&self) -> &Mat3 {
+        &self.xyz_from_sensor_rgb
+    }
+
+    pub fn to_sensor_rgb(
+        &self,
+        sampled_spectrum: &SampledSpectrum,
+        wavelengths: &SampledWavelengths,
+    ) -> Rgb {
+        let sampled_spectrum = Vec4::new(
+            safe_div(sampled_spectrum.0.x, wavelengths.pdf().x),
+            safe_div(sampled_spectrum.0.y, wavelengths.pdf().y),
+            safe_div(sampled_spectrum.0.z, wavelengths.pdf().z),
+            safe_div(sampled_spectrum.0.w, wavelengths.pdf().w),
+        );
+
+        Rgb::new(
+            Vec3::new(
+                (self.r.sample(wavelengths).0 * sampled_spectrum).avg(),
+                (self.g.sample(wavelengths).0 * sampled_spectrum).avg(),
+                (self.b.sample(wavelengths).0 * sampled_spectrum).avg(),
+            ) * self.imaging_ratio,
+        )
     }
 }

@@ -1,6 +1,7 @@
 use glam::Vec2;
 use tinybvh::Ray;
 
+pub mod film;
 pub mod perspective;
 pub mod pixel_sensor;
 

@@ -9,6 +9,7 @@ mod camera_model;
 mod geometry_resources;
 mod path_tracer;
 mod radiometry;
+mod sampling;
 use glam::{Vec2, Vec3};
 mod math;
 
