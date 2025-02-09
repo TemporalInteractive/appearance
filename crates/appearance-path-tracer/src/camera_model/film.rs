@@ -67,12 +67,8 @@ impl Film {
         // TODO: ok so the pdf is low? resulting in exploded rgbs, I want to visualize the image after a few samples not after (LAMBDA_MAX - LAMBDA_MIN) samples
         let rgb = self.sensor.to_sensor_rgb(sampled_spectrum, wavelengths);
 
-        // Should be done, but use different sensor color space? Should be applied after adding all samples together
+        // TODO: should be applied after adding all samples together
         let rgb = Rgb::new(self.output_rgb_from_sensor_rgb * rgb.0);
-
-        // Reinhard tone mapping
-        //let rgb = Rgb::new(rgb.0 / (rgb.0 + Vec3::ONE));
-        //let rgb = Rgb::new(rgb.0 / 100.0);
 
         // TODO: optionally clamp rgb
 
