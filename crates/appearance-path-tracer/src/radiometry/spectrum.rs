@@ -6,7 +6,10 @@ use std::{
 
 use glam::{FloatExt, Vec3, Vec4};
 
-use crate::math::{find_interval, sqr, Vec4Extensions};
+use crate::{
+    math::{find_interval, sqr, Vec4Extensions},
+    radiometry::data_tables::cie::{CIE_S0, CIE_S1, CIE_S2, CIE_SAMPLES, CIE_S_LAMBDA},
+};
 
 use super::{
     black_body_emission,
@@ -537,6 +540,50 @@ impl DenselySampledSpectrum {
                 LAMBDA_MAX as u32,
             )
         })
+    }
+
+    pub fn cie_d(temperature: f32) -> DenselySampledSpectrum {
+        let cct = temperature * 1.4388 / 1.4380;
+        if cct < 4000.0 {
+            let black_body_spectrum = BlackBodySpectrum::new(temperature);
+
+            let mut reflectance = vec![];
+            for lambda in LAMBDA_MIN as u32..LAMBDA_MAX as u32 {
+                reflectance.push(black_body_spectrum.spectral_distribution(lambda as f32));
+            }
+
+            DenselySampledSpectrum::new_from_spectral_distribution(
+                reflectance,
+                LAMBDA_MIN as u32,
+                LAMBDA_MAX as u32,
+            )
+        } else {
+            let x = if cct <= 7000.0 {
+                -4.607 * 1e9 / cct.powi(3)
+                    + 2.9678 * 1e6 / sqr(cct)
+                    + 0.09911 * 1e3 / cct
+                    + 0.244063
+            } else {
+                -2.0064 * 1e9 / cct.powi(3)
+                    + 1.9018 * 1e6 / sqr(cct)
+                    + 0.24748 * 1e3 / cct
+                    + 0.23704
+            };
+
+            let y = -3.0 * x * x + 2.870 * x - 0.275;
+
+            let m = 0.0241 + 0.2562 * x - 0.7341 * y;
+            let m1 = (-1.3515 - 1.7703 * x + 5.9114 * y) / m;
+            let m2 = (0.0300 - 31.4424 * x + 30.0717 * y) / m;
+
+            let mut values = vec![0.0; CIE_SAMPLES];
+            for i in 0..CIE_SAMPLES {
+                values[i] = (CIE_S0[i] + CIE_S1[i] * m1 + CIE_S2[i] * m2) * 0.01;
+            }
+
+            let pwl = PiecewiseLinearSpectrum::new(values, CIE_S_LAMBDA.to_vec());
+            DenselySampledSpectrum::new_from_spectrum(&pwl, LAMBDA_MIN as u32, LAMBDA_MAX as u32)
+        }
     }
 }
 

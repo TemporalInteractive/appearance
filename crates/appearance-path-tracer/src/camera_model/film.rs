@@ -70,7 +70,8 @@ impl Film {
         //let rgb = Rgb::new(self.output_rgb_from_sensor_rgb * rgb.0);
 
         // Reinhard tone mapping
-        let rgb = Rgb::new(rgb.0 / (rgb.0 + Vec3::ONE));
+        //let rgb = Rgb::new(rgb.0 / (rgb.0 + Vec3::ONE));
+        let rgb = Rgb::new(rgb.0 / 100.0);
 
         // TODO: optionally clamp rgb
 

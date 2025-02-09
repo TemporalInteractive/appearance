@@ -19,7 +19,7 @@ use appearance_world::visible_world_action::VisibleWorldActionType;
 use geometry_resources::*;
 use math::random::{pcg_hash, splitmix_64, xor_shift_u32};
 use path_tracer::{CameraMatrices, PATH_TRACER_RAY_PACKET_SIZE, RAYS_PER_PACKET};
-use radiometry::{PiecewiseLinearSpectrum, RgbColorSpace};
+use radiometry::{DenselySampledSpectrum, PiecewiseLinearSpectrum, RgbColorSpace};
 use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 
 pub struct PathTracer {
@@ -49,7 +49,7 @@ impl PathTracer {
             PiecewiseLinearSpectrum::canon_eos_100d_g().clone(),
             PiecewiseLinearSpectrum::canon_eos_100d_b().clone(),
             &RgbColorSpace::srgb(),
-            PiecewiseLinearSpectrum::cie_illum_d6500(),
+            &DenselySampledSpectrum::cie_d(6500.0),
             1.0,
         );
         let film = Film::new(UVec2::new(512, 512), pixel_sensor, RgbColorSpace::srgb());

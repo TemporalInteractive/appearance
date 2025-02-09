@@ -390,6 +390,8 @@ pub const CIE_S_LAMBDA: &[f32] = &[
     825.000000, 830.000000,
 ];
 
+pub const CIE_SAMPLES: usize = 107;
+
 #[rustfmt::skip]
 #[allow(clippy::excessive_precision)]
 pub const CIE_S0: &[f32] = &[
