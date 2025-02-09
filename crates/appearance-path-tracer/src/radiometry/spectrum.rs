@@ -12,7 +12,12 @@ use super::{
     black_body_emission,
     data_tables::{
         camera::{CANON_EOS_100D_B, CANON_EOS_100D_G, CANON_EOS_100D_R},
-        cie::{CIE_ILLUM_D6500, CIE_LAMBDA, CIE_X, CIE_Y, CIE_Z},
+        cie::{
+            ACES_ILLUM_D60, CIE_ILLUM_D5000, CIE_ILLUM_D6500, CIE_ILLUM_F1, CIE_ILLUM_F10,
+            CIE_ILLUM_F11, CIE_ILLUM_F12, CIE_ILLUM_F2, CIE_ILLUM_F3, CIE_ILLUM_F4, CIE_ILLUM_F5,
+            CIE_ILLUM_F6, CIE_ILLUM_F7, CIE_ILLUM_F8, CIE_ILLUM_F9, CIE_LAMBDA, CIE_X, CIE_Y,
+            CIE_Z,
+        },
         swatch_reflectances::SWATCH_REFLECTANCES,
     },
     Rgb, RgbColorSpace, RgbSigmoidPolynomial, Xyz, CIE_Y_INTEGRAL,
@@ -240,7 +245,21 @@ static CIE_X_SPECTRUM_LPW: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
 static CIE_Y_SPECTRUM_LPW: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
 static CIE_Z_SPECTRUM_LPW: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
 
+static CIE_ILLUM_D5000_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+static ACES_ILLUM_D60_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
 static CIE_ILLUM_D6500_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+static CIE_ILLUM_F1_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+static CIE_ILLUM_F2_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+static CIE_ILLUM_F3_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+static CIE_ILLUM_F4_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+static CIE_ILLUM_F5_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+static CIE_ILLUM_F6_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+static CIE_ILLUM_F7_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+static CIE_ILLUM_F8_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+static CIE_ILLUM_F9_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+static CIE_ILLUM_F10_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+static CIE_ILLUM_F11_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+static CIE_ILLUM_F12_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
 
 static CANON_EOS_100D_R_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
 static CANON_EOS_100D_G_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
@@ -331,9 +350,79 @@ impl PiecewiseLinearSpectrum {
             .get_or_init(|| PiecewiseLinearSpectrum::new(CIE_Z.to_vec(), CIE_LAMBDA.to_vec()))
     }
 
+    pub fn cie_illum_d5000() -> &'static PiecewiseLinearSpectrum {
+        CIE_ILLUM_D5000_SPECTRUM
+            .get_or_init(|| PiecewiseLinearSpectrum::from_interleaved(CIE_ILLUM_D5000, true))
+    }
+
+    pub fn aces_illum_d60() -> &'static PiecewiseLinearSpectrum {
+        ACES_ILLUM_D60_SPECTRUM
+            .get_or_init(|| PiecewiseLinearSpectrum::from_interleaved(ACES_ILLUM_D60, true))
+    }
+
     pub fn cie_illum_d6500() -> &'static PiecewiseLinearSpectrum {
         CIE_ILLUM_D6500_SPECTRUM
             .get_or_init(|| PiecewiseLinearSpectrum::from_interleaved(CIE_ILLUM_D6500, true))
+    }
+
+    pub fn cie_illum_f1() -> &'static PiecewiseLinearSpectrum {
+        CIE_ILLUM_F1_SPECTRUM
+            .get_or_init(|| PiecewiseLinearSpectrum::from_interleaved(CIE_ILLUM_F1, true))
+    }
+
+    pub fn cie_illum_f2() -> &'static PiecewiseLinearSpectrum {
+        CIE_ILLUM_F2_SPECTRUM
+            .get_or_init(|| PiecewiseLinearSpectrum::from_interleaved(CIE_ILLUM_F2, true))
+    }
+
+    pub fn cie_illum_f3() -> &'static PiecewiseLinearSpectrum {
+        CIE_ILLUM_F3_SPECTRUM
+            .get_or_init(|| PiecewiseLinearSpectrum::from_interleaved(CIE_ILLUM_F3, true))
+    }
+
+    pub fn cie_illum_f4() -> &'static PiecewiseLinearSpectrum {
+        CIE_ILLUM_F4_SPECTRUM
+            .get_or_init(|| PiecewiseLinearSpectrum::from_interleaved(CIE_ILLUM_F4, true))
+    }
+
+    pub fn cie_illum_f5() -> &'static PiecewiseLinearSpectrum {
+        CIE_ILLUM_F5_SPECTRUM
+            .get_or_init(|| PiecewiseLinearSpectrum::from_interleaved(CIE_ILLUM_F5, true))
+    }
+
+    pub fn cie_illum_f6() -> &'static PiecewiseLinearSpectrum {
+        CIE_ILLUM_F6_SPECTRUM
+            .get_or_init(|| PiecewiseLinearSpectrum::from_interleaved(CIE_ILLUM_F6, true))
+    }
+
+    pub fn cie_illum_f7() -> &'static PiecewiseLinearSpectrum {
+        CIE_ILLUM_F7_SPECTRUM
+            .get_or_init(|| PiecewiseLinearSpectrum::from_interleaved(CIE_ILLUM_F7, true))
+    }
+
+    pub fn cie_illum_f8() -> &'static PiecewiseLinearSpectrum {
+        CIE_ILLUM_F8_SPECTRUM
+            .get_or_init(|| PiecewiseLinearSpectrum::from_interleaved(CIE_ILLUM_F8, true))
+    }
+
+    pub fn cie_illum_f9() -> &'static PiecewiseLinearSpectrum {
+        CIE_ILLUM_F9_SPECTRUM
+            .get_or_init(|| PiecewiseLinearSpectrum::from_interleaved(CIE_ILLUM_F9, true))
+    }
+
+    pub fn cie_illum_f10() -> &'static PiecewiseLinearSpectrum {
+        CIE_ILLUM_F10_SPECTRUM
+            .get_or_init(|| PiecewiseLinearSpectrum::from_interleaved(CIE_ILLUM_F10, true))
+    }
+
+    pub fn cie_illum_f11() -> &'static PiecewiseLinearSpectrum {
+        CIE_ILLUM_F11_SPECTRUM
+            .get_or_init(|| PiecewiseLinearSpectrum::from_interleaved(CIE_ILLUM_F11, true))
+    }
+
+    pub fn cie_illum_f12() -> &'static PiecewiseLinearSpectrum {
+        CIE_ILLUM_F12_SPECTRUM
+            .get_or_init(|| PiecewiseLinearSpectrum::from_interleaved(CIE_ILLUM_F11, true))
     }
 
     pub fn canon_eos_100d_r() -> &'static PiecewiseLinearSpectrum {
