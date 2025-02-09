@@ -104,7 +104,9 @@ impl SampledWavelengths {
             }
         }
 
-        let pdf = Vec4::splat(1.0 / (LAMBDA_MAX - LAMBDA_MIN));
+        // TODO: why can't I wrap my head around this pdf?
+        //let pdf = Vec4::splat(1.0 / (LAMBDA_MAX - LAMBDA_MIN));
+        let pdf = Vec4::ONE;
 
         Self { lambda, pdf }
     }
@@ -130,7 +132,9 @@ impl SampledWavelengths {
         if !(360.0..=830.0).contains(&wavelength) {
             0.0
         } else {
-            0.003_939_804 / sqr((0.0072 * (wavelength - 538.0)).cosh())
+            // TODO: Again, why can't I wrap my head around this pdf?
+            (0.003_939_804 / sqr((0.0072 * (wavelength - 538.0)).cosh()))
+                * (LAMBDA_MAX - LAMBDA_MIN)
         }
     }
 
