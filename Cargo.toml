@@ -43,8 +43,8 @@ puffin = { version = "0.19.0", default-features = false, features = ["web"] }
 rayon = { version = "1.8.1", default-features = false }
 specs = { version = "0.20.0", default-features = false, features = ["parallel"] }
 superluminal-perf = { version = "0.3.0", default-features = false }
-tinybvh = { git = "https://github.com/TemporalInteractive/tinybvh.git", rev = "a2d7bcc", default-features = false, features = ["simd", "unsafe-send-sync"] }
-# tinybvh = { path = "../tinybvh", default-features = false, features = ["simd", "unsafe-send-sync"] }
+# tinybvh = { git = "https://github.com/TemporalInteractive/tinybvh.git", rev = "a2d7bcc", default-features = false, features = ["simd", "unsafe-send-sync"] }
+tinybvh = { path = "../tinybvh", default-features = false, features = ["simd", "unsafe-send-sync"] }
 turbojpeg = { version = "1.2.1", default-features = true }
 unreliable = { git = "https://github.com/TemporalInteractive/unreliable.git", rev = "85dff33", default-features = false }
 # unreliable = { path = "../unreliable/unreliable", default-features = false }
