@@ -7,7 +7,7 @@ use std::{
 use glam::{FloatExt, Vec3, Vec4};
 
 use crate::{
-    math::{find_interval, lookup_table::LookupTable, sqr, Vec4Extensions},
+    math::{find_interval, find_interval_fast, lookup_table::LookupTable, sqr, Vec4Extensions},
     radiometry::data_tables::cie::{CIE_S0, CIE_S1, CIE_S2, CIE_SAMPLES, CIE_S_LAMBDA},
 };
 
@@ -479,7 +479,7 @@ impl Spectrum for PiecewiseLinearSpectrum {
         {
             0.0
         } else {
-            let o = find_interval(self.wavelengths.len(), |i| self.wavelengths[i] <= lambda);
+            let o = find_interval_fast(&self.wavelengths, lambda);
 
             let t =
                 (lambda - self.wavelengths[o]) / (self.wavelengths[o + 1] - self.wavelengths[o]);

@@ -1,4 +1,5 @@
 /// Create an optimized lookup table for expensive functions
+/// Quality of samples is low but high performance, as no rounding or linear interpolation is performed on the index
 pub struct LookupTable {
     values: Vec<f32>,
     precision_scale: f32,

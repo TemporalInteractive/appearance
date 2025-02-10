@@ -38,6 +38,7 @@ pub fn lerp(t: f32, a: f32, b: f32) -> f32 {
     (1.0 - t) * a + t * b
 }
 
+/// A very generic function to find an interval using lambdas
 pub fn find_interval<F>(sz: usize, pred: F) -> usize
 where
     F: Fn(usize) -> bool,
@@ -56,4 +57,22 @@ where
     }
 
     (first - 1).clamp(0, sz as i32 - 2) as usize
+}
+
+pub fn find_interval_fast(values: &[f32], x: f32) -> usize {
+    let n_values = values.len() as i32 - 2;
+    let mut size = n_values;
+    let mut first = 1;
+
+    while size > 0 {
+        let half = size >> 1;
+        let middle = first + half;
+        let pred_result = values[middle as usize] <= x;
+
+        first = if pred_result { middle + 1 } else { first };
+
+        size = if pred_result { size - (half + 1) } else { half };
+    }
+
+    (first - 1).clamp(0, n_values) as usize
 }
