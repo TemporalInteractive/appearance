@@ -90,9 +90,6 @@ impl PathTracer {
 
         self.film.resize(UVec2::new(width, num_rows));
 
-        // self.pixels
-        //     .resize((width * num_rows) as usize * NODE_BYTES_PER_PIXEL, 128);
-
         self.camera.set_aspect_ratio(width as f32 / height as f32);
 
         let camera_matrices = CameraMatrices {
