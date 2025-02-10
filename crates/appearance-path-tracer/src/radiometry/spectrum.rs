@@ -7,7 +7,7 @@ use std::{
 use glam::{FloatExt, Vec3, Vec4};
 
 use crate::{
-    math::{find_interval, sqr, Vec4Extensions},
+    math::{find_interval, lookup_table::LookupTable, sqr, Vec4Extensions},
     radiometry::data_tables::cie::{CIE_S0, CIE_S1, CIE_S2, CIE_SAMPLES, CIE_S_LAMBDA},
 };
 
@@ -90,6 +90,9 @@ pub struct SampledWavelengths {
     pdf: Vec4,
 }
 
+static VISIBLE_WAVELENGTHS_PDF_LOOKUP: OnceLock<LookupTable> = OnceLock::new();
+static SAMPLE_VISIBLE_WAVELENGTHS_LOOKUP: OnceLock<LookupTable> = OnceLock::new();
+
 impl SampledWavelengths {
     pub fn sample_uniform(u: f32) -> Self {
         let mut lambda = Vec4::ZERO;
@@ -132,14 +135,34 @@ impl SampledWavelengths {
         if !(360.0..=830.0).contains(&wavelength) {
             0.0
         } else {
-            // TODO: Again, why can't I wrap my head around this pdf?
-            (0.003_939_804 / sqr((0.0072 * (wavelength - 538.0)).cosh()))
-                * (LAMBDA_MAX - LAMBDA_MIN)
+            let lookup = VISIBLE_WAVELENGTHS_PDF_LOOKUP.get_or_init(|| {
+                LookupTable::new(
+                    |x| {
+                        // TODO: Again, why can't I wrap my head around this pdf?
+                        (0.003_939_804 / sqr((0.0072 * (x - 538.0)).cosh()))
+                            * (LAMBDA_MAX - LAMBDA_MIN)
+                    },
+                    360.0,
+                    830.0,
+                    10.0,
+                )
+            });
+
+            lookup.evaluate(wavelength)
         }
     }
 
     fn sample_visible_wavelengths(u: f32) -> f32 {
-        538.0 - 138.888_89 * (0.85691062 - 1.827_502 * u).atanh()
+        let lookup = SAMPLE_VISIBLE_WAVELENGTHS_LOOKUP.get_or_init(|| {
+            LookupTable::new(
+                |x| 538.0 - 138.888_89 * (0.85691062 - 1.827_502 * x).atanh(),
+                0.0,
+                1.0,
+                1000.0,
+            )
+        });
+
+        lookup.evaluate(u)
     }
 
     /// Terminates all but one of the wavelength.

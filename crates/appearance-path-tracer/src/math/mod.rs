@@ -3,6 +3,7 @@ use core::{cmp::Ord, ops::Mul};
 pub mod coord_system;
 pub mod glam_extensions;
 pub mod interaction;
+pub mod lookup_table;
 pub mod normal;
 pub mod random;
 pub mod spherical_geometry;
