@@ -48,7 +48,7 @@ impl PathTracer {
             PiecewiseLinearSpectrum::canon_eos_100d_r().clone(),
             PiecewiseLinearSpectrum::canon_eos_100d_g().clone(),
             PiecewiseLinearSpectrum::canon_eos_100d_b().clone(),
-            &RgbColorSpace::srgb(),
+            &RgbColorSpace::dci_p3(),
             &DenselySampledSpectrum::cie_d(6500.0),
             1.0,
         );

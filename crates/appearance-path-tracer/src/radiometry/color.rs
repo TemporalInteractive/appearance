@@ -12,6 +12,8 @@ use super::{
         self,
         cie::{CIE_ILLUM_D6500, CIE_X, CIE_Y, CIE_Z},
         rgb_color_space::{
+            aces_to_spectrum_coeffs, aces_to_spectrum_scales, dci_p3_to_spectrum_coeffs,
+            dci_p3_to_spectrum_scales, rec2020_to_spectrum_coeffs, rec2020_to_spectrum_scales,
             srgb_to_spectrum_coeffs, srgb_to_spectrum_scales, RgbSpectrumCoefficientArray,
         },
     },
@@ -93,6 +95,9 @@ impl Rgb {
     }
 }
 
+static ACES_COLOR_SPACE: OnceLock<Arc<RgbColorSpace>> = OnceLock::new();
+static DCI_P3_COLOR_SPACE: OnceLock<Arc<RgbColorSpace>> = OnceLock::new();
+static REC2020_COLOR_SPACE: OnceLock<Arc<RgbColorSpace>> = OnceLock::new();
 static SRGB_COLOR_SPACE: OnceLock<Arc<RgbColorSpace>> = OnceLock::new();
 
 #[derive(Clone)]
@@ -141,6 +146,70 @@ impl RgbColorSpace {
             b: b_xy,
             w: w_xy,
         }
+    }
+
+    pub fn aces() -> Arc<Self> {
+        ACES_COLOR_SPACE
+            .get_or_init(|| {
+                // TODO: clean all them arcs everywhere
+                let aces_illum_d60 = Arc::new(PiecewiseLinearSpectrum::aces_illum_d60().clone());
+
+                let srgb_spectrum_table =
+                    RgbToSpectrumTable::new(aces_to_spectrum_scales(), aces_to_spectrum_coeffs());
+
+                Arc::new(Self::new(
+                    Vec2::new(0.7347, 0.2653),
+                    Vec2::new(0.0, 1.0),
+                    Vec2::new(0.0001, -0.077),
+                    aces_illum_d60,
+                    srgb_spectrum_table,
+                ))
+            })
+            .clone()
+    }
+
+    pub fn dci_p3() -> Arc<Self> {
+        DCI_P3_COLOR_SPACE
+            .get_or_init(|| {
+                // TODO: clean all them arcs everywhere
+                let std_illum_65 = Arc::new(PiecewiseLinearSpectrum::cie_illum_d6500().clone());
+
+                let srgb_spectrum_table = RgbToSpectrumTable::new(
+                    dci_p3_to_spectrum_scales(),
+                    dci_p3_to_spectrum_coeffs(),
+                );
+
+                Arc::new(Self::new(
+                    Vec2::new(0.68, 0.32),
+                    Vec2::new(0.265, 0.690),
+                    Vec2::new(0.15, 0.06),
+                    std_illum_65,
+                    srgb_spectrum_table,
+                ))
+            })
+            .clone()
+    }
+
+    pub fn rec2020() -> Arc<Self> {
+        REC2020_COLOR_SPACE
+            .get_or_init(|| {
+                // TODO: clean all them arcs everywhere
+                let std_illum_65 = Arc::new(PiecewiseLinearSpectrum::cie_illum_d6500().clone());
+
+                let srgb_spectrum_table = RgbToSpectrumTable::new(
+                    rec2020_to_spectrum_scales(),
+                    rec2020_to_spectrum_coeffs(),
+                );
+
+                Arc::new(Self::new(
+                    Vec2::new(0.708, 0.292),
+                    Vec2::new(0.170, 0.797),
+                    Vec2::new(0.131, 0.046),
+                    std_illum_65,
+                    srgb_spectrum_table,
+                ))
+            })
+            .clone()
     }
 
     pub fn srgb() -> Arc<Self> {
