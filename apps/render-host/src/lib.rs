@@ -224,8 +224,8 @@ pub fn internal_main() -> Result<()> {
     let _ = Appearance::new("Render Host");
     RenderLoopHandler::<HostRenderLoop>::new(&RenderLoopWindowDesc {
         title: "Render Host".to_owned(),
-        width: 1024,
-        height: 512,
+        width: 640,
+        height: 448,
         resizeable: false,
         maximized: false,
     })
