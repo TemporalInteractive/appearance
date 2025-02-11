@@ -73,10 +73,8 @@ impl RenderLoop for HostRenderLoop {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8Unorm,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING
-                | wgpu::TextureUsages::STORAGE_BINDING
-                | wgpu::TextureUsages::COPY_DST,
+            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
 
@@ -87,8 +85,8 @@ impl RenderLoop for HostRenderLoop {
             });
         let _ = world.create_entity(
             "Buggy",
-            Transform::new(Vec3::new(3.0, 0.0, 0.0), Quat::IDENTITY, Vec3::splat(0.02)),
-            |builder| builder.with(ModelComponent::new("assets/Buggy.glb")),
+            Transform::new(Vec3::new(3.0, 0.0, 0.0), Quat::IDENTITY, Vec3::splat(1.0)),
+            |builder| builder.with(ModelComponent::new("assets/Sponza.glb")),
         );
 
         Self {
@@ -226,8 +224,8 @@ pub fn internal_main() -> Result<()> {
     let _ = Appearance::new("Render Host");
     RenderLoopHandler::<HostRenderLoop>::new(&RenderLoopWindowDesc {
         title: "Render Host".to_owned(),
-        width: 1024,
-        height: 512,
+        width: 640,
+        height: 448,
         resizeable: false,
         maximized: false,
     })
