@@ -6,6 +6,7 @@ mod camera_model;
 mod geometry_resources;
 mod path_tracer;
 mod radiometry;
+mod reflectance;
 mod sampling;
 use camera_model::{film::Film, pixel_sensor::PixelSensor};
 use glam::{UVec2, Vec2};
