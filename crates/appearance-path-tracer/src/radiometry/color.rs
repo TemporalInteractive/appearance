@@ -1,24 +1,16 @@
-use std::{
-    rc::Rc,
-    sync::{Arc, OnceLock},
-};
+use std::sync::{Arc, OnceLock};
 
-use glam::{FloatExt, Mat3, Vec2, Vec3};
+use glam::{Mat3, Vec2, Vec3};
 
 use crate::math::{find_interval, lerp, sqr, Vec3Extensions};
 
 use super::{
-    data_tables::{
-        self,
-        cie::{CIE_ILLUM_D6500, CIE_X, CIE_Y, CIE_Z},
-        rgb_color_space::{
-            aces_to_spectrum_coeffs, aces_to_spectrum_scales, dci_p3_to_spectrum_coeffs,
-            dci_p3_to_spectrum_scales, rec2020_to_spectrum_coeffs, rec2020_to_spectrum_scales,
-            srgb_to_spectrum_coeffs, srgb_to_spectrum_scales, RgbSpectrumCoefficientArray,
-        },
+    data_tables::rgb_color_space::{
+        aces_to_spectrum_coeffs, aces_to_spectrum_scales, dci_p3_to_spectrum_coeffs,
+        dci_p3_to_spectrum_scales, rec2020_to_spectrum_coeffs, rec2020_to_spectrum_scales,
+        srgb_to_spectrum_coeffs, srgb_to_spectrum_scales, RgbSpectrumCoefficientArray,
     },
-    DenselySampledSpectrum, PiecewiseLinearSpectrum, SampledSpectrum, Spectrum, LAMBDA_MAX,
-    LAMBDA_MIN,
+    DenselySampledSpectrum, PiecewiseLinearSpectrum, Spectrum,
 };
 
 pub const CIE_Y_INTEGRAL: f32 = 106.856895;

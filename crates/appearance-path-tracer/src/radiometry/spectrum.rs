@@ -1,13 +1,9 @@
-use core::convert::Into;
-use std::{
-    rc::Rc,
-    sync::{Arc, OnceLock},
-};
+use std::sync::{Arc, OnceLock};
 
 use glam::{FloatExt, Vec3, Vec4};
 
 use crate::{
-    math::{find_interval, find_interval_fast, lookup_table::LookupTable, sqr, Vec4Extensions},
+    math::{find_interval_fast, lookup_table::LookupTable, sqr, Vec4Extensions},
     radiometry::data_tables::cie::{CIE_S0, CIE_S1, CIE_S2, CIE_SAMPLES, CIE_S_LAMBDA},
 };
 
@@ -452,7 +448,7 @@ impl PiecewiseLinearSpectrum {
 
     pub fn cie_illum_f12() -> &'static PiecewiseLinearSpectrum {
         CIE_ILLUM_F12_SPECTRUM
-            .get_or_init(|| PiecewiseLinearSpectrum::from_interleaved(CIE_ILLUM_F11, true))
+            .get_or_init(|| PiecewiseLinearSpectrum::from_interleaved(CIE_ILLUM_F12, true))
     }
 
     pub fn canon_eos_100d_r() -> &'static PiecewiseLinearSpectrum {

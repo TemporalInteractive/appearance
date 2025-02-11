@@ -5,7 +5,7 @@ use crate::{
     radiometry::{
         data_tables::swatch_reflectances::N_SWATCH_REFLECTANCES, project_reflectance,
         DenselySampledSpectrum, PiecewiseLinearSpectrum, Rgb, RgbColorSpace, SampledSpectrum,
-        SampledWavelengths, Spectrum, Xyz,
+        SampledWavelengths, Spectrum,
     },
 };
 

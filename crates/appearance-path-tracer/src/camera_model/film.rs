@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use glam::{Mat3, UVec2, Vec2, Vec3};
+use glam::{Mat3, UVec2};
 
 use crate::radiometry::{Rgb, RgbColorSpace, SampledSpectrum, SampledWavelengths};
 

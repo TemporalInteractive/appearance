@@ -1,7 +1,4 @@
 #![allow(dead_code)]
-#![allow(unused_imports)]
-
-use std::sync::{Arc, Mutex};
 
 use appearance_camera::Camera;
 
@@ -11,16 +8,16 @@ mod path_tracer;
 mod radiometry;
 mod sampling;
 use camera_model::{film::Film, pixel_sensor::PixelSensor};
-use glam::{UVec2, Vec2, Vec3};
+use glam::{UVec2, Vec2};
 mod math;
 
-use appearance_render_loop::host::{NODE_BYTES_PER_PIXEL, RENDER_BLOCK_SIZE};
+use appearance_render_loop::host::RENDER_BLOCK_SIZE;
 use appearance_world::visible_world_action::VisibleWorldActionType;
 use geometry_resources::*;
-use math::random::{pcg_hash, splitmix_64, xor_shift_u32};
+use math::random::splitmix_64;
 use path_tracer::{CameraMatrices, PATH_TRACER_RAY_PACKET_SIZE, RAYS_PER_PACKET};
 use radiometry::{DenselySampledSpectrum, PiecewiseLinearSpectrum, RgbColorSpace};
-use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 pub struct PathTracer {
     film: Film,

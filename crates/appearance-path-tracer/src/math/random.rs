@@ -1,5 +1,3 @@
-use glam::{Vec2, Vec3, Vec4};
-
 pub fn wangh_hash(x: u32) -> u32 {
     let mut state = (x ^ 61u32) ^ (x >> 16u32);
     state *= 9u32;
