@@ -191,15 +191,15 @@ impl SampledWavelengths {
 
 /// Represents a range of spectral sample values.
 pub trait Spectrum: std::fmt::Debug + Sync + Send {
-    fn spectral_distribution(&self, lambda: f32) -> f32;
-    fn max_spectral_distribution(&self) -> f32;
+    fn reflectance(&self, lambda: f32) -> f32;
+    fn max_reflectance(&self) -> f32;
 
     fn sample(&self, sampled_wavelengths: &SampledWavelengths) -> SampledSpectrum {
         SampledSpectrum::new(Vec4::new(
-            self.spectral_distribution(sampled_wavelengths.lambda[0]),
-            self.spectral_distribution(sampled_wavelengths.lambda[1]),
-            self.spectral_distribution(sampled_wavelengths.lambda[2]),
-            self.spectral_distribution(sampled_wavelengths.lambda[3]),
+            self.reflectance(sampled_wavelengths.lambda[0]),
+            self.reflectance(sampled_wavelengths.lambda[1]),
+            self.reflectance(sampled_wavelengths.lambda[2]),
+            self.reflectance(sampled_wavelengths.lambda[3]),
         ))
     }
 
@@ -207,8 +207,7 @@ pub trait Spectrum: std::fmt::Debug + Sync + Send {
         let mut integral = 0.0;
 
         for lambda in LAMBDA_MIN as u32..=LAMBDA_MAX as u32 {
-            integral += self.spectral_distribution(lambda as f32)
-                * other.spectral_distribution(lambda as f32);
+            integral += self.reflectance(lambda as f32) * other.reflectance(lambda as f32);
         }
 
         integral
@@ -228,14 +227,14 @@ pub fn project_reflectance(
     for lambda in LAMBDA_MIN as u32..=LAMBDA_MAX as u32 {
         let lambda = lambda as f32;
 
-        let illum_spectral_distribution = illum.spectral_distribution(lambda);
+        let illum_spectral_distribution = illum.reflectance(lambda);
         let refl_illum_spectral_distribution =
-            refl.spectral_distribution(lambda) * illum_spectral_distribution;
+            refl.reflectance(lambda) * illum_spectral_distribution;
 
-        integral += b2.spectral_distribution(lambda) * illum_spectral_distribution;
-        result.x += b1.spectral_distribution(lambda) * refl_illum_spectral_distribution;
-        result.y += b2.spectral_distribution(lambda) * refl_illum_spectral_distribution;
-        result.z += b3.spectral_distribution(lambda) * refl_illum_spectral_distribution;
+        integral += b2.reflectance(lambda) * illum_spectral_distribution;
+        result.x += b1.reflectance(lambda) * refl_illum_spectral_distribution;
+        result.y += b2.reflectance(lambda) * refl_illum_spectral_distribution;
+        result.z += b3.reflectance(lambda) * refl_illum_spectral_distribution;
     }
 
     result / integral
@@ -256,11 +255,11 @@ impl ConstantSpectrum {
 }
 
 impl Spectrum for ConstantSpectrum {
-    fn spectral_distribution(&self, _lambda: f32) -> f32 {
+    fn reflectance(&self, _lambda: f32) -> f32 {
         self.spectral_distribution
     }
 
-    fn max_spectral_distribution(&self) -> f32 {
+    fn max_reflectance(&self) -> f32 {
         self.spectral_distribution
     }
 }
@@ -468,7 +467,7 @@ impl PiecewiseLinearSpectrum {
 }
 
 impl Spectrum for PiecewiseLinearSpectrum {
-    fn spectral_distribution(&self, lambda: f32) -> f32 {
+    fn reflectance(&self, lambda: f32) -> f32 {
         if self.wavelengths.is_empty()
             || lambda < *self.wavelengths.first().unwrap()
             || lambda > *self.wavelengths.last().unwrap()
@@ -483,7 +482,7 @@ impl Spectrum for PiecewiseLinearSpectrum {
         }
     }
 
-    fn max_spectral_distribution(&self) -> f32 {
+    fn max_reflectance(&self) -> f32 {
         self.max_reflectance
     }
 }
@@ -513,7 +512,7 @@ impl DenselySampledSpectrum {
         let mut spectral_distribution = Vec::with_capacity((lambda_max - lambda_min) as usize);
 
         for lambda in lambda_min..lambda_max {
-            spectral_distribution.push(spectrum.spectral_distribution(lambda as f32));
+            spectral_distribution.push(spectrum.reflectance(lambda as f32));
         }
 
         Self {
@@ -572,7 +571,7 @@ impl DenselySampledSpectrum {
 
             let mut reflectance = vec![];
             for lambda in LAMBDA_MIN as u32..=LAMBDA_MAX as u32 {
-                reflectance.push(black_body_spectrum.spectral_distribution(lambda as f32));
+                reflectance.push(black_body_spectrum.reflectance(lambda as f32));
             }
 
             DenselySampledSpectrum::new_from_spectral_distribution(
@@ -611,7 +610,7 @@ impl DenselySampledSpectrum {
 }
 
 impl Spectrum for DenselySampledSpectrum {
-    fn spectral_distribution(&self, lambda: f32) -> f32 {
+    fn reflectance(&self, lambda: f32) -> f32 {
         let i = lambda.round() as i32 - self.lambda_min as i32;
         if i < 0 || i >= self.spectral_distribution.len() as i32 {
             0.0
@@ -620,7 +619,7 @@ impl Spectrum for DenselySampledSpectrum {
         }
     }
 
-    fn max_spectral_distribution(&self) -> f32 {
+    fn max_reflectance(&self) -> f32 {
         *self.spectral_distribution.last().unwrap()
     }
 }
@@ -645,11 +644,11 @@ impl BlackBodySpectrum {
 }
 
 impl Spectrum for BlackBodySpectrum {
-    fn spectral_distribution(&self, lambda: f32) -> f32 {
+    fn reflectance(&self, lambda: f32) -> f32 {
         black_body_emission(lambda, self.t) * self.normalization_factor
     }
 
-    fn max_spectral_distribution(&self) -> f32 {
+    fn max_reflectance(&self) -> f32 {
         1.0
     }
 }
@@ -669,11 +668,11 @@ impl RgbAlbedoSpectrum {
 }
 
 impl Spectrum for RgbAlbedoSpectrum {
-    fn spectral_distribution(&self, lambda: f32) -> f32 {
+    fn reflectance(&self, lambda: f32) -> f32 {
         self.polynomial.evaluate(lambda)
     }
 
-    fn max_spectral_distribution(&self) -> f32 {
+    fn max_reflectance(&self) -> f32 {
         self.polynomial.max_value()
     }
 }
@@ -700,11 +699,11 @@ impl RgbUnboundedSpectrum {
 }
 
 impl Spectrum for RgbUnboundedSpectrum {
-    fn spectral_distribution(&self, lambda: f32) -> f32 {
+    fn reflectance(&self, lambda: f32) -> f32 {
         self.scale * self.polynomial.evaluate(lambda)
     }
 
-    fn max_spectral_distribution(&self) -> f32 {
+    fn max_reflectance(&self) -> f32 {
         self.scale * self.polynomial.max_value()
     }
 }
@@ -735,23 +734,21 @@ impl RgbIlluminantSpectrum {
 }
 
 impl Spectrum for RgbIlluminantSpectrum {
-    fn spectral_distribution(&self, lambda: f32) -> f32 {
-        self.scale
-            * self.polynomial.evaluate(lambda)
-            * self.illuminant.spectral_distribution(lambda)
+    fn reflectance(&self, lambda: f32) -> f32 {
+        self.scale * self.polynomial.evaluate(lambda) * self.illuminant.reflectance(lambda)
     }
 
-    fn max_spectral_distribution(&self) -> f32 {
-        self.scale * self.polynomial.max_value() * self.illuminant.max_spectral_distribution()
+    fn max_reflectance(&self) -> f32 {
+        self.scale * self.polynomial.max_value() * self.illuminant.max_reflectance()
     }
 
     fn sample(&self, sampled_wavelengths: &SampledWavelengths) -> SampledSpectrum {
         SampledSpectrum::new(
             Vec4::new(
-                self.spectral_distribution(sampled_wavelengths.lambda[0]),
-                self.spectral_distribution(sampled_wavelengths.lambda[1]),
-                self.spectral_distribution(sampled_wavelengths.lambda[2]),
-                self.spectral_distribution(sampled_wavelengths.lambda[3]),
+                self.reflectance(sampled_wavelengths.lambda[0]),
+                self.reflectance(sampled_wavelengths.lambda[1]),
+                self.reflectance(sampled_wavelengths.lambda[2]),
+                self.reflectance(sampled_wavelengths.lambda[3]),
             ) * Vec4::from(self.illuminant.sample(sampled_wavelengths)),
         )
     }
