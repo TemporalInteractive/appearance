@@ -4,6 +4,7 @@ use appearance_camera::Camera;
 
 mod camera_model;
 mod geometry_resources;
+mod light_sources;
 mod path_tracer;
 mod radiometry;
 mod reflectance;
