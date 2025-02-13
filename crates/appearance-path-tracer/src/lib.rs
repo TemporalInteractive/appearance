@@ -4,8 +4,11 @@ use appearance_camera::Camera;
 
 mod camera_model;
 mod geometry_resources;
+mod light_sources;
+mod path_integrator;
 mod path_tracer;
 mod radiometry;
+mod reflectance;
 mod sampling;
 use camera_model::{film::Film, pixel_sensor::PixelSensor};
 use glam::{UVec2, Vec2};

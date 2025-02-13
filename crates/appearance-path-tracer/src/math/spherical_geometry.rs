@@ -77,3 +77,7 @@ pub fn sin_phi(w: Vec3) -> f32 {
         (w.y / sin_theta).clamp(-1.0, 1.0)
     }
 }
+
+pub fn same_hemisphere(w: Vec3, wp: Vec3) -> bool {
+    w.z * wp.z > 0.0
+}

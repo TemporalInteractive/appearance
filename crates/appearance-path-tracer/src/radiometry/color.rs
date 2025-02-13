@@ -163,8 +163,7 @@ impl RgbColorSpace {
     pub fn dci_p3() -> Arc<Self> {
         DCI_P3_COLOR_SPACE
             .get_or_init(|| {
-                // TODO: clean all them arcs everywhere
-                let std_illum_65 = Arc::new(PiecewiseLinearSpectrum::cie_illum_d6500().clone());
+                let std_illum_65 = PiecewiseLinearSpectrum::cie_illum_d6500();
 
                 let srgb_spectrum_table = RgbToSpectrumTable::new(
                     dci_p3_to_spectrum_scales(),
@@ -185,8 +184,7 @@ impl RgbColorSpace {
     pub fn rec2020() -> Arc<Self> {
         REC2020_COLOR_SPACE
             .get_or_init(|| {
-                // TODO: clean all them arcs everywhere
-                let std_illum_65 = Arc::new(PiecewiseLinearSpectrum::cie_illum_d6500().clone());
+                let std_illum_65 = PiecewiseLinearSpectrum::cie_illum_d6500();
 
                 let srgb_spectrum_table = RgbToSpectrumTable::new(
                     rec2020_to_spectrum_scales(),
@@ -207,8 +205,7 @@ impl RgbColorSpace {
     pub fn srgb() -> Arc<Self> {
         SRGB_COLOR_SPACE
             .get_or_init(|| {
-                // TODO: clean all them arcs everywhere
-                let std_illum_65 = Arc::new(PiecewiseLinearSpectrum::cie_illum_d6500().clone());
+                let std_illum_65 = PiecewiseLinearSpectrum::cie_illum_d6500();
 
                 let srgb_spectrum_table =
                     RgbToSpectrumTable::new(srgb_to_spectrum_scales(), srgb_to_spectrum_coeffs());

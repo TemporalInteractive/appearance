@@ -13,8 +13,10 @@ appearance-camera.workspace = true
 appearance-model.workspace = true
 appearance-profiling.workspace = true
 appearance-render-loop.workspace = true
+appearance-transform.workspace = true
 appearance-world.workspace = true
 
+bitflags.workspace = true
 bytemuck.workspace = true
 glam.workspace = true
 log.workspace = true

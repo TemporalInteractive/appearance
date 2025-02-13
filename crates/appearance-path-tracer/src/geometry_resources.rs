@@ -7,6 +7,14 @@ use glam::{swizzles::Vec4Swizzles, Mat4, Vec2, Vec3, Vec4};
 use tinybvh::{BlasInstance, Bvh, BvhBase, Intersection};
 use uuid::Uuid;
 
+use crate::{
+    light_sources::point_light::PointLight,
+    radiometry::{
+        DenselySampledSpectrum, PiecewiseLinearSpectrum, Rgb, RgbColorSpace, RgbIlluminantSpectrum,
+        LAMBDA_MAX, LAMBDA_MIN,
+    },
+};
+
 pub struct GeometryHitData {
     pub position: Vec3,
     pub normal: Vec3,
@@ -20,6 +28,8 @@ pub struct GeometryResources {
 
     tlas: Bvh,
     blas_idx_to_mesh_mapping: HashMap<u32, (String, u32, Mat4)>,
+
+    pub point_light: PointLight,
 }
 
 impl Default for GeometryResources {
@@ -32,12 +42,25 @@ impl GeometryResources {
     pub fn new() -> Self {
         let model_assets = AssetDatabase::<Model>::new();
 
+        let light_spectrum = RgbIlluminantSpectrum::new(
+            Rgb(Vec3::ONE),
+            &RgbColorSpace::srgb(),
+            PiecewiseLinearSpectrum::cie_illum_d6500(),
+        );
+        let light_spectrum = DenselySampledSpectrum::new_from_spectrum(
+            &light_spectrum,
+            LAMBDA_MIN as u32,
+            LAMBDA_MAX as u32,
+        );
+        let point_light = PointLight::new(Vec3::new(0.0, 5.0, 0.0), light_spectrum, 100.0);
+
         Self {
             models: HashMap::new(),
             model_instances: HashMap::new(),
             model_assets,
             tlas: Bvh::new(),
             blas_idx_to_mesh_mapping: HashMap::new(),
+            point_light,
         }
     }
 

@@ -1,7 +1,7 @@
 use glam::Vec3;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Normal(Vec3);
+pub struct Normal(pub Vec3);
 
 impl From<Vec3> for Normal {
     fn from(v: Vec3) -> Self {
