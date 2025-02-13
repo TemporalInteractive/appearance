@@ -71,7 +71,7 @@ impl<T: NodeRenderer + 'static> Node<T> {
                             format: NODE_PIXEL_FORMAT,
                         };
                         let compressed_pixel_bytes =
-                            turbojpeg::compress(image, 80, turbojpeg::Subsamp::Sub2x2).unwrap();
+                            turbojpeg::compress(image, 95, turbojpeg::Subsamp::Sub2x2).unwrap();
 
                         let message =
                             NodeToHostMessage::RenderPartialFinished(RenderPartialFinishedData {

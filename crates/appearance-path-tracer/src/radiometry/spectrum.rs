@@ -272,7 +272,7 @@ static CIE_Z_SPECTRUM_LPW: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
 
 static CIE_ILLUM_D5000_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
 static ACES_ILLUM_D60_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
-static CIE_ILLUM_D6500_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+static CIE_ILLUM_D6500_SPECTRUM: OnceLock<Arc<PiecewiseLinearSpectrum>> = OnceLock::new();
 static CIE_ILLUM_F1_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
 static CIE_ILLUM_F2_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
 static CIE_ILLUM_F3_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
@@ -385,9 +385,15 @@ impl PiecewiseLinearSpectrum {
             .get_or_init(|| PiecewiseLinearSpectrum::from_interleaved(ACES_ILLUM_D60, true))
     }
 
-    pub fn cie_illum_d6500() -> &'static PiecewiseLinearSpectrum {
+    pub fn cie_illum_d6500() -> Arc<PiecewiseLinearSpectrum> {
         CIE_ILLUM_D6500_SPECTRUM
-            .get_or_init(|| PiecewiseLinearSpectrum::from_interleaved(CIE_ILLUM_D6500, true))
+            .get_or_init(|| {
+                Arc::new(PiecewiseLinearSpectrum::from_interleaved(
+                    CIE_ILLUM_D6500,
+                    true,
+                ))
+            })
+            .clone()
     }
 
     pub fn cie_illum_f1() -> &'static PiecewiseLinearSpectrum {

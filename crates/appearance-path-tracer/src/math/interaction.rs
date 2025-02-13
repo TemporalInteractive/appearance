@@ -2,6 +2,7 @@ use glam::{Vec2, Vec3};
 
 use super::normal::Normal;
 
+#[derive(Debug, Clone)]
 pub struct Interaction {
     pub point: Vec3,
     pub wo: Vec3,
@@ -20,6 +21,7 @@ impl Interaction {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct SurfaceInteraction {
     pub interaction: Interaction,
     pub dpdu: Vec3,

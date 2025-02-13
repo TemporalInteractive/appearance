@@ -49,14 +49,14 @@ pub struct LightSourceLiSample {
 }
 
 pub trait LightSource {
-    fn phi(&self, wavelengths: SampledWavelengths) -> SampledSpectrum;
+    fn phi(&self, wavelengths: &SampledWavelengths) -> SampledSpectrum;
     fn ty(&self) -> LightSourceType;
     fn sample_li(
         &self,
         ctx: LightSourceSampleCtx,
         u: Vec2,
-        wavelengths: SampledWavelengths,
-        allow_incomplete_pdf: f32,
+        wavelengths: &SampledWavelengths,
+        allow_incomplete_pdf: bool,
     ) -> Option<LightSourceLiSample>;
-    fn pdf_li(&self, ctx: LightSourceSampleCtx, wi: Vec3, allow_incomplete_pdf: f32) -> f32;
+    fn pdf_li(&self, ctx: LightSourceSampleCtx, wi: Vec3, allow_incomplete_pdf: bool) -> f32;
 }
