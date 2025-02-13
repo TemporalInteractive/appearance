@@ -1,4 +1,4 @@
-use super::{EPSILON, ONE_MINUS_EPSILON};
+use core::f32;
 
 const PCG32_DEFAULT_STATE: u64 = 0x853c49e6748fea9b;
 const PCG32_DEFAULT_STREAM: u64 = 0xda3e39cb94b95bdb;
@@ -26,20 +26,20 @@ impl Rng {
         self.state = 0;
         self.inc = (sequence_idx << 1) | 1;
         self.uniform_u32();
-        self.state += offset;
+        self.state = self.state.wrapping_add(offset);
         self.uniform_u32();
     }
 
     pub fn uniform_u32(&mut self) -> u32 {
         let old_state = self.state;
-        self.state = old_state * PCG32_MULT + self.inc;
+        self.state = old_state.wrapping_mul(PCG32_MULT).wrapping_add(self.inc);
         let xor_shifted = (((old_state >> 18u32) ^ old_state) >> 27u32) as u32;
         let rot = (old_state >> 59u32) as u32;
-        (xor_shifted >> rot) | (xor_shifted << ((!rot + 1u32) & 31))
+        (xor_shifted >> rot) | (xor_shifted << ((!rot).wrapping_add(1u32) & 31))
     }
 
     pub fn uniform_f32(&mut self) -> f32 {
-        ONE_MINUS_EPSILON.min(self.uniform_u32() as f32 * EPSILON)
+        self.uniform_u32() as f32 * 2.328_306_4e-10_f32
     }
 
     pub fn advance(&mut self, delta: i64) {
@@ -66,9 +66,9 @@ impl Rng {
 // Source: http://zimbry.blogspot.ch/2011/09/better-bit-mixing-improving-on.html
 pub fn mix_bits(mut v: u64) -> u64 {
     v ^= v >> 31;
-    v *= 0x7fb5d329728ea185;
+    v = v.wrapping_mul(0x7fb5d329728ea185);
     v ^= v >> 27;
-    v *= 0x81dadef4bc2dd44d;
+    v = v.wrapping_mul(0x81dadef4bc2dd44d);
     v ^= v >> 33;
     v
 }

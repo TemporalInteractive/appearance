@@ -9,9 +9,6 @@ pub mod random;
 pub mod spherical_geometry;
 pub use glam_extensions::*;
 
-pub const ONE_MINUS_EPSILON: f32 = f32::from_bits(0x3f7fffff);
-pub const EPSILON: f32 = f32::from_bits(0x1);
-
 pub fn sqr<T: Mul<Output = T> + Clone + Copy>(x: T) -> T {
     x * x
 }
