@@ -1,11 +1,12 @@
-use glam::{Mat4, Vec2, Vec4, Vec4Swizzles};
+use glam::{IVec2, Mat4, Vec2, Vec4, Vec4Swizzles};
 use tinybvh::Ray;
 
 use crate::{
     geometry_resources::GeometryResources,
-    math::random::random_f32,
     path_integrator::PathIntegrator,
     radiometry::{SampledSpectrum, SampledWavelengths},
+    sampling::independent_sampler::IndependentSampler,
+    sampling::Sampler,
 };
 
 /// All packets will be 16x16 because a packet of 256 rays can be traced with greater performance.
@@ -26,9 +27,11 @@ pub struct SamplePixelResult {
 
 pub fn render_pixels(
     uv: [Vec2; RAYS_PER_PACKET],
-    rng: [u32; RAYS_PER_PACKET],
+    seed: u32,
     camera_matrices: &CameraMatrices,
     geometry_resources: &GeometryResources,
+    width: u32,
+    height: u32,
 ) -> [SamplePixelResult; RAYS_PER_PACKET] {
     let path_integrator = PathIntegrator::new(3);
 
@@ -40,12 +43,18 @@ pub fn render_pixels(
         let direction = camera_matrices.inv_view * Vec4::from((target.xyz().normalize(), 0.0));
 
         let ray = Ray::new(origin.xyz(), direction.xyz());
-        let mut rng = rng[i];
+        let mut sampler = Box::new(IndependentSampler::new(1, seed));
 
-        let wavelengths = SampledWavelengths::sample_visible(random_f32(&mut rng));
+        let pixel = IVec2::new(
+            (corrected_uv.x * width as f32) as i32,
+            (corrected_uv.y * height as f32) as i32,
+        );
+        sampler.start_pixel_sample(pixel, 0, 0);
+
+        let wavelengths = SampledWavelengths::sample_visible(sampler.get_1d());
 
         results[i].sampled_spectrum =
-            path_integrator.li(ray, &wavelengths, rng, geometry_resources);
+            path_integrator.li(ray, &wavelengths, sampler, geometry_resources);
         results[i].sampled_wavelengths = wavelengths;
     }
 

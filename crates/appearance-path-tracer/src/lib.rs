@@ -17,7 +17,6 @@ mod math;
 use appearance_render_loop::host::RENDER_BLOCK_SIZE;
 use appearance_world::visible_world_action::VisibleWorldActionType;
 use geometry_resources::*;
-use math::random::splitmix_64;
 use path_tracer::{CameraMatrices, PATH_TRACER_RAY_PACKET_SIZE, RAYS_PER_PACKET};
 use radiometry::{DenselySampledSpectrum, PiecewiseLinearSpectrum, RgbColorSpace};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
@@ -111,7 +110,6 @@ impl PathTracer {
                 for block_y in 0..(RENDER_BLOCK_SIZE / PATH_TRACER_RAY_PACKET_SIZE) {
                     for block_x in 0..(RENDER_BLOCK_SIZE / PATH_TRACER_RAY_PACKET_SIZE) {
                         let mut ray_uvs = [Vec2::ZERO; RAYS_PER_PACKET];
-                        let mut ray_rngs = [0u32; RAYS_PER_PACKET];
 
                         // Loop over the ray packets
                         for ray_block_y in 0..PATH_TRACER_RAY_PACKET_SIZE {
@@ -122,13 +120,6 @@ impl PathTracer {
                                 let local_x = (local_block_x * RENDER_BLOCK_SIZE) + block_x;
                                 let local_y = (local_block_y * RENDER_BLOCK_SIZE) + block_y;
 
-                                let block_size = RENDER_BLOCK_SIZE * RENDER_BLOCK_SIZE;
-                                let start_pixel = (local_block_y * block_size * num_blocks_x)
-                                    + local_block_x * block_size;
-
-                                let local_block_id = block_y * RENDER_BLOCK_SIZE + block_x;
-                                let local_id = (start_pixel + local_block_id) as usize;
-
                                 let x = local_x;
                                 let y = local_y + start_row;
 
@@ -138,22 +129,19 @@ impl PathTracer {
                                 ) * 2.0
                                     - 1.0;
 
-                                // TODO: improve seed
-                                let mut seed = local_id as u64 + (self.frame_idx as u64 * 100000);
-                                let rng = splitmix_64(&mut seed) as u32;
-
                                 let i = (ray_block_y * PATH_TRACER_RAY_PACKET_SIZE + ray_block_x)
                                     as usize;
                                 ray_uvs[i] = uv;
-                                ray_rngs[i] = rng;
                             }
                         }
 
                         let result = path_tracer::render_pixels(
                             ray_uvs,
-                            ray_rngs,
+                            self.frame_idx,
                             &camera_matrices,
                             &self.geometry_resources,
+                            width,
+                            height,
                         );
 
                         for ray_block_y in 0..PATH_TRACER_RAY_PACKET_SIZE {

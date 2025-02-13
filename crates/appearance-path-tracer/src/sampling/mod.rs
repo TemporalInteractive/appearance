@@ -1,5 +1,4 @@
 use core::{
-    clone::Clone,
     f32::consts::{FRAC_1_PI, FRAC_PI_2, FRAC_PI_4},
     fmt::Debug,
 };
@@ -12,7 +11,7 @@ use crate::math::{safe_sqrt, sqr};
 pub mod filter;
 pub mod independent_sampler;
 
-pub trait Sampler: Debug + Clone {
+pub trait Sampler: Debug {
     fn samples_per_pixels(&self) -> u32;
     fn start_pixel_sample(&mut self, p: IVec2, sample_idx: u32, dim: u32);
     fn get_1d(&mut self) -> f32;

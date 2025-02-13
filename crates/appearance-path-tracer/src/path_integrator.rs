@@ -4,11 +4,12 @@ use tinybvh::Ray;
 use crate::{
     geometry_resources::GeometryResources,
     light_sources::{LightSource, LightSourceSampleCtx},
-    math::{interaction::Interaction, normal::Normal, random::random_f32},
+    math::{interaction::Interaction, normal::Normal},
     radiometry::{
         Rgb, RgbAlbedoSpectrum, RgbColorSpace, SampledSpectrum, SampledWavelengths, Spectrum,
     },
     reflectance::{diffuse::DiffuseBxdf, Bsdf, BxdfReflTransFlags, TransportMode},
+    sampling::Sampler,
 };
 
 pub struct PathIntegrator {
@@ -24,7 +25,7 @@ impl PathIntegrator {
         &self,
         mut ray: Ray,
         wavelengths: &SampledWavelengths,
-        mut rng: u32, // TODO: sampler class
+        mut sampler: Box<dyn Sampler>,
         geometry_resources: &GeometryResources,
     ) -> SampledSpectrum {
         let mut l = Vec4::ZERO;
@@ -89,8 +90,8 @@ impl PathIntegrator {
                 }
             }
 
-            let uc = random_f32(&mut rng);
-            let u = Vec2::new(random_f32(&mut rng), random_f32(&mut rng));
+            let uc = sampler.get_1d();
+            let u = sampler.get_2d();
             if let Some(bsdf_sample) = bsdf.sample_f(
                 wo,
                 uc,
