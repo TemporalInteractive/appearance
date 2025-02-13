@@ -3,14 +3,12 @@ use tinybvh::Ray;
 
 use crate::{
     geometry_resources::GeometryResources,
-    light_sources::{point_light::PointLight, LightSource, LightSourceSampleCtx},
+    light_sources::{LightSource, LightSourceSampleCtx},
     math::{interaction::Interaction, normal::Normal, random::random_f32},
     radiometry::{
-        DenselySampledSpectrum, PiecewiseLinearSpectrum, Rgb, RgbAlbedoSpectrum, RgbColorSpace,
-        RgbIlluminantSpectrum, SampledSpectrum, SampledWavelengths, Spectrum, LAMBDA_MAX,
-        LAMBDA_MIN,
+        Rgb, RgbAlbedoSpectrum, RgbColorSpace, SampledSpectrum, SampledWavelengths, Spectrum,
     },
-    reflectance::{diffuse::DiffuseBxdf, Bsdf, Bxdf, BxdfReflTransFlags, TransportMode},
+    reflectance::{diffuse::DiffuseBxdf, Bsdf, BxdfReflTransFlags, TransportMode},
 };
 
 pub struct PathIntegrator {
@@ -18,8 +16,8 @@ pub struct PathIntegrator {
 }
 
 impl PathIntegrator {
-    pub fn new(_max_bounces: u32) -> Self {
-        Self { max_bounces: 4 }
+    pub fn new(max_bounces: u32) -> Self {
+        Self { max_bounces }
     }
 
     pub fn li(
@@ -62,7 +60,7 @@ impl PathIntegrator {
 
             // TODO: get bsdf from intersection material
             let spectrum =
-                RgbAlbedoSpectrum::new(Rgb(Vec3::new(1.0, 1.0, 0.5)), &RgbColorSpace::srgb());
+                RgbAlbedoSpectrum::new(Rgb(Vec3::new(1.0, 1.0, 1.0)), &RgbColorSpace::srgb());
             let diffuse_bxdf = Box::new(DiffuseBxdf::new(spectrum.sample(wavelengths)));
             let bsdf = Bsdf::new(diffuse_bxdf, Normal(hit_data.normal), Vec3::ZERO);
 

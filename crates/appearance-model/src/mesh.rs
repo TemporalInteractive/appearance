@@ -1,7 +1,7 @@
 use glam::{Vec2, Vec3, Vec4, Vec4Swizzles};
 use std::sync::Arc;
 
-use tinybvh::{Bvh, BvhBuildQuality};
+use tinybvh::{BvhBuildQuality, BvhSoA};
 
 pub struct Mesh {
     pub vertex_positions: Vec<Vec4>,
@@ -11,7 +11,7 @@ pub struct Mesh {
     pub indices: Vec<u32>,
     pub material_idx: u32,
 
-    pub blas: Arc<Bvh>,
+    pub blas: Arc<BvhSoA>,
 }
 
 impl Mesh {
@@ -23,7 +23,7 @@ impl Mesh {
         indices: Vec<u32>,
         material_idx: u32,
     ) -> Self {
-        let mut blas = Bvh::new();
+        let mut blas = BvhSoA::new();
         if indices.is_empty() {
             blas.build(vertex_positions.clone(), BvhBuildQuality::High);
         } else {

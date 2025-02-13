@@ -136,7 +136,7 @@ pub struct Bsdf {
 }
 
 impl Bsdf {
-    pub fn new(bxdf: Box<dyn Bxdf>, shading_normal: Normal, shading_dpdu: Vec3) -> Self {
+    pub fn new(bxdf: Box<dyn Bxdf>, shading_normal: Normal, _shading_dpdu: Vec3) -> Self {
         //let shading_cs = CoordSystem::from_xz(shading_dpdu.normalize(), shading_normal.0); // TODO
         let shading_cs = CoordSystem::from_z(shading_normal.0);
 
