@@ -137,7 +137,7 @@ impl PathTracer {
 
                         let result = path_tracer::render_pixels(
                             ray_uvs,
-                            self.frame_idx,
+                            self.frame_idx as u64,
                             &camera_matrices,
                             &self.geometry_resources,
                             width,

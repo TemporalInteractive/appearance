@@ -1,4 +1,4 @@
-use glam::{IVec2, Vec2};
+use glam::{UVec2, Vec2};
 use murmurhash3::murmurhash3_x64_128;
 
 use crate::math::random::Rng;
@@ -8,12 +8,12 @@ use super::Sampler;
 #[derive(Debug, Clone)]
 pub struct IndependentSampler {
     samples_per_pixel: u32,
-    seed: u32,
+    seed: u64,
     rng: Rng,
 }
 
 impl IndependentSampler {
-    pub fn new(samples_per_pixel: u32, seed: u32) -> Self {
+    pub fn new(samples_per_pixel: u32, seed: u64) -> Self {
         Self {
             samples_per_pixel,
             seed,
@@ -27,7 +27,7 @@ impl Sampler for IndependentSampler {
         self.samples_per_pixel
     }
 
-    fn start_pixel_sample(&mut self, p: IVec2, sample_idx: u32, dim: u32) {
+    fn start_pixel_sample(&mut self, p: UVec2, sample_idx: u32, dim: u32) {
         let hash = murmurhash3_x64_128(
             &[bytemuck::bytes_of(&p), bytemuck::bytes_of(&self.seed)].concat(),
             0,

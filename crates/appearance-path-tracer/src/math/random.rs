@@ -1,5 +1,7 @@
 use core::f32;
 
+use super::reverse_bits_32;
+
 const PCG32_DEFAULT_STATE: u64 = 0x853c49e6748fea9b;
 const PCG32_DEFAULT_STREAM: u64 = 0xda3e39cb94b95bdb;
 const PCG32_MULT: u64 = 0x5851f42d4c957f2d;
@@ -113,4 +115,30 @@ pub fn random_f32(state: &mut u32) -> f32 {
 pub fn random_f32_ranged(state: &mut u32, lo: f32, hi: f32) -> f32 {
     let random = random_f32(state);
     lo + random * (hi - lo)
+}
+
+pub trait Scrambler {
+    fn scramble(&self, v: u32) -> u32;
+}
+
+pub struct FastOwenScrambler {
+    seed: u32,
+}
+
+impl FastOwenScrambler {
+    pub fn new(seed: u32) -> Self {
+        Self { seed }
+    }
+}
+
+impl Scrambler for FastOwenScrambler {
+    fn scramble(&self, mut v: u32) -> u32 {
+        v = reverse_bits_32(v);
+        v ^= v * 0x3d20adea;
+        v += self.seed;
+        v *= (self.seed >> 16) | 1;
+        v ^= v * 0x05526c56;
+        v ^= v * 0x53a22864;
+        reverse_bits_32(v)
+    }
 }

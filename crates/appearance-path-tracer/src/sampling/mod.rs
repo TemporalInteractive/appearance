@@ -4,16 +4,17 @@ use core::{
 };
 use std::f32::consts::PI;
 
-use glam::{IVec2, Vec2, Vec3};
+use glam::{UVec2, Vec2, Vec3};
 
 use crate::math::{safe_sqrt, sqr};
 
 pub mod filter;
 pub mod independent_sampler;
+pub mod zsobol_sampler;
 
 pub trait Sampler: Debug {
     fn samples_per_pixels(&self) -> u32;
-    fn start_pixel_sample(&mut self, p: IVec2, sample_idx: u32, dim: u32);
+    fn start_pixel_sample(&mut self, p: UVec2, sample_idx: u32, dim: u32);
     fn get_1d(&mut self) -> f32;
     fn get_2d(&mut self) -> Vec2;
 }
