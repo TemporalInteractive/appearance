@@ -31,6 +31,8 @@ pub fn render_pixels(
     geometry_resources: &GeometryResources,
     width: u32,
     height: u32,
+    sample_idx: u32,
+    sampels_per_pixel: u32,
 ) -> [SamplePixelResult; RAYS_PER_PACKET] {
     let path_integrator = PathIntegrator::new(3);
 
@@ -42,13 +44,17 @@ pub fn render_pixels(
         let direction = camera_matrices.inv_view * Vec4::from((target.xyz().normalize(), 0.0));
 
         let ray = Ray::new(origin.xyz(), direction.xyz());
-        let mut sampler = Box::new(ZSobolSampler::new(1, UVec2::new(width, height), seed));
+        let mut sampler = Box::new(ZSobolSampler::new(
+            sampels_per_pixel,
+            UVec2::new(width, height),
+            seed,
+        ));
 
         let pixel = UVec2::new(
             ((corrected_uv.x * 0.5 + 0.5) * width as f32) as u32,
             ((corrected_uv.y * 0.5 + 0.5) * height as f32) as u32,
         );
-        sampler.start_pixel_sample(pixel, 0, 0);
+        sampler.start_pixel_sample(pixel, sample_idx, 0);
 
         let wavelengths = SampledWavelengths::sample_visible(sampler.get_1d());
 
