@@ -98,6 +98,8 @@ impl PathTracer {
 
         self.geometry_resources.rebuild_tlas();
 
+        let samples_per_pixel = 2;
+
         // Loop over the number of blocks, flattened to allow for better multithreading utilization
         let flat_block_indices = (0..(num_blocks_y * num_blocks_x)).collect::<Vec<u32>>();
         flat_block_indices
@@ -106,66 +108,77 @@ impl PathTracer {
                 let local_block_y = flat_block_idx / num_blocks_x;
                 let local_block_x = flat_block_idx % num_blocks_x;
 
-                // Loop over the block size, divided by the number of rays per packet
-                for block_y in 0..(RENDER_BLOCK_SIZE / PATH_TRACER_RAY_PACKET_SIZE) {
-                    for block_x in 0..(RENDER_BLOCK_SIZE / PATH_TRACER_RAY_PACKET_SIZE) {
-                        let mut ray_uvs = [Vec2::ZERO; RAYS_PER_PACKET];
+                for sample in 0..samples_per_pixel {
+                    // Loop over the block size, divided by the number of rays per packet
+                    for block_y in 0..(RENDER_BLOCK_SIZE / PATH_TRACER_RAY_PACKET_SIZE) {
+                        for block_x in 0..(RENDER_BLOCK_SIZE / PATH_TRACER_RAY_PACKET_SIZE) {
+                            let mut ray_uvs = [Vec2::ZERO; RAYS_PER_PACKET];
 
-                        // Loop over the ray packets
-                        for ray_block_y in 0..PATH_TRACER_RAY_PACKET_SIZE {
-                            for ray_block_x in 0..PATH_TRACER_RAY_PACKET_SIZE {
-                                let block_y = block_y * PATH_TRACER_RAY_PACKET_SIZE + ray_block_y;
-                                let block_x = block_x * PATH_TRACER_RAY_PACKET_SIZE + ray_block_x;
+                            // Loop over the ray packets
+                            for ray_block_y in 0..PATH_TRACER_RAY_PACKET_SIZE {
+                                for ray_block_x in 0..PATH_TRACER_RAY_PACKET_SIZE {
+                                    let block_y =
+                                        block_y * PATH_TRACER_RAY_PACKET_SIZE + ray_block_y;
+                                    let block_x =
+                                        block_x * PATH_TRACER_RAY_PACKET_SIZE + ray_block_x;
 
-                                let local_x = (local_block_x * RENDER_BLOCK_SIZE) + block_x;
-                                let local_y = (local_block_y * RENDER_BLOCK_SIZE) + block_y;
+                                    let local_x = (local_block_x * RENDER_BLOCK_SIZE) + block_x;
+                                    let local_y = (local_block_y * RENDER_BLOCK_SIZE) + block_y;
 
-                                let x = local_x;
-                                let y = local_y + start_row;
+                                    let x = local_x;
+                                    let y = local_y + start_row;
 
-                                let uv = Vec2::new(
-                                    (x as f32 + 0.5) / width as f32,
-                                    (y as f32 + 0.5) / height as f32,
-                                ) * 2.0
-                                    - 1.0;
+                                    let uv = Vec2::new(
+                                        (x as f32 + 0.5) / width as f32,
+                                        (y as f32 + 0.5) / height as f32,
+                                    ) * 2.0
+                                        - 1.0;
 
-                                let i = (ray_block_y * PATH_TRACER_RAY_PACKET_SIZE + ray_block_x)
-                                    as usize;
-                                ray_uvs[i] = uv;
+                                    let i = (ray_block_y * PATH_TRACER_RAY_PACKET_SIZE
+                                        + ray_block_x)
+                                        as usize;
+                                    ray_uvs[i] = uv;
+                                }
                             }
-                        }
 
-                        let result = path_tracer::render_pixels(
-                            ray_uvs,
-                            self.frame_idx as u64,
-                            &camera_matrices,
-                            &self.geometry_resources,
-                            width,
-                            height,
-                        );
+                            let result = path_tracer::render_pixels(
+                                ray_uvs,
+                                self.frame_idx as u64,
+                                &camera_matrices,
+                                &self.geometry_resources,
+                                width,
+                                height,
+                                sample,
+                                samples_per_pixel,
+                            );
 
-                        for ray_block_y in 0..PATH_TRACER_RAY_PACKET_SIZE {
-                            for ray_block_x in 0..PATH_TRACER_RAY_PACKET_SIZE {
-                                let block_y = block_y * PATH_TRACER_RAY_PACKET_SIZE + ray_block_y;
-                                let block_x = block_x * PATH_TRACER_RAY_PACKET_SIZE + ray_block_x;
+                            for ray_block_y in 0..PATH_TRACER_RAY_PACKET_SIZE {
+                                for ray_block_x in 0..PATH_TRACER_RAY_PACKET_SIZE {
+                                    let block_y =
+                                        block_y * PATH_TRACER_RAY_PACKET_SIZE + ray_block_y;
+                                    let block_x =
+                                        block_x * PATH_TRACER_RAY_PACKET_SIZE + ray_block_x;
 
-                                let block_size = RENDER_BLOCK_SIZE * RENDER_BLOCK_SIZE;
-                                let start_pixel = (local_block_y * block_size * num_blocks_x)
-                                    + local_block_x * block_size;
+                                    let block_size = RENDER_BLOCK_SIZE * RENDER_BLOCK_SIZE;
+                                    let start_pixel = (local_block_y * block_size * num_blocks_x)
+                                        + local_block_x * block_size;
 
-                                let local_block_id = block_y * RENDER_BLOCK_SIZE + block_x;
-                                let local_id = (start_pixel + local_block_id) as usize;
+                                    let local_block_id = block_y * RENDER_BLOCK_SIZE + block_x;
+                                    let local_id = (start_pixel + local_block_id) as usize;
 
-                                let i = (ray_block_y * PATH_TRACER_RAY_PACKET_SIZE + ray_block_x)
-                                    as usize;
+                                    let i = (ray_block_y * PATH_TRACER_RAY_PACKET_SIZE
+                                        + ray_block_x)
+                                        as usize;
 
-                                // A lot of performance is safed by not using a mutex for pixel access from multiple threads
-                                unsafe {
-                                    self.film.add_sample(
-                                        local_id,
-                                        &result[i].sampled_spectrum,
-                                        &result[i].sampled_wavelengths,
-                                    );
+                                    // A lot of performance is safed by not using a mutex for pixel access from multiple threads
+                                    unsafe {
+                                        self.film.add_sample(
+                                            local_id,
+                                            &result[i].sampled_spectrum,
+                                            &result[i].sampled_wavelengths,
+                                            sample,
+                                        );
+                                    }
                                 }
                             }
                         }
@@ -175,6 +188,6 @@ impl PathTracer {
 
         self.frame_idx += 1;
 
-        result_callback(self.film.pixels());
+        result_callback(self.film.get_pixels_out(samples_per_pixel));
     }
 }
