@@ -7,6 +7,7 @@ use appearance::appearance_world::components::{ModelComponent, TransformComponen
 use appearance::appearance_world::{specs, World};
 use clap::Parser;
 use glam::{Quat, Vec3};
+use std::collections::VecDeque;
 use std::sync::Arc;
 
 use appearance::appearance_render_loop::host::Host;
@@ -36,6 +37,7 @@ pub struct HostRenderLoop {
     texture: wgpu::Texture,
     swapchain_format: wgpu::TextureFormat,
     timer: Timer,
+    fps_history: VecDeque<f32>,
 
     input_handler: InputHandler,
     camera_controller: CameraController,
@@ -94,6 +96,7 @@ impl RenderLoop for HostRenderLoop {
             texture,
             swapchain_format: config.view_formats[0],
             timer: Timer::new(),
+            fps_history: VecDeque::new(),
 
             input_handler: InputHandler::new(),
             camera_controller: CameraController::new(),
@@ -141,7 +144,19 @@ impl RenderLoop for HostRenderLoop {
     ) -> bool {
         let delta_time = self.timer.elapsed();
         self.timer.reset();
-        log::info!("{}ms ({} fps)", delta_time * 1000.0, 1.0 / delta_time);
+        let fps = 1.0 / delta_time;
+
+        self.fps_history.push_back(fps);
+        if self.fps_history.len() > 30 {
+            self.fps_history.pop_front();
+        }
+        let fps_avg: f32 = self.fps_history.iter().sum();
+        log::info!(
+            "{}ms ({} fps {} fps avg)",
+            delta_time * 1000.0,
+            fps,
+            fps_avg / self.fps_history.len() as f32
+        );
 
         if let Some(duck_entity) = self.duck_entity {
             let mut transforms_mut = self.world.entities_mut::<TransformComponent>();
