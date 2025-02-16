@@ -2,7 +2,7 @@ use anyhow::Result;
 use appearance_world::visible_world_action::VisibleWorldAction;
 use core::{
     net::SocketAddr,
-    sync::atomic::{AtomicBool, Ordering},
+    sync::atomic::{AtomicBool, AtomicU32, Ordering},
 };
 use crossbeam::channel::Receiver;
 use std::{
@@ -136,6 +136,91 @@ impl HostToNodeMessage {
     }
 }
 
+pub const BUFFERED_PIXEL_COUNT: usize = 2;
+
+struct BufferedPixelData {
+    width: u32,
+    height: u32,
+    pixels: [Mutex<Vec<u8>>; BUFFERED_PIXEL_COUNT],
+    frame_idx: AtomicU32,
+}
+
+impl BufferedPixelData {
+    fn new(width: u32, height: u32) -> Self {
+        let pixel_bytes = (width * height) as usize * BYTES_PER_PIXEL;
+
+        let pixels = [
+            Mutex::new(vec![0; pixel_bytes]),
+            Mutex::new(vec![0; pixel_bytes]),
+        ];
+
+        Self {
+            width,
+            height,
+            pixels,
+            frame_idx: AtomicU32::new(0),
+        }
+    }
+
+    fn write_pixels_idx(&self) -> usize {
+        self.frame_idx.load(Ordering::SeqCst) as usize % BUFFERED_PIXEL_COUNT
+    }
+
+    fn read_pixels_idx(&self) -> usize {
+        (self.frame_idx.load(Ordering::SeqCst) + 1) as usize % BUFFERED_PIXEL_COUNT
+    }
+
+    fn write_render_finished_pixels(
+        &self,
+        render_pixels: &[u8],
+        render_partial_finished_data: RenderPartialFinishedData,
+    ) {
+        if let Ok(mut pixels) = self.pixels[self.write_pixels_idx()].lock() {
+            for local_y in 0..RENDER_BLOCK_SIZE {
+                for local_x in 0..RENDER_BLOCK_SIZE {
+                    let x =
+                        local_x + (render_partial_finished_data.column_block * RENDER_BLOCK_SIZE);
+                    let y = local_y + render_partial_finished_data.row;
+
+                    let id = (y * self.width + x) as usize;
+                    let local_id = (local_y * RENDER_BLOCK_SIZE + local_x) as usize;
+
+                    for i in 0..NODE_BYTES_PER_PIXEL {
+                        pixels[id * BYTES_PER_PIXEL + i] =
+                            render_pixels[local_id * NODE_BYTES_PER_PIXEL + i];
+                    }
+                    pixels[id * BYTES_PER_PIXEL + BYTES_PER_PIXEL - 1] = 255;
+                }
+            }
+        }
+    }
+
+    fn set_pixels_pink(&self) {
+        for pixels in &self.pixels {
+            if let Ok(mut pixels) = pixels.lock() {
+                for x in 0..self.width {
+                    for y in 0..self.height {
+                        pixels[(y * self.width + x) as usize * BYTES_PER_PIXEL] = 255;
+                        pixels[(y * self.width + x) as usize * BYTES_PER_PIXEL + 1] = 0;
+                        pixels[(y * self.width + x) as usize * BYTES_PER_PIXEL + 2] = 255;
+                        pixels[(y * self.width + x) as usize * BYTES_PER_PIXEL + 3] = 255;
+                    }
+                }
+            }
+        }
+    }
+
+    fn read_pixels<F: Fn(&[u8])>(&self, callback: F) {
+        if let Ok(pixels) = self.pixels[self.read_pixels_idx()].lock() {
+            callback(pixels.as_ref());
+        }
+    }
+
+    pub fn next_frame(&self) {
+        self.frame_idx.fetch_add(1, Ordering::SeqCst);
+    }
+}
+
 pub struct Host {
     connected_nodes: Arc<Mutex<Vec<SocketAddr>>>,
     has_received_new_connections: Arc<AtomicBool>,
@@ -144,17 +229,14 @@ pub struct Host {
 
     width: u32,
     height: u32,
-    pixels: Arc<Mutex<Vec<u8>>>,
+    pixels: Arc<BufferedPixelData>,
 }
 
 impl Host {
     pub fn new(host_port: u16, node_port: u16, width: u32, height: u32) -> Result<Self> {
         let connected_nodes = Arc::new(Mutex::new(Vec::new()));
         let has_received_new_connections = Arc::new(AtomicBool::new(false));
-        let pixels = Arc::new(Mutex::new(vec![
-            0;
-            (width * height) as usize * BYTES_PER_PIXEL
-        ]));
+        let pixels = Arc::new(BufferedPixelData::new(width, height));
 
         let mut socket = Socket::new(None, host_port)?;
 
@@ -189,7 +271,7 @@ impl Host {
         event_receiver: Receiver<SocketEvent>,
         connected_nodes: Arc<Mutex<Vec<SocketAddr>>>,
         has_received_new_connections: Arc<AtomicBool>,
-        pixels: Arc<Mutex<Vec<u8>>>,
+        pixels: Arc<BufferedPixelData>,
         width: u32,
     ) {
         loop {
@@ -206,29 +288,31 @@ impl Host {
                                         )
                                         .unwrap();
 
-                                        if let Ok(mut pixels) = pixels.lock() {
-                                            for local_y in 0..RENDER_BLOCK_SIZE {
-                                                for local_x in 0..RENDER_BLOCK_SIZE {
-                                                    let x = local_x
-                                                        + (data.column_block * RENDER_BLOCK_SIZE);
-                                                    let y = local_y + data.row;
+                                        pixels.write_render_finished_pixels(&image.pixels, data);
 
-                                                    let id = (y * width + x) as usize;
-                                                    let local_id = (local_y * RENDER_BLOCK_SIZE
-                                                        + local_x)
-                                                        as usize;
+                                        // if let Ok(mut pixels) = pixels.lock() {
+                                        //     for local_y in 0..RENDER_BLOCK_SIZE {
+                                        //         for local_x in 0..RENDER_BLOCK_SIZE {
+                                        //             let x = local_x
+                                        //                 + (data.column_block * RENDER_BLOCK_SIZE);
+                                        //             let y = local_y + data.row;
 
-                                                    for i in 0..NODE_BYTES_PER_PIXEL {
-                                                        pixels[id * BYTES_PER_PIXEL + i] = image
-                                                            .pixels
-                                                            [local_id * NODE_BYTES_PER_PIXEL + i];
-                                                    }
-                                                    pixels[id * BYTES_PER_PIXEL
-                                                        + BYTES_PER_PIXEL
-                                                        - 1] = 255;
-                                                }
-                                            }
-                                        }
+                                        //             let id = (y * width + x) as usize;
+                                        //             let local_id = (local_y * RENDER_BLOCK_SIZE
+                                        //                 + local_x)
+                                        //                 as usize;
+
+                                        //             for i in 0..NODE_BYTES_PER_PIXEL {
+                                        //                 pixels[id * BYTES_PER_PIXEL + i] = image
+                                        //                     .pixels
+                                        //                     [local_id * NODE_BYTES_PER_PIXEL + i];
+                                        //             }
+                                        //             pixels[id * BYTES_PER_PIXEL
+                                        //                 + BYTES_PER_PIXEL
+                                        //                 - 1] = 255;
+                                        //         }
+                                        //     }
+                                        // }
 
                                         // TODO: in the future the 8x8 blocks can be memcpied, however this will require a more advanced blit pass to display correctly
                                         // let first_dst_pixel = (data.row * width) + data.row_start;
@@ -320,16 +404,18 @@ impl Host {
         if let Ok(connected_nodes) = self.connected_nodes.lock() {
             // Return pink when no nodes connected, this should be a visual warning to the host
             if connected_nodes.is_empty() {
-                if let Ok(mut pixels) = self.pixels.lock() {
-                    for x in 0..self.width {
-                        for y in 0..self.height {
-                            pixels[(y * self.width + x) as usize * BYTES_PER_PIXEL] = 255;
-                            pixels[(y * self.width + x) as usize * BYTES_PER_PIXEL + 1] = 0;
-                            pixels[(y * self.width + x) as usize * BYTES_PER_PIXEL + 2] = 255;
-                            pixels[(y * self.width + x) as usize * BYTES_PER_PIXEL + 3] = 255;
-                        }
-                    }
-                }
+                // if let Ok(mut pixels) = self.pixels.lock() {
+                //     for x in 0..self.width {
+                //         for y in 0..self.height {
+                //             pixels[(y * self.width + x) as usize * BYTES_PER_PIXEL] = 255;
+                //             pixels[(y * self.width + x) as usize * BYTES_PER_PIXEL + 1] = 0;
+                //             pixels[(y * self.width + x) as usize * BYTES_PER_PIXEL + 2] = 255;
+                //             pixels[(y * self.width + x) as usize * BYTES_PER_PIXEL + 3] = 255;
+                //         }
+                //     }
+                // }
+
+                self.pixels.set_pixels_pink();
             } else {
                 let barrier = self.socket.barrier().fetch_add(1, Ordering::SeqCst) + 1;
 
@@ -370,8 +456,12 @@ impl Host {
             }
         }
 
-        if let Ok(pixels) = self.pixels.lock() {
-            result_callback(pixels.as_ref());
-        }
+        self.pixels.read_pixels(result_callback);
+
+        self.pixels.next_frame();
+
+        // if let Ok(pixels) = self.pixels.lock() {
+        //     result_callback(pixels.as_ref());
+        // }
     }
 }
