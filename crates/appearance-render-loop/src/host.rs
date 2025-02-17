@@ -172,10 +172,6 @@ impl BufferedPixelData {
         }
     }
 
-    fn write_pixels_idx(&self) -> usize {
-        self.frame_idx.load(Ordering::SeqCst) as usize % BUFFERED_PIXEL_COUNT
-    }
-
     fn read_pixels_idx(&self) -> usize {
         (self.frame_idx.load(Ordering::SeqCst) + 1) as usize % BUFFERED_PIXEL_COUNT
     }

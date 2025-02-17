@@ -44,13 +44,13 @@ impl PathIntegrator {
                 break;
             }
 
-            let normal_f = RgbAlbedoSpectrum::new(
-                Rgb(hit_data.normal * 0.5 + 0.5),
-                RgbColorSpace::srgb().as_ref(),
-            )
-            .sample(wavelengths);
-            l += normal_f.0;
-            break;
+            // let normal_f = RgbAlbedoSpectrum::new(
+            //     Rgb(hit_data.normal * 0.5 + 0.5),
+            //     RgbColorSpace::srgb().as_ref(),
+            // )
+            // .sample(wavelengths);
+            // l += normal_f.0;
+            // break;
 
             // TODO: triangle light radiance on hit
 
