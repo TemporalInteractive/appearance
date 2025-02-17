@@ -24,6 +24,7 @@ pub struct SamplePixelResult {
     pub sampled_wavelengths: SampledWavelengths,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn render_pixels(
     uv: [Vec2; RAYS_PER_PACKET],
     seed: u64,

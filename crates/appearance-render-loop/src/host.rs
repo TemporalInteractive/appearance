@@ -9,7 +9,6 @@ use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
     thread,
-    time::Duration,
 };
 
 use unreliable::{Socket, SocketEvent};
@@ -274,14 +273,12 @@ impl Host {
         let recieve_events_connected_nodes = connected_nodes.clone();
         let recieve_events_has_received_new_connections = has_received_new_connections.clone();
         let recieve_events_pixels = pixels.clone();
-        let recieve_events_width = width;
         thread::spawn(move || {
             Self::receive_events(
                 receive_events_event_receiver,
                 recieve_events_connected_nodes,
                 recieve_events_has_received_new_connections,
                 recieve_events_pixels,
-                recieve_events_width,
             )
         });
 
@@ -303,7 +300,6 @@ impl Host {
         connected_nodes: Arc<Mutex<Vec<SocketAddr>>>,
         has_received_new_connections: Arc<AtomicBool>,
         pixels: Arc<BufferedPixelData>,
-        width: u32,
     ) {
         loop {
             if let Ok(socket_event) = event_receiver.recv() {
