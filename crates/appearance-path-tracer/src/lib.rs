@@ -98,7 +98,7 @@ impl PathTracer {
 
         self.geometry_resources.rebuild_tlas();
 
-        let samples_per_pixel = 2;
+        let samples_per_pixel = 1;
 
         // Loop over the number of blocks, flattened to allow for better multithreading utilization
         let flat_block_indices = (0..(num_blocks_y * num_blocks_x)).collect::<Vec<u32>>();
