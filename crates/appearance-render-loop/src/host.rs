@@ -6,8 +6,10 @@ use core::{
 };
 use crossbeam::channel::Receiver;
 use std::{
+    collections::HashMap,
     sync::{Arc, Mutex},
     thread,
+    time::Duration,
 };
 
 use unreliable::{Socket, SocketEvent};
@@ -21,6 +23,7 @@ pub const NODE_PIXEL_FORMAT: turbojpeg::PixelFormat = turbojpeg::PixelFormat::RG
 pub struct RenderPartialFinishedData {
     pub row: u32,
     pub column_block: u32,
+    pub frame_idx: u32,
     pub compressed_pixel_bytes: Vec<u8>,
 }
 
@@ -39,6 +42,7 @@ impl NodeToHostMessage {
                 let mut bytes = bytemuck::bytes_of(&0u32).to_vec();
                 bytes.append(&mut bytemuck::bytes_of(&data.row).to_vec());
                 bytes.append(&mut bytemuck::bytes_of(&data.column_block).to_vec());
+                bytes.append(&mut bytemuck::bytes_of(&data.frame_idx).to_vec());
                 bytes.append(&mut data.compressed_pixel_bytes);
 
                 let padded_size = bytes.len().div_ceil(4) * 4;
@@ -61,10 +65,12 @@ impl NodeToHostMessage {
             0 => {
                 let row = *bytemuck::from_bytes::<u32>(&bytes[4..8]);
                 let column_block = *bytemuck::from_bytes::<u32>(&bytes[8..12]);
-                let compressed_pixel_bytes = bytes[12..bytes.len()].to_vec();
+                let frame_idx = *bytemuck::from_bytes::<u32>(&bytes[12..16]);
+                let compressed_pixel_bytes = bytes[16..bytes.len()].to_vec();
                 Ok(Self::RenderPartialFinished(RenderPartialFinishedData {
                     row,
                     column_block,
+                    frame_idx,
                     compressed_pixel_bytes,
                 }))
             }
@@ -82,6 +88,7 @@ pub struct StartRenderData {
     pub height: u32,
     pub row_start: u32,
     pub row_end: u32,
+    pub frame_idx: u32,
 }
 
 pub enum HostToNodeMessage {
@@ -142,23 +149,26 @@ struct BufferedPixelData {
     width: u32,
     height: u32,
     pixels: [Mutex<Vec<u8>>; BUFFERED_PIXEL_COUNT],
+    duplicate_map: [Mutex<HashMap<u32, bool>>; BUFFERED_PIXEL_COUNT],
     frame_idx: AtomicU32,
+    received_packet_count: [AtomicU32; BUFFERED_PIXEL_COUNT],
 }
 
 impl BufferedPixelData {
     fn new(width: u32, height: u32) -> Self {
         let pixel_bytes = (width * height) as usize * BYTES_PER_PIXEL;
 
-        let pixels = [
-            Mutex::new(vec![0; pixel_bytes]),
-            Mutex::new(vec![0; pixel_bytes]),
-        ];
+        let pixels = std::array::from_fn(|_| Mutex::new(vec![0; pixel_bytes]));
+        let duplicate_map = std::array::from_fn(|_| Mutex::new(HashMap::new()));
+        let received_packet_count = std::array::from_fn(|_| AtomicU32::new(0));
 
         Self {
             width,
             height,
             pixels,
+            duplicate_map,
             frame_idx: AtomicU32::new(0),
+            received_packet_count,
         }
     }
 
@@ -175,7 +185,20 @@ impl BufferedPixelData {
         render_pixels: &[u8],
         render_partial_finished_data: RenderPartialFinishedData,
     ) {
-        if let Ok(mut pixels) = self.pixels[self.write_pixels_idx()].lock() {
+        let idx = render_partial_finished_data.frame_idx as usize % BUFFERED_PIXEL_COUNT;
+
+        if let Ok(mut duplicate_map) = self.duplicate_map[idx].lock() {
+            assert!(render_partial_finished_data.column_block < u16::MAX as u32);
+            assert!(render_partial_finished_data.row < u16::MAX as u32);
+
+            let key = render_partial_finished_data.column_block
+                | (render_partial_finished_data.row << 16);
+            if duplicate_map.insert(key, true).is_some() {
+                return;
+            }
+        }
+
+        if let Ok(mut pixels) = self.pixels[idx].lock() {
             for local_y in 0..RENDER_BLOCK_SIZE {
                 for local_x in 0..RENDER_BLOCK_SIZE {
                     let x =
@@ -193,6 +216,8 @@ impl BufferedPixelData {
                 }
             }
         }
+
+        self.received_packet_count[idx].fetch_add(1, Ordering::SeqCst);
     }
 
     fn set_pixels_pink(&self) {
@@ -217,6 +242,14 @@ impl BufferedPixelData {
     }
 
     pub fn next_frame(&self) {
+        self.duplicate_map[self.read_pixels_idx()]
+            .lock()
+            .unwrap()
+            .clear();
+
+        let count = self.received_packet_count[self.read_pixels_idx()].swap(0, Ordering::SeqCst);
+        log::debug!("received pixel packets: {}", count);
+
         self.frame_idx.fetch_add(1, Ordering::SeqCst);
     }
 }
@@ -230,6 +263,7 @@ pub struct Host {
     width: u32,
     height: u32,
     pixels: Arc<BufferedPixelData>,
+    frame_idx: u32,
 }
 
 impl Host {
@@ -264,6 +298,7 @@ impl Host {
             width,
             height,
             pixels,
+            frame_idx: 0,
         })
     }
 
@@ -277,7 +312,12 @@ impl Host {
         loop {
             if let Ok(socket_event) = event_receiver.recv() {
                 match socket_event {
-                    SocketEvent::Packet(packet) => {
+                    SocketEvent::Packet(packet, delay) => {
+                        if delay > 1 {
+                            println!("REJECT!");
+                            continue;
+                        }
+
                         if !packet.is_barrier() {
                             if let Ok(message) = NodeToHostMessage::from_bytes(packet.payload()) {
                                 match message {
@@ -289,30 +329,6 @@ impl Host {
                                         .unwrap();
 
                                         pixels.write_render_finished_pixels(&image.pixels, data);
-
-                                        // if let Ok(mut pixels) = pixels.lock() {
-                                        //     for local_y in 0..RENDER_BLOCK_SIZE {
-                                        //         for local_x in 0..RENDER_BLOCK_SIZE {
-                                        //             let x = local_x
-                                        //                 + (data.column_block * RENDER_BLOCK_SIZE);
-                                        //             let y = local_y + data.row;
-
-                                        //             let id = (y * width + x) as usize;
-                                        //             let local_id = (local_y * RENDER_BLOCK_SIZE
-                                        //                 + local_x)
-                                        //                 as usize;
-
-                                        //             for i in 0..NODE_BYTES_PER_PIXEL {
-                                        //                 pixels[id * BYTES_PER_PIXEL + i] = image
-                                        //                     .pixels
-                                        //                     [local_id * NODE_BYTES_PER_PIXEL + i];
-                                        //             }
-                                        //             pixels[id * BYTES_PER_PIXEL
-                                        //                 + BYTES_PER_PIXEL
-                                        //                 - 1] = 255;
-                                        //         }
-                                        //     }
-                                        // }
 
                                         // TODO: in the future the 8x8 blocks can be memcpied, however this will require a more advanced blit pass to display correctly
                                         // let first_dst_pixel = (data.row * width) + data.row_start;
@@ -404,17 +420,6 @@ impl Host {
         if let Ok(connected_nodes) = self.connected_nodes.lock() {
             // Return pink when no nodes connected, this should be a visual warning to the host
             if connected_nodes.is_empty() {
-                // if let Ok(mut pixels) = self.pixels.lock() {
-                //     for x in 0..self.width {
-                //         for y in 0..self.height {
-                //             pixels[(y * self.width + x) as usize * BYTES_PER_PIXEL] = 255;
-                //             pixels[(y * self.width + x) as usize * BYTES_PER_PIXEL + 1] = 0;
-                //             pixels[(y * self.width + x) as usize * BYTES_PER_PIXEL + 2] = 255;
-                //             pixels[(y * self.width + x) as usize * BYTES_PER_PIXEL + 3] = 255;
-                //         }
-                //     }
-                // }
-
                 self.pixels.set_pixels_pink();
             } else {
                 let barrier = self.socket.barrier().fetch_add(1, Ordering::SeqCst) + 1;
@@ -440,6 +445,7 @@ impl Host {
                         height: self.height,
                         row_start,
                         row_end,
+                        frame_idx: self.frame_idx,
                     });
                     packet_sender
                         .send_barrier(*node, message.to_bytes())
@@ -459,9 +465,6 @@ impl Host {
         self.pixels.read_pixels(result_callback);
 
         self.pixels.next_frame();
-
-        // if let Ok(pixels) = self.pixels.lock() {
-        //     result_callback(pixels.as_ref());
-        // }
+        self.frame_idx += 1;
     }
 }

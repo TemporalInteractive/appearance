@@ -77,6 +77,7 @@ impl<T: NodeRenderer + 'static> Node<T> {
                             NodeToHostMessage::RenderPartialFinished(RenderPartialFinishedData {
                                 row: (local_block_y * RENDER_BLOCK_SIZE) + data.row_start,
                                 column_block: local_block_x,
+                                frame_idx: data.frame_idx,
                                 compressed_pixel_bytes: compressed_pixel_bytes.to_vec(),
                             });
 
@@ -103,7 +104,11 @@ impl<T: NodeRenderer + 'static> Node<T> {
             #[allow(clippy::collapsible_match)]
             if let Ok(socket_event) = self.socket.event_receiver().try_recv() {
                 match socket_event {
-                    SocketEvent::Packet(packet) => {
+                    SocketEvent::Packet(packet, delay) => {
+                        if delay > 0 {
+                            continue;
+                        }
+
                         if let Ok(message) = HostToNodeMessage::from_bytes(packet.payload()) {
                             match message {
                                 HostToNodeMessage::StartRender(data) => {
