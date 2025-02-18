@@ -63,7 +63,7 @@ impl PathIntegrator {
 
             if let Some(tex_coord) = hit_data.tex_coord {
                 if let Some(base_color_texture) = &hit_data.material.base_color_texture {
-                    base_color_factor *= base_color_texture.sample(tex_coord);
+                    base_color_factor *= base_color_texture.sample(tex_coord).xyz();
                 }
             }
 
