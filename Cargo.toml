@@ -18,6 +18,7 @@ appearance-model = { version = "0.1.0", path = "crates/appearance-model" }
 appearance-path-tracer = { version = "0.1.0", path = "crates/appearance-path-tracer" }
 appearance-profiling = { version = "0.1.0", path = "crates/appearance-profiling", features = ["superluminal"] }
 appearance-render-loop = { version = "0.1.0", path = "crates/appearance-render-loop" }
+appearance-texture = { version = "0.1.0", path = "crates/appearance-texture" }
 appearance-time = { version = "0.1.0", path = "crates/appearance-time" }
 appearance-transform = { version = "0.1.0", path = "crates/appearance-transform" }
 appearance-wgpu = { version = "0.1.0", path = "crates/appearance-wgpu" }
@@ -79,6 +80,7 @@ members = [
     "crates/appearance-path-tracer",
     "crates/appearance-profiling",
     "crates/appearance-render-loop",
+    "crates/appearance-texture",
     "crates/appearance-time",
     "crates/appearance-transform",
     "crates/appearance-wgpu",

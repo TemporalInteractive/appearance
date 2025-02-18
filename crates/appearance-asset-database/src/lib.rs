@@ -2,8 +2,11 @@ use std::{collections::HashMap, fs, io::Read, sync::Arc};
 
 use anyhow::Result;
 
-pub trait Asset {
-    fn load(file_path: &str, data: Vec<u8>) -> Self;
+pub trait Asset
+where
+    Self: Sized,
+{
+    fn load(file_path: &str, data: &[u8]) -> Result<Self>;
 }
 
 pub struct AssetDatabase<A: Asset> {
@@ -34,7 +37,20 @@ impl<A: Asset> AssetDatabase<A> {
             let mut data = vec![0; metadata.len() as usize];
             let _ = file.read(&mut data)?;
 
-            let asset = Arc::new(A::load(path, data));
+            let asset = Arc::new(A::load(path, &data)?);
+
+            self.assets.insert(path.to_owned(), asset.clone());
+            Ok(asset)
+        }
+    }
+
+    pub fn get_from_bytes(&mut self, path: &str, data: &[u8]) -> Result<Arc<A>> {
+        appearance_profiling::profile_function!();
+
+        if let Some(asset) = self.assets.get(path) {
+            Ok(asset.clone())
+        } else {
+            let asset = Arc::new(A::load(path, data)?);
 
             self.assets.insert(path.to_owned(), asset.clone());
             Ok(asset)

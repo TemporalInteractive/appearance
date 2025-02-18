@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use appearance_asset_database::AssetDatabase;
-use appearance_model::Model;
+use appearance_model::{material::Material, Model};
 use appearance_world::visible_world_action::VisibleWorldActionType;
 use glam::{swizzles::Vec4Swizzles, Mat4, Vec2, Vec3, Vec4};
 use tinybvh::{BlasInstance, Bvh, BvhBase, Intersection};
@@ -15,10 +15,11 @@ use crate::{
     },
 };
 
-pub struct GeometryHitData {
+pub struct GeometryHitData<'a> {
     pub position: Vec3,
     pub normal: Vec3,
     pub tex_coord: Option<Vec2>,
+    pub material: &'a Material,
 }
 
 pub struct GeometryResources {
@@ -249,10 +250,13 @@ impl GeometryResources {
             None
         };
 
+        let material = &model.materials[mesh.material_idx as usize];
+
         GeometryHitData {
             position,
             normal,
             tex_coord,
+            material,
         }
     }
 }
