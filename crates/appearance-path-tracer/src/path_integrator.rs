@@ -1,4 +1,4 @@
-use glam::{Vec2, Vec3, Vec4};
+use glam::{Vec2, Vec3, Vec4, Vec4Swizzles};
 use tinybvh::Ray;
 
 use crate::{
@@ -59,9 +59,16 @@ impl PathIntegrator {
                 break;
             }
 
+            let mut base_color_factor = hit_data.material.base_color_factor.xyz();
+
+            if let Some(tex_coord) = hit_data.tex_coord {
+                if let Some(base_color_texture) = &hit_data.material.base_color_texture {
+                    base_color_factor *= base_color_texture.sample(tex_coord);
+                }
+            }
+
             // TODO: get bsdf from intersection material
-            let spectrum =
-                RgbAlbedoSpectrum::new(Rgb(Vec3::new(1.0, 1.0, 1.0)), &RgbColorSpace::srgb());
+            let spectrum = RgbAlbedoSpectrum::new(Rgb(base_color_factor), &RgbColorSpace::srgb());
             let diffuse_bxdf = Box::new(DiffuseBxdf::new(spectrum.sample(wavelengths)));
             let bsdf = Bsdf::new(diffuse_bxdf, Normal(hit_data.normal), Vec3::ZERO);
 
