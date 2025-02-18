@@ -44,7 +44,13 @@ impl PathIntegrator {
             let hit_data = geometry_resources.get_hit_data(&ray.hit);
 
             if ray.hit.t == 1e30 {
-                // TODO: skybox on ray miss
+                let rgb = RgbAlbedoSpectrum::new(
+                    Rgb(Vec3::new(100.0 / 255.0, 149.0 / 255.0, 237.0 / 255.0)),
+                    &RgbColorSpace::srgb(),
+                )
+                .sample(wavelengths);
+
+                l += throughput * rgb.0;
                 break;
             }
 

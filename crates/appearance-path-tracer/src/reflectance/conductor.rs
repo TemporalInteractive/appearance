@@ -74,8 +74,6 @@ impl Bxdf for ConductorBxdf {
                 fresnel_complex_spectrum(abs_cos_theta(wi), self.eta, self.k).0 / abs_cos_theta(wi),
             );
 
-            println!("{:?}", f);
-
             Some(BsdfSample {
                 f,
                 wi,

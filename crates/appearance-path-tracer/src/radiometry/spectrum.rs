@@ -291,8 +291,20 @@ static CANON_EOS_100D_R_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::
 static CANON_EOS_100D_G_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
 static CANON_EOS_100D_B_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
 
+static AG_ETA_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+static AG_K_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+static AL_ETA_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+static AL_K_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
 static AU_ETA_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
 static AU_K_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+static CU_ETA_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+static CU_K_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+static CU_CZ_ETA_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+static CU_CZ_K_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+static MG_O_ETA_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+static MG_O_K_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+static TI_O2_ETA_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+static TI_O2_K_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
 
 #[derive(Debug, Clone)]
 pub struct PiecewiseLinearSpectrum {
@@ -480,7 +492,7 @@ impl PiecewiseLinearSpectrum {
     }
 
     pub fn au_k() -> &'static PiecewiseLinearSpectrum {
-        AU_ETA_SPECTRUM.get_or_init(|| PiecewiseLinearSpectrum::from_interleaved(AU_K, false))
+        AU_K_SPECTRUM.get_or_init(|| PiecewiseLinearSpectrum::from_interleaved(AU_K, false))
     }
 }
 
