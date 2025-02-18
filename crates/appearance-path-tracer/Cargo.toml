@@ -20,6 +20,7 @@ bitflags.workspace = true
 bytemuck.workspace = true
 glam.workspace = true
 murmurhash3.workspace = true
+num.workspace = true
 log.workspace = true
 rayon.workspace = true
 tinybvh.workspace = true
