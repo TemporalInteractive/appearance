@@ -13,10 +13,14 @@ use crate::{
     sampling::sample_uniform_hemisphere,
 };
 
+pub mod conductor;
 pub mod diffuse;
+mod microfacet;
+
 pub enum TransportMode {
     Radiance,
 }
+
 pub struct BsdfSample {
     pub f: SampledSpectrum,
     pub wi: Vec3,
