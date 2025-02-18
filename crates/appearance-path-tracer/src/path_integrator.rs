@@ -22,7 +22,7 @@ pub struct PathIntegrator {
 
 impl PathIntegrator {
     pub fn new(max_bounces: u32) -> Self {
-        Self { max_bounces: 1 }
+        Self { max_bounces }
     }
 
     pub fn li(
@@ -108,21 +108,21 @@ impl PathIntegrator {
                 }
             }
 
-            // let uc = sampler.get_1d();
-            // let u = sampler.get_2d();
-            // if let Some(bsdf_sample) = bsdf.sample_f(
-            //     wo,
-            //     uc,
-            //     u,
-            //     TransportMode::Radiance,
-            //     BxdfReflTransFlags::all(),
-            // ) {
-            //     throughput *=
-            //         bsdf_sample.f.0 * bsdf_sample.wi.dot(hit_data.normal).abs() / bsdf_sample.pdf;
-            //     ray = Ray::new(interaction.point + bsdf_sample.wi * 0.0001, bsdf_sample.wi);
-            // } else {
-            //     break;
-            // }
+            let uc = sampler.get_1d();
+            let u = sampler.get_2d();
+            if let Some(bsdf_sample) = bsdf.sample_f(
+                wo,
+                uc,
+                u,
+                TransportMode::Radiance,
+                BxdfReflTransFlags::all(),
+            ) {
+                throughput *=
+                    bsdf_sample.f.0 * bsdf_sample.wi.dot(hit_data.normal).abs() / bsdf_sample.pdf;
+                ray = Ray::new(interaction.point + bsdf_sample.wi * 0.0001, bsdf_sample.wi);
+            } else {
+                break;
+            }
         }
 
         SampledSpectrum::new(l)
