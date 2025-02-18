@@ -17,6 +17,7 @@ use super::{
             CIE_ILLUM_F6, CIE_ILLUM_F7, CIE_ILLUM_F8, CIE_ILLUM_F9, CIE_LAMBDA, CIE_X, CIE_Y,
             CIE_Z,
         },
+        materials::{AU_ETA, AU_K},
         swatch_reflectances::SWATCH_REFLECTANCES,
     },
     Rgb, RgbColorSpace, RgbSigmoidPolynomial, Xyz, CIE_Y_INTEGRAL,
@@ -290,6 +291,9 @@ static CANON_EOS_100D_R_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::
 static CANON_EOS_100D_G_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
 static CANON_EOS_100D_B_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
 
+static AU_ETA_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+static AU_K_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+
 #[derive(Debug, Clone)]
 pub struct PiecewiseLinearSpectrum {
     reflectance: Vec<f32>,
@@ -469,6 +473,14 @@ impl PiecewiseLinearSpectrum {
     pub fn canon_eos_100d_b() -> &'static PiecewiseLinearSpectrum {
         CANON_EOS_100D_B_SPECTRUM
             .get_or_init(|| PiecewiseLinearSpectrum::from_interleaved(CANON_EOS_100D_B, false))
+    }
+
+    pub fn au_eta() -> &'static PiecewiseLinearSpectrum {
+        AU_ETA_SPECTRUM.get_or_init(|| PiecewiseLinearSpectrum::from_interleaved(AU_ETA, false))
+    }
+
+    pub fn au_k() -> &'static PiecewiseLinearSpectrum {
+        AU_ETA_SPECTRUM.get_or_init(|| PiecewiseLinearSpectrum::from_interleaved(AU_K, false))
     }
 }
 

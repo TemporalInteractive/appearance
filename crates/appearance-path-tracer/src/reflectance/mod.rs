@@ -15,7 +15,7 @@ use crate::{
 
 pub mod conductor;
 pub mod diffuse;
-mod microfacet;
+pub mod microfacet;
 
 pub enum TransportMode {
     Radiance,
@@ -225,6 +225,10 @@ impl Bsdf {
 pub struct RefractResult {
     pub wt: Vec3,
     pub eta: f32,
+}
+
+pub fn reflect(wo: Vec3, n: Vec3) -> Vec3 {
+    -wo + 2.0 * wo.dot(n) * n
 }
 
 pub fn refract(wi: Vec3, mut n: Normal, mut eta: f32) -> Option<RefractResult> {

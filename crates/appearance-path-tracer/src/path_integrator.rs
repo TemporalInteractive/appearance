@@ -6,9 +6,13 @@ use crate::{
     light_sources::{LightSource, LightSourceSampleCtx},
     math::{interaction::Interaction, normal::Normal},
     radiometry::{
-        Rgb, RgbAlbedoSpectrum, RgbColorSpace, SampledSpectrum, SampledWavelengths, Spectrum,
+        PiecewiseLinearSpectrum, Rgb, RgbAlbedoSpectrum, RgbColorSpace, SampledSpectrum,
+        SampledWavelengths, Spectrum,
     },
-    reflectance::{diffuse::DiffuseBxdf, Bsdf, BxdfReflTransFlags, TransportMode},
+    reflectance::{
+        conductor::ConductorBxdf, diffuse::DiffuseBxdf, microfacet::ThrowbridgeReitzDistribution,
+        Bsdf, BxdfReflTransFlags, TransportMode,
+    },
     sampling::Sampler,
 };
 
@@ -18,7 +22,7 @@ pub struct PathIntegrator {
 
 impl PathIntegrator {
     pub fn new(max_bounces: u32) -> Self {
-        Self { max_bounces }
+        Self { max_bounces: 1 }
     }
 
     pub fn li(
@@ -68,11 +72,16 @@ impl PathIntegrator {
             }
 
             // TODO: get bsdf from intersection material
-            let spectrum = RgbAlbedoSpectrum::new(Rgb(base_color_factor), &RgbColorSpace::srgb());
-            let diffuse_bxdf = Box::new(DiffuseBxdf::new(spectrum.sample(wavelengths)));
-            let bsdf = Bsdf::new(diffuse_bxdf, Normal(hit_data.normal), Vec3::ZERO);
+            // let spectrum = RgbAlbedoSpectrum::new(Rgb(base_color_factor), &RgbColorSpace::srgb());
+            // let diffuse_bxdf = Box::new(DiffuseBxdf::new(spectrum.sample(wavelengths)));
+            // let bsdf = Bsdf::new(diffuse_bxdf, Normal(hit_data.normal), Vec3::ZERO);
 
-            // TODO: sample uniform light from scene
+            let eta = PiecewiseLinearSpectrum::au_eta().sample(wavelengths);
+            let k = PiecewiseLinearSpectrum::au_k().sample(wavelengths);
+            let microfacet = ThrowbridgeReitzDistribution::new(0.01, 0.01);
+            let conductor_bxdf = Box::new(ConductorBxdf::new(microfacet, eta, k));
+            let bsdf = Bsdf::new(conductor_bxdf, Normal(hit_data.normal), Vec3::ZERO);
+
             let wo = -Vec3::from(ray.D);
             if let Some(light_sample) = geometry_resources.point_light.sample_li(
                 LightSourceSampleCtx::new_from_medium(interaction.clone()),
@@ -86,32 +95,34 @@ impl PathIntegrator {
                         bsdf.f(wo, wi, TransportMode::Radiance).0 * wi.dot(hit_data.normal).abs(),
                     );
 
-                    let mut shadow_ray = Ray::new(interaction.point + wi * 0.0001, wi);
-                    shadow_ray.hit.t = interaction
-                        .point
-                        .distance(light_sample.light_interaction.point);
-                    if !geometry_resources.tlas().is_occluded(&shadow_ray) {
-                        l += throughput * f.0 * light_sample.l.0 / (light_sample.pdf);
-                        // TODO: dont forget the light sampler pdf in the future
+                    if f.has_contribution() {
+                        let mut shadow_ray = Ray::new(interaction.point + wi * 0.0001, wi);
+                        shadow_ray.hit.t = interaction
+                            .point
+                            .distance(light_sample.light_interaction.point);
+                        if !geometry_resources.tlas().is_occluded(&shadow_ray) {
+                            l += throughput * f.0 * light_sample.l.0 / (light_sample.pdf);
+                            // TODO: dont forget the light sampler pdf in the future
+                        }
                     }
                 }
             }
 
-            let uc = sampler.get_1d();
-            let u = sampler.get_2d();
-            if let Some(bsdf_sample) = bsdf.sample_f(
-                wo,
-                uc,
-                u,
-                TransportMode::Radiance,
-                BxdfReflTransFlags::all(),
-            ) {
-                throughput *=
-                    bsdf_sample.f.0 * bsdf_sample.wi.dot(hit_data.normal).abs() / bsdf_sample.pdf;
-                ray = Ray::new(interaction.point + bsdf_sample.wi * 0.0001, bsdf_sample.wi);
-            } else {
-                break;
-            }
+            // let uc = sampler.get_1d();
+            // let u = sampler.get_2d();
+            // if let Some(bsdf_sample) = bsdf.sample_f(
+            //     wo,
+            //     uc,
+            //     u,
+            //     TransportMode::Radiance,
+            //     BxdfReflTransFlags::all(),
+            // ) {
+            //     throughput *=
+            //         bsdf_sample.f.0 * bsdf_sample.wi.dot(hit_data.normal).abs() / bsdf_sample.pdf;
+            //     ray = Ray::new(interaction.point + bsdf_sample.wi * 0.0001, bsdf_sample.wi);
+            // } else {
+            //     break;
+            // }
         }
 
         SampledSpectrum::new(l)

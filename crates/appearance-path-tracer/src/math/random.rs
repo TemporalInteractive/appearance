@@ -134,11 +134,11 @@ impl FastOwenScrambler {
 impl Scrambler for FastOwenScrambler {
     fn scramble(&self, mut v: u32) -> u32 {
         v = reverse_bits_32(v);
-        v ^= v * 0x3d20adea;
-        v += self.seed;
-        v *= (self.seed >> 16) | 1;
-        v ^= v * 0x05526c56;
-        v ^= v * 0x53a22864;
+        v ^= v.wrapping_mul(0x3d20adea);
+        v = v.wrapping_add(self.seed);
+        v = v.wrapping_mul((self.seed >> 16) | 1);
+        v ^= v.wrapping_mul(0x05526c56);
+        v ^= v.wrapping_mul(0x53a22864);
         reverse_bits_32(v)
     }
 }

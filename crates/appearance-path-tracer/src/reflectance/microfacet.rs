@@ -11,6 +11,7 @@ use crate::{
     sampling::sample_uniform_disk_polar,
 };
 
+#[derive(Debug, Clone)]
 pub struct ThrowbridgeReitzDistribution {
     alpha_x: f32,
     alpha_y: f32,
