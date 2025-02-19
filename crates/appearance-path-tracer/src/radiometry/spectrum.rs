@@ -799,7 +799,7 @@ pub struct RgbIlluminantSpectrum {
 }
 
 impl RgbIlluminantSpectrum {
-    pub fn new(rgb: Rgb, color_space: &RgbColorSpace, illuminant: Arc<dyn Spectrum>) -> Self {
+    pub fn new(rgb: Rgb, color_space: &RgbColorSpace) -> Self {
         let m = Vec3::from(rgb).max_element();
         let scale = 2.0 * m;
         let polynomial = if scale != 0.0 {
@@ -811,7 +811,7 @@ impl RgbIlluminantSpectrum {
         Self {
             scale,
             polynomial,
-            illuminant,
+            illuminant: color_space.illuminant().clone(),
         }
     }
 }

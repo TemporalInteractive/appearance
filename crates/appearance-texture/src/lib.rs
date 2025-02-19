@@ -1,4 +1,4 @@
-use glam::{UVec2, Vec2, Vec4};
+use glam::{UVec2, Vec2, Vec4, Vec4Swizzles};
 
 pub mod asset;
 
@@ -90,6 +90,20 @@ impl Texture {
         let c11 = self.load(id11);
 
         bilinear(tx, ty, c00, c10, c01, c11)
+    }
+
+    pub fn get_sampling_distribution(&self) -> Vec<Vec<f32>> {
+        let mut distribution = vec![vec![0.0; self.height as usize]; self.width as usize];
+
+        // TODO: rayon par iter
+        for y in 0..self.height {
+            for x in 0..self.width {
+                let value = self.load(UVec2::new(x, y)).xyz().element_sum() / 3.0;
+                distribution[x as usize][y as usize] = value;
+            }
+        }
+
+        distribution
     }
 }
 

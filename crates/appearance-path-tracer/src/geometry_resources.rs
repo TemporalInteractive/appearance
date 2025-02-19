@@ -13,8 +13,7 @@ use crate::{
         LightSourceSampler,
     },
     radiometry::{
-        DenselySampledSpectrum, PiecewiseLinearSpectrum, Rgb, RgbColorSpace, RgbIlluminantSpectrum,
-        LAMBDA_MAX, LAMBDA_MIN,
+        DenselySampledSpectrum, Rgb, RgbColorSpace, RgbIlluminantSpectrum, LAMBDA_MAX, LAMBDA_MIN,
     },
 };
 
@@ -46,11 +45,7 @@ impl GeometryResources {
     pub fn new() -> Self {
         let model_assets = AssetDatabase::<Model>::new();
 
-        let light_spectrum = RgbIlluminantSpectrum::new(
-            Rgb(Vec3::ONE),
-            &RgbColorSpace::srgb(),
-            PiecewiseLinearSpectrum::cie_illum_d6500(),
-        );
+        let light_spectrum = RgbIlluminantSpectrum::new(Rgb(Vec3::ONE), &RgbColorSpace::srgb());
         let light_spectrum = DenselySampledSpectrum::new_from_spectrum(
             &light_spectrum,
             LAMBDA_MIN as u32,

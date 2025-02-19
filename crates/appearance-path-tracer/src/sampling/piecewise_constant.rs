@@ -122,6 +122,14 @@ impl PiecewiseConstant2D {
         }
     }
 
+    pub fn new_from_2d(func: Vec<Vec<f32>>, min: [f32; 2], max: [f32; 2]) -> Self {
+        let nu = func.len();
+        let nv = func[0].len();
+        let func = func.into_iter().flatten().collect();
+
+        Self::new(func, nu, nv, min, max)
+    }
+
     pub fn integral(&self) -> f32 {
         self.marginal.integral()
     }
