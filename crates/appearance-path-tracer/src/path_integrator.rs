@@ -84,7 +84,7 @@ impl PathIntegrator {
 
             let eta = PiecewiseLinearSpectrum::au_eta().sample(wavelengths);
             let k = PiecewiseLinearSpectrum::au_k().sample(wavelengths);
-            let microfacet = ThrowbridgeReitzDistribution::new(0.01, 0.01);
+            let microfacet = ThrowbridgeReitzDistribution::new(0.1, 0.1);
             let conductor_bxdf = Box::new(ConductorBxdf::new(microfacet, eta, k));
             let bsdf = Bsdf::new(conductor_bxdf, Normal(hit_data.normal), Vec3::ZERO);
 
