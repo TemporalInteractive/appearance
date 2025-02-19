@@ -1,6 +1,6 @@
 use glam::Vec3;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Normal(pub Vec3);
 
 impl From<Vec3> for Normal {

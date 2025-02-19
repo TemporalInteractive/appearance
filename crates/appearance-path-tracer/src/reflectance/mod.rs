@@ -77,6 +77,12 @@ impl From<BxdfReflTransFlags> for BxdfFlags {
     }
 }
 
+impl BxdfFlags {
+    pub fn is_non_specular(&self) -> bool {
+        self.contains(Self::DIFFUSE | Self::GLOSSY)
+    }
+}
+
 pub trait Bxdf: Debug {
     fn f(&self, wo: Vec3, wi: Vec3, transport_mode: TransportMode) -> SampledSpectrum;
     fn sample_f(

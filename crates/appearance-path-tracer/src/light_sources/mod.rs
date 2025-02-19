@@ -23,6 +23,16 @@ pub enum LightSourceType {
     Infinite,
 }
 
+impl LightSourceType {
+    pub fn is_delta(&self) -> bool {
+        match self {
+            Self::DeltaDirection | Self::DeltaPosition => true,
+            _ => false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
 pub struct LightSourceSampleCtx {
     pub point: Vec3,
     pub normal: Normal,
@@ -44,6 +54,10 @@ impl LightSourceSampleCtx {
             normal: Normal::new(Vec3::ZERO),
             shading_normal: Normal::new(Vec3::ZERO),
         }
+    }
+
+    pub fn offset_ray_origin(&mut self, pt: Vec3) {
+        self.point += (pt - self.point) * 0.00001; // TODO: ??
     }
 }
 

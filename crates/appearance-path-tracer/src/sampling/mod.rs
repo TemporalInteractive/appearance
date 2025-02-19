@@ -80,3 +80,9 @@ pub fn panorama_coords_to_unit_vector(uv: Vec2) -> Vec3 {
 
     Vec3::new(x, y, z)
 }
+
+pub fn power_heuristic(nf: u32, f_pdf: f32, ng: u32, g_pdf: f32) -> f32 {
+    let f = nf as f32 * f_pdf;
+    let g = ng as f32 * g_pdf;
+    sqr(f) / (sqr(f) + sqr(g))
+}
