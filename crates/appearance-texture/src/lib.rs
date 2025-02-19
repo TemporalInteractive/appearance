@@ -32,6 +32,20 @@ pub struct Texture {
     data: Box<[u8]>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TextureSampleRepeat {
+    #[default]
+    Clamp,
+    Repeat,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TextureSampleInterpolation {
+    #[default]
+    Nearest,
+    Linear,
+}
+
 impl Texture {
     pub fn new(create_desc: TextureCreateDesc) -> Self {
         Self {
@@ -72,24 +86,64 @@ impl Texture {
         result
     }
 
-    pub fn sample(&self, uv: Vec2) -> Vec4 {
-        let x = (uv.x * self.width as f32).abs();
-        let y = (uv.y * self.height as f32).abs();
+    pub fn sample(
+        &self,
+        uv: Vec2,
+        repeat: TextureSampleRepeat,
+        interpolation: TextureSampleInterpolation,
+    ) -> Vec4 {
+        match interpolation {
+            TextureSampleInterpolation::Linear => {
+                let x = (uv.x * self.width as f32).abs();
+                let y = (uv.y * self.height as f32).abs();
 
-        let tx = x.fract();
-        let ty = y.fract();
+                let tx = x.fract();
+                let ty = y.fract();
 
-        let id00 = UVec2::new((x as u32) % self.width, (y as u32) % self.height);
-        let id10 = UVec2::new((x as u32 + 1) % self.width, (y as u32) % self.height);
-        let id01 = UVec2::new((x as u32) % self.width, (y as u32 + 1) % self.height);
-        let id11 = UVec2::new((x as u32 + 1) % self.width, (y as u32 + 1) % self.height);
+                let id00 = UVec2::new(x as u32, y as u32);
+                let id10 = UVec2::new(x as u32 + 1, y as u32);
+                let id01 = UVec2::new(x as u32, y as u32 + 1);
+                let id11 = UVec2::new(x as u32 + 1, y as u32 + 1);
 
-        let c00 = self.load(id00);
-        let c10 = self.load(id10);
-        let c01 = self.load(id01);
-        let c11 = self.load(id11);
+                let (id00, id10, id01, id11) = match repeat {
+                    TextureSampleRepeat::Clamp => (
+                        id00.clamp(UVec2::ZERO, UVec2::new(self.width - 1, self.height - 1)),
+                        id10.clamp(UVec2::ZERO, UVec2::new(self.width - 1, self.height - 1)),
+                        id01.clamp(UVec2::ZERO, UVec2::new(self.width - 1, self.height - 1)),
+                        id11.clamp(UVec2::ZERO, UVec2::new(self.width - 1, self.height - 1)),
+                    ),
+                    TextureSampleRepeat::Repeat => (
+                        id00 % UVec2::new(self.width, self.height),
+                        id10 % UVec2::new(self.width, self.height),
+                        id01 % UVec2::new(self.width, self.height),
+                        id11 % UVec2::new(self.width, self.height),
+                    ),
+                };
 
-        bilinear(tx, ty, c00, c10, c01, c11)
+                let c00 = self.load(id00);
+                let c10 = self.load(id10);
+                let c01 = self.load(id01);
+                let c11 = self.load(id11);
+
+                bilinear(tx, ty, c00, c10, c01, c11)
+            }
+            TextureSampleInterpolation::Nearest => {
+                let x = (uv.x * self.width as f32).abs();
+                let y = (uv.y * self.height as f32).abs();
+
+                let id = match repeat {
+                    TextureSampleRepeat::Clamp => UVec2::new(
+                        (x as u32).clamp(0, self.width - 1),
+                        (y as u32).clamp(0, self.height - 1),
+                    ),
+                    TextureSampleRepeat::Repeat => {
+                        UVec2::new((x as u32) % self.width, (y as u32) % self.height)
+                    }
+                };
+
+                self.load(id)
+            }
+        }
     }
 
     pub fn get_sampling_distribution(&self) -> Vec<Vec<f32>> {

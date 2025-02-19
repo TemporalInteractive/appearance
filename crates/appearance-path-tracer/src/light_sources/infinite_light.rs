@@ -1,8 +1,9 @@
 use core::f32::consts::PI;
 use std::sync::Arc;
 
-use appearance_texture::Texture;
+use appearance_texture::{Texture, TextureSampleInterpolation, TextureSampleRepeat};
 use glam::{UVec2, Vec2, Vec3, Vec4, Vec4Swizzles};
+use tinybvh::Ray;
 
 use crate::{
     math::{interaction::Interaction, sqr},
@@ -66,7 +67,14 @@ impl InfiniteLight {
     }
 
     fn image_le(&self, uv: Vec2, wavelengths: &SampledWavelengths) -> SampledSpectrum {
-        let rgb = Rgb(self.texture.sample(uv).xyz());
+        let rgb = Rgb(self
+            .texture
+            .sample(
+                uv,
+                TextureSampleRepeat::Clamp,
+                TextureSampleInterpolation::Nearest,
+            )
+            .xyz());
         let spectrum = RgbIlluminantSpectrum::new(rgb, &self.color_space);
         SampledSpectrum(spectrum.sample(wavelengths).0 * self.scale)
     }
@@ -132,5 +140,13 @@ impl LightSource for InfiniteLight {
         };
 
         pdf / (4.0 * PI)
+    }
+
+    fn le(&self, ray: &Ray, wavelengths: &SampledWavelengths) -> SampledSpectrum {
+        let uv = unit_vector_to_panorama_coords(ray.D.into());
+        if uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0 {
+            println!("{:?} {:?}", uv, Vec3::from(ray.D));
+        }
+        self.image_le(uv, wavelengths)
     }
 }

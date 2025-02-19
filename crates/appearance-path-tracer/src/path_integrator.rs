@@ -1,9 +1,10 @@
+use appearance_texture::{TextureSampleInterpolation, TextureSampleRepeat};
 use glam::{Vec3, Vec4, Vec4Swizzles};
 use tinybvh::Ray;
 
 use crate::{
     geometry_resources::GeometryResources,
-    light_sources::LightSourceSampleCtx,
+    light_sources::{LightSource, LightSourceSampleCtx},
     math::{interaction::Interaction, normal::Normal},
     radiometry::{
         PiecewiseLinearSpectrum, Rgb, RgbAlbedoSpectrum, RgbColorSpace, SampledSpectrum,
@@ -44,13 +45,8 @@ impl PathIntegrator {
             let hit_data = geometry_resources.get_hit_data(&ray.hit);
 
             if ray.hit.t == 1e30 {
-                let rgb = RgbAlbedoSpectrum::new(
-                    Rgb(Vec3::new(100.0 / 255.0, 149.0 / 255.0, 237.0 / 255.0)),
-                    &RgbColorSpace::srgb(),
-                )
-                .sample(wavelengths);
-
-                l += throughput * rgb.0;
+                let sky_l = geometry_resources.infinite_light.le(&ray, wavelengths);
+                l += throughput * sky_l.0;
                 break;
             }
 
@@ -73,20 +69,26 @@ impl PathIntegrator {
 
             if let Some(tex_coord) = hit_data.tex_coord {
                 if let Some(base_color_texture) = &hit_data.material.base_color_texture {
-                    base_color_factor *= base_color_texture.sample(tex_coord).xyz();
+                    base_color_factor *= base_color_texture
+                        .sample(
+                            tex_coord,
+                            TextureSampleRepeat::Repeat,
+                            TextureSampleInterpolation::Linear,
+                        )
+                        .xyz();
                 }
             }
 
             // TODO: get bsdf from intersection material
-            // let spectrum = RgbAlbedoSpectrum::new(Rgb(base_color_factor), &RgbColorSpace::srgb());
-            // let diffuse_bxdf = Box::new(DiffuseBxdf::new(spectrum.sample(wavelengths)));
-            // let bsdf = Bsdf::new(diffuse_bxdf, Normal(hit_data.normal), Vec3::ZERO);
+            let spectrum = RgbAlbedoSpectrum::new(Rgb(base_color_factor), &RgbColorSpace::srgb());
+            let diffuse_bxdf = Box::new(DiffuseBxdf::new(spectrum.sample(wavelengths)));
+            let bsdf = Bsdf::new(diffuse_bxdf, Normal(hit_data.normal), Vec3::ZERO);
 
-            let eta = PiecewiseLinearSpectrum::au_eta().sample(wavelengths);
-            let k = PiecewiseLinearSpectrum::au_k().sample(wavelengths);
-            let microfacet = ThrowbridgeReitzDistribution::new(0.1, 0.1);
-            let conductor_bxdf = Box::new(ConductorBxdf::new(microfacet, eta, k));
-            let bsdf = Bsdf::new(conductor_bxdf, Normal(hit_data.normal), Vec3::ZERO);
+            // let eta = PiecewiseLinearSpectrum::au_eta().sample(wavelengths);
+            // let k = PiecewiseLinearSpectrum::au_k().sample(wavelengths);
+            // let microfacet = ThrowbridgeReitzDistribution::new(0.1, 0.1);
+            // let conductor_bxdf = Box::new(ConductorBxdf::new(microfacet, eta, k));
+            // let bsdf = Bsdf::new(conductor_bxdf, Normal(hit_data.normal), Vec3::ZERO);
 
             let wo = -Vec3::from(ray.D);
 

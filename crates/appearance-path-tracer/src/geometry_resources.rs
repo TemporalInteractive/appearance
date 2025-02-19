@@ -2,6 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use appearance_asset_database::AssetDatabase;
 use appearance_model::{material::Material, Model};
+use appearance_texture::Texture;
 use appearance_world::visible_world_action::VisibleWorldActionType;
 use glam::{swizzles::Vec4Swizzles, Mat4, Vec2, Vec3, Vec4};
 use tinybvh::{BlasInstance, Bvh, BvhBase, Intersection};
@@ -9,8 +10,8 @@ use uuid::Uuid;
 
 use crate::{
     light_sources::{
-        point_light::PointLight, uniform_light_sampler::UniformLightSourceSampler,
-        LightSourceSampler,
+        infinite_light::InfiniteLight, point_light::PointLight,
+        uniform_light_sampler::UniformLightSourceSampler, LightSourceSampler,
     },
     radiometry::{
         DenselySampledSpectrum, Rgb, RgbColorSpace, RgbIlluminantSpectrum, LAMBDA_MAX, LAMBDA_MIN,
@@ -33,6 +34,7 @@ pub struct GeometryResources {
     blas_idx_to_mesh_mapping: HashMap<u32, (String, u32, Mat4)>,
 
     pub light_sampler: Box<dyn LightSourceSampler>,
+    pub infinite_light: InfiniteLight,
 }
 
 impl Default for GeometryResources {
@@ -43,7 +45,9 @@ impl Default for GeometryResources {
 
 impl GeometryResources {
     pub fn new() -> Self {
+        // TODO: don't forget to update if these are kept around
         let model_assets = AssetDatabase::<Model>::new();
+        let mut texture_assets = AssetDatabase::<Texture>::new();
 
         let light_spectrum = RgbIlluminantSpectrum::new(Rgb(Vec3::ONE), &RgbColorSpace::srgb());
         let light_spectrum = DenselySampledSpectrum::new_from_spectrum(
@@ -59,6 +63,12 @@ impl GeometryResources {
 
         let light_sampler = Box::new(UniformLightSourceSampler::new(vec![point_light]));
 
+        let infinite_light_texture = texture_assets
+            .get("assets/evening_road_01_puresky_4k.png")
+            .unwrap();
+        let infinite_light =
+            InfiniteLight::new(infinite_light_texture, RgbColorSpace::srgb(), 5.0, 100.0);
+
         Self {
             models: HashMap::new(),
             model_instances: HashMap::new(),
@@ -66,6 +76,7 @@ impl GeometryResources {
             tlas: Bvh::new(),
             blas_idx_to_mesh_mapping: HashMap::new(),
             light_sampler,
+            infinite_light,
         }
     }
 

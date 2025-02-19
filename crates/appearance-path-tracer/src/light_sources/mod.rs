@@ -1,6 +1,7 @@
 use core::marker::{Send, Sync};
 
-use glam::{Vec2, Vec3};
+use glam::{Vec2, Vec3, Vec4};
+use tinybvh::Ray;
 
 use crate::{
     math::{
@@ -64,6 +65,21 @@ pub trait LightSource: Send + Sync {
         allow_incomplete_pdf: bool,
     ) -> Option<LightSourceLiSample>;
     fn pdf_li(&self, ctx: LightSourceSampleCtx, wi: Vec3, allow_incomplete_pdf: bool) -> f32;
+
+    fn l(
+        &self,
+        _p: Vec3,
+        _n: Normal,
+        _uv: Vec2,
+        _w: Vec3,
+        _wavelengths: &SampledWavelengths,
+    ) -> SampledSpectrum {
+        SampledSpectrum(Vec4::ZERO)
+    }
+
+    fn le(&self, _ray: &Ray, _wavelengths: &SampledWavelengths) -> SampledSpectrum {
+        SampledSpectrum(Vec4::ZERO)
+    }
 }
 
 pub struct SampledLightSource<'a> {
