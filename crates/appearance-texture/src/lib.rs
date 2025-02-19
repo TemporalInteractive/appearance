@@ -1,5 +1,7 @@
 use glam::{UVec2, Vec2, Vec4};
 
+pub mod asset;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TextureFormat {
     Rgba8Unorm,
