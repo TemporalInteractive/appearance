@@ -1,3 +1,6 @@
+use glam::{UVec2, Vec2};
+use num::clamp;
+
 use crate::math::{find_interval, lerp};
 
 pub struct PiecewiseConstant1D {
@@ -28,7 +31,6 @@ impl PiecewiseConstant1D {
         }
 
         let integral = cdf[func.len()];
-        #[allow(clippy::needless_range_loop)]
         if integral == 0.0 {
             for i in 1..(func.len() + 1) {
                 cdf[i] = i as f32 / func.len() as f32;
@@ -86,8 +88,76 @@ pub struct PiecewiseConstant2D {
     marginal: PiecewiseConstant1D,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct PC2DSampleResult {
+    pub value: Vec2,
+    pub pdf: f32,
+    pub offset: UVec2,
+}
+
 impl PiecewiseConstant2D {
-    pub fn new(func: Vec<f32>, nu: i32, nv: i32, min: [f32; 2], max: [f32; 2]) -> Self {
-        todo!()
+    pub fn new(func: Vec<f32>, nu: usize, nv: usize, min: [f32; 2], max: [f32; 2]) -> Self {
+        debug_assert!(func.len() == nu * nv);
+
+        let mut conditional = Vec::with_capacity(nv);
+        for v in 0..nv {
+            conditional.push(PiecewiseConstant1D::new(
+                func[(v * nu)..(v * nu + nu)].to_vec(),
+                min[0],
+                max[0],
+            ));
+        }
+
+        let mut marginal_func = Vec::with_capacity(nv);
+        for v in 0..nv {
+            marginal_func.push(conditional[v].integral());
+        }
+        let marginal = PiecewiseConstant1D::new(marginal_func, min[1], max[1]);
+
+        Self {
+            min,
+            max,
+            conditional,
+            marginal,
+        }
+    }
+
+    pub fn integral(&self) -> f32 {
+        self.marginal.integral()
+    }
+
+    pub fn sample(&self, u: Vec2) -> PC2DSampleResult {
+        let d1 = self.marginal.sample(u.y);
+        let d0 = self.conditional[d1.offset].sample(u.x);
+
+        PC2DSampleResult {
+            value: Vec2::new(d0.value, d1.value),
+            pdf: d0.pdf * d1.pdf,
+            offset: UVec2::new(d0.offset as u32, d1.offset as u32),
+        }
+    }
+
+    pub fn pdf(&self, p: Vec2) -> f32 {
+        let mut p = p - Vec2::new(self.min[0], self.min[1]);
+        if self.max[0] > self.min[0] {
+            p.x /= self.max[0] - self.min[0];
+        }
+        if self.max[1] > self.min[1] {
+            p.y /= self.max[1] - self.min[1];
+        }
+
+        let iu = clamp(
+            (p.x * self.conditional[0].size() as f32) as usize,
+            0,
+            self.conditional[0].size() - 1,
+        );
+
+        let iv = clamp(
+            (p.y * self.marginal.size() as f32) as usize,
+            0,
+            self.marginal.size() - 1,
+        );
+
+        self.conditional[iv].func[iu] / self.marginal.integral()
     }
 }
