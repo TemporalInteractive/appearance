@@ -1,3 +1,5 @@
+use core::marker::{Send, Sync};
+
 use glam::{Vec2, Vec3};
 
 use crate::{
@@ -9,6 +11,8 @@ use crate::{
 };
 
 pub mod point_light;
+
+pub mod uniform_light_sampler;
 
 pub enum LightSourceType {
     DeltaPosition,
@@ -48,7 +52,7 @@ pub struct LightSourceLiSample {
     pub light_interaction: Interaction,
 }
 
-pub trait LightSource {
+pub trait LightSource: Send + Sync {
     fn phi(&self, wavelengths: &SampledWavelengths) -> SampledSpectrum;
     fn ty(&self) -> LightSourceType;
     fn sample_li(
@@ -59,4 +63,16 @@ pub trait LightSource {
         allow_incomplete_pdf: bool,
     ) -> Option<LightSourceLiSample>;
     fn pdf_li(&self, ctx: LightSourceSampleCtx, wi: Vec3, allow_incomplete_pdf: bool) -> f32;
+}
+
+pub struct SampledLightSource<'a> {
+    pub light_source: &'a dyn LightSource,
+    pub pdf: f32,
+}
+
+pub trait LightSourceSampler: Send + Sync {
+    fn sample_with_ctx(&self, ctx: LightSourceSampleCtx, u: f32) -> Option<SampledLightSource>;
+    fn sample(&self, u: f32) -> Option<SampledLightSource>;
+    fn pmf_with_ctx(&self, ctx: LightSourceSampleCtx, light_source: &dyn LightSource) -> f32;
+    fn pmf(&self, light_source: &dyn LightSource) -> f32;
 }

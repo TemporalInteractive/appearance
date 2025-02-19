@@ -8,7 +8,10 @@ use tinybvh::{BlasInstance, Bvh, BvhBase, Intersection};
 use uuid::Uuid;
 
 use crate::{
-    light_sources::point_light::PointLight,
+    light_sources::{
+        point_light::PointLight, uniform_light_sampler::UniformLightSourceSampler,
+        LightSourceSampler,
+    },
     radiometry::{
         DenselySampledSpectrum, PiecewiseLinearSpectrum, Rgb, RgbColorSpace, RgbIlluminantSpectrum,
         LAMBDA_MAX, LAMBDA_MIN,
@@ -30,7 +33,7 @@ pub struct GeometryResources {
     tlas: Bvh,
     blas_idx_to_mesh_mapping: HashMap<u32, (String, u32, Mat4)>,
 
-    pub point_light: PointLight,
+    pub light_sampler: Box<dyn LightSourceSampler>,
 }
 
 impl Default for GeometryResources {
@@ -53,7 +56,13 @@ impl GeometryResources {
             LAMBDA_MIN as u32,
             LAMBDA_MAX as u32,
         );
-        let point_light = PointLight::new(Vec3::new(0.0, 5.0, 0.0), light_spectrum, 100.0);
+        let point_light = Box::new(PointLight::new(
+            Vec3::new(0.0, 5.0, 0.0),
+            light_spectrum,
+            100.0,
+        ));
+
+        let light_sampler = Box::new(UniformLightSourceSampler::new(vec![point_light]));
 
         Self {
             models: HashMap::new(),
@@ -61,7 +70,7 @@ impl GeometryResources {
             model_assets,
             tlas: Bvh::new(),
             blas_idx_to_mesh_mapping: HashMap::new(),
-            point_light,
+            light_sampler,
         }
     }
 

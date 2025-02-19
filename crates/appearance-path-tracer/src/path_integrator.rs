@@ -1,9 +1,9 @@
-use glam::{Vec2, Vec3, Vec4, Vec4Swizzles};
+use glam::{Vec3, Vec4, Vec4Swizzles};
 use tinybvh::Ray;
 
 use crate::{
     geometry_resources::GeometryResources,
-    light_sources::{LightSource, LightSourceSampleCtx},
+    light_sources::LightSourceSampleCtx,
     math::{interaction::Interaction, normal::Normal},
     radiometry::{
         PiecewiseLinearSpectrum, Rgb, RgbAlbedoSpectrum, RgbColorSpace, SampledSpectrum,
@@ -89,26 +89,33 @@ impl PathIntegrator {
             let bsdf = Bsdf::new(conductor_bxdf, Normal(hit_data.normal), Vec3::ZERO);
 
             let wo = -Vec3::from(ray.D);
-            if let Some(light_sample) = geometry_resources.point_light.sample_li(
-                LightSourceSampleCtx::new_from_medium(interaction.clone()),
-                Vec2::ZERO, // TODO: this should be random
-                wavelengths,
-                false,
-            ) {
-                if light_sample.pdf > 0.0 {
-                    let wi = light_sample.wi;
-                    let f = SampledSpectrum::new(
-                        bsdf.f(wo, wi, TransportMode::Radiance).0 * wi.dot(hit_data.normal).abs(),
-                    );
 
-                    if f.has_contribution() {
-                        let mut shadow_ray = Ray::new(interaction.point + wi * 0.0001, wi);
-                        shadow_ray.hit.t = interaction
-                            .point
-                            .distance(light_sample.light_interaction.point);
-                        if !geometry_resources.tlas().is_occluded(&shadow_ray) {
-                            l += throughput * f.0 * light_sample.l.0 / (light_sample.pdf);
-                            // TODO: dont forget the light sampler pdf in the future
+            if let Some(light_source_sample) =
+                geometry_resources.light_sampler.sample(sampler.get_1d())
+            {
+                if let Some(light_sample) = light_source_sample.light_source.sample_li(
+                    LightSourceSampleCtx::new_from_medium(interaction.clone()),
+                    sampler.get_2d(),
+                    wavelengths,
+                    false,
+                ) {
+                    if light_sample.pdf > 0.0 && light_sample.l.has_contribution() {
+                        let wi = light_sample.wi;
+                        let f = SampledSpectrum::new(
+                            bsdf.f(wo, wi, TransportMode::Radiance).0
+                                * wi.dot(hit_data.normal).abs(),
+                        );
+
+                        if f.has_contribution() {
+                            let mut shadow_ray = Ray::new(interaction.point + wi * 0.0001, wi);
+                            shadow_ray.hit.t = interaction
+                                .point
+                                .distance(light_sample.light_interaction.point);
+                            if !geometry_resources.tlas().is_occluded(&shadow_ray) {
+                                l += throughput * f.0 * light_sample.l.0
+                                    / (light_source_sample.pdf * light_sample.pdf);
+                                // TODO: dont forget the light sampler pdf in the future
+                            }
                         }
                     }
                 }
