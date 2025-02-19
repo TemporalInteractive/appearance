@@ -10,6 +10,7 @@ use crate::math::{safe_sqrt, sqr};
 
 pub mod filter;
 pub mod independent_sampler;
+pub mod piecewise_constant;
 pub mod zsobol_sampler;
 
 pub trait Sampler: Debug {

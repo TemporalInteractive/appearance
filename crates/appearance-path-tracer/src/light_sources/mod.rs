@@ -10,6 +10,7 @@ use crate::{
     radiometry::{SampledSpectrum, SampledWavelengths},
 };
 
+pub mod infinite_light;
 pub mod point_light;
 
 pub mod uniform_light_sampler;
