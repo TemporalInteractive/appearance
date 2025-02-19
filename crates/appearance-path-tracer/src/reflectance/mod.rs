@@ -1,18 +1,26 @@
 use bitflags::bitflags;
+use num::complex::Complex32;
 use std::fmt::Debug;
 
 use glam::{Vec2, Vec3, Vec4};
 
 use crate::{
-    math::{coord_system::CoordSystem, normal::Normal, spherical_geometry::abs_cos_theta},
+    math::{
+        coord_system::CoordSystem, normal::Normal, safe_sqrt, spherical_geometry::abs_cos_theta,
+        sqr,
+    },
     radiometry::SampledSpectrum,
     sampling::sample_uniform_hemisphere,
 };
 
+pub mod conductor;
 pub mod diffuse;
+pub mod microfacet;
+
 pub enum TransportMode {
     Radiance,
 }
+
 pub struct BsdfSample {
     pub f: SampledSpectrum,
     pub wi: Vec3,
@@ -212,4 +220,78 @@ impl Bsdf {
             self.bxdf.pdf(wo, wi, transport_mode, sample_flags)
         }
     }
+}
+
+pub struct RefractResult {
+    pub wt: Vec3,
+    pub eta: f32,
+}
+
+pub fn reflect(wo: Vec3, n: Vec3) -> Vec3 {
+    -wo + 2.0 * wo.dot(n) * n
+}
+
+pub fn refract(wi: Vec3, mut n: Normal, mut eta: f32) -> Option<RefractResult> {
+    let mut cos_theta_i = n.0.dot(wi);
+    if cos_theta_i < 0.0 {
+        eta = 1.0 / eta;
+        cos_theta_i = -cos_theta_i;
+        n = Normal(-n.0);
+    }
+
+    let sin_2_theta_i = (1.0 - sqr(cos_theta_i)).max(0.0);
+    let sin_2_theta_t = sin_2_theta_i / sqr(eta);
+    if sin_2_theta_t >= 1.0 {
+        None
+    } else {
+        let cos_theta_t = safe_sqrt(1.0 - sin_2_theta_t);
+
+        let wt = -wi / eta + (cos_theta_i / eta - cos_theta_t) * n.0;
+
+        Some(RefractResult { wt, eta })
+    }
+}
+
+pub fn fresnel_dielectric(mut cos_theta_i: f32, mut eta: f32) -> f32 {
+    cos_theta_i = cos_theta_i.clamp(-1.0, 1.0);
+    if cos_theta_i < 0.0 {
+        eta = 1.0 / eta;
+        cos_theta_i = -cos_theta_i;
+    }
+
+    let sin_2_theta_i = 1.0 - sqr(cos_theta_i);
+    let sin_2_theta_t = sin_2_theta_i / sqr(eta);
+    if sin_2_theta_t >= 1.0 {
+        1.0
+    } else {
+        let cos_theta_t = safe_sqrt(1.0 - sin_2_theta_t);
+
+        let r_parl = (eta * cos_theta_i - cos_theta_t) / (eta * cos_theta_i + cos_theta_t);
+        let r_perp = (cos_theta_i - eta * cos_theta_t) / (cos_theta_i + eta * cos_theta_t);
+        (sqr(r_parl) + sqr(r_perp)) / 2.0
+    }
+}
+
+pub fn fresnel_complex(mut cos_theta_i: f32, eta: Complex32) -> f32 {
+    cos_theta_i = cos_theta_i.clamp(0.0, 1.0);
+
+    let sin_2_theta_i = 1.0 - sqr(cos_theta_i);
+    let sin_2_theta_t = sin_2_theta_i / sqr(eta);
+    let cos_theta_t = (1.0 - sin_2_theta_t).sqrt();
+
+    let r_parl = (eta * cos_theta_i - cos_theta_t) / (eta * cos_theta_i + cos_theta_t);
+    let r_perp = (cos_theta_i - eta * cos_theta_t) / (cos_theta_i + eta * cos_theta_t);
+    (r_parl.norm() + r_perp.norm()) / 2.0
+}
+
+pub fn fresnel_complex_spectrum(
+    cos_theta_i: f32,
+    eta: SampledSpectrum,
+    k: SampledSpectrum,
+) -> SampledSpectrum {
+    let mut result = SampledSpectrum::new(Vec4::ZERO);
+    for i in 0..4 {
+        result.0[i] = fresnel_complex(cos_theta_i, Complex32::new(eta.0[i], k.0[i]));
+    }
+    result
 }

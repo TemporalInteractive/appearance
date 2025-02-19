@@ -45,6 +45,12 @@ pub fn sample_uniform_disk_concentric(u: Vec2) -> Vec2 {
     }
 }
 
+pub fn sample_uniform_disk_polar(u: Vec2) -> Vec2 {
+    let r = u.x.sqrt();
+    let theta = 2.0 * PI * u.y;
+    Vec2::new(r * theta.cos(), r * theta.sin())
+}
+
 pub fn sample_cosine_hemisphere(u: Vec2) -> Vec3 {
     let d = sample_uniform_disk_concentric(u);
     let z = safe_sqrt(1.0 - sqr(d.x) - sqr(d.y));

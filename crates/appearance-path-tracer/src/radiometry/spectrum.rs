@@ -17,6 +17,10 @@ use super::{
             CIE_ILLUM_F6, CIE_ILLUM_F7, CIE_ILLUM_F8, CIE_ILLUM_F9, CIE_LAMBDA, CIE_X, CIE_Y,
             CIE_Z,
         },
+        materials::{
+            AG_ETA, AG_K, AL_ETA, AL_K, AU_ETA, AU_K, CU_ETA, CU_K, CU_ZN_ETA, CU_ZN_K, MG_O_ETA,
+            MG_O_K, TI_O2_ETA, TI_O2_K,
+        },
         swatch_reflectances::SWATCH_REFLECTANCES,
     },
     Rgb, RgbColorSpace, RgbSigmoidPolynomial, Xyz, CIE_Y_INTEGRAL,
@@ -290,6 +294,21 @@ static CANON_EOS_100D_R_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::
 static CANON_EOS_100D_G_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
 static CANON_EOS_100D_B_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
 
+static AG_ETA_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+static AG_K_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+static AL_ETA_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+static AL_K_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+static AU_ETA_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+static AU_K_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+static CU_ETA_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+static CU_K_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+static CU_ZN_ETA_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+static CU_ZN_K_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+static MG_O_ETA_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+static MG_O_K_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+static TI_O2_ETA_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+static TI_O2_K_SPECTRUM: OnceLock<PiecewiseLinearSpectrum> = OnceLock::new();
+
 #[derive(Debug, Clone)]
 pub struct PiecewiseLinearSpectrum {
     reflectance: Vec<f32>,
@@ -469,6 +488,64 @@ impl PiecewiseLinearSpectrum {
     pub fn canon_eos_100d_b() -> &'static PiecewiseLinearSpectrum {
         CANON_EOS_100D_B_SPECTRUM
             .get_or_init(|| PiecewiseLinearSpectrum::from_interleaved(CANON_EOS_100D_B, false))
+    }
+
+    pub fn ag_eta() -> &'static PiecewiseLinearSpectrum {
+        AG_ETA_SPECTRUM.get_or_init(|| PiecewiseLinearSpectrum::from_interleaved(AG_ETA, false))
+    }
+
+    pub fn ag_k() -> &'static PiecewiseLinearSpectrum {
+        AG_K_SPECTRUM.get_or_init(|| PiecewiseLinearSpectrum::from_interleaved(AG_K, false))
+    }
+
+    pub fn al_eta() -> &'static PiecewiseLinearSpectrum {
+        AL_ETA_SPECTRUM.get_or_init(|| PiecewiseLinearSpectrum::from_interleaved(AL_ETA, false))
+    }
+
+    pub fn al_k() -> &'static PiecewiseLinearSpectrum {
+        AL_K_SPECTRUM.get_or_init(|| PiecewiseLinearSpectrum::from_interleaved(AL_K, false))
+    }
+
+    pub fn au_eta() -> &'static PiecewiseLinearSpectrum {
+        AU_ETA_SPECTRUM.get_or_init(|| PiecewiseLinearSpectrum::from_interleaved(AU_ETA, false))
+    }
+
+    pub fn au_k() -> &'static PiecewiseLinearSpectrum {
+        AU_K_SPECTRUM.get_or_init(|| PiecewiseLinearSpectrum::from_interleaved(AU_K, false))
+    }
+
+    pub fn cu_eta() -> &'static PiecewiseLinearSpectrum {
+        CU_ETA_SPECTRUM.get_or_init(|| PiecewiseLinearSpectrum::from_interleaved(CU_ETA, false))
+    }
+
+    pub fn cu_k() -> &'static PiecewiseLinearSpectrum {
+        CU_K_SPECTRUM.get_or_init(|| PiecewiseLinearSpectrum::from_interleaved(CU_K, false))
+    }
+
+    pub fn cu_zn_eta() -> &'static PiecewiseLinearSpectrum {
+        CU_ZN_ETA_SPECTRUM
+            .get_or_init(|| PiecewiseLinearSpectrum::from_interleaved(CU_ZN_ETA, false))
+    }
+
+    pub fn cu_zn_k() -> &'static PiecewiseLinearSpectrum {
+        CU_ZN_K_SPECTRUM.get_or_init(|| PiecewiseLinearSpectrum::from_interleaved(CU_ZN_K, false))
+    }
+
+    pub fn mg_o_eta() -> &'static PiecewiseLinearSpectrum {
+        MG_O_ETA_SPECTRUM.get_or_init(|| PiecewiseLinearSpectrum::from_interleaved(MG_O_ETA, false))
+    }
+
+    pub fn mg_o_k() -> &'static PiecewiseLinearSpectrum {
+        MG_O_K_SPECTRUM.get_or_init(|| PiecewiseLinearSpectrum::from_interleaved(MG_O_K, false))
+    }
+
+    pub fn ti_o2_eta() -> &'static PiecewiseLinearSpectrum {
+        TI_O2_ETA_SPECTRUM
+            .get_or_init(|| PiecewiseLinearSpectrum::from_interleaved(TI_O2_ETA, false))
+    }
+
+    pub fn ti_o2_k() -> &'static PiecewiseLinearSpectrum {
+        TI_O2_K_SPECTRUM.get_or_init(|| PiecewiseLinearSpectrum::from_interleaved(TI_O2_K, false))
     }
 }
 
