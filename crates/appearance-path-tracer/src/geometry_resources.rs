@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use crate::{
     light_sources::{
-        infinite_light::InfiniteLight, point_light::PointLight,
+        distant_light::DistantLight, infinite_light::InfiniteLight, point_light::PointLight,
         uniform_light_sampler::UniformLightSourceSampler, LightSourceSampler,
     },
     radiometry::{
@@ -49,25 +49,27 @@ impl GeometryResources {
         let model_assets = AssetDatabase::<Model>::new();
         let mut texture_assets = AssetDatabase::<Texture>::new();
 
-        let light_spectrum = RgbIlluminantSpectrum::new(Rgb(Vec3::ONE), &RgbColorSpace::srgb());
+        let light_spectrum =
+            RgbIlluminantSpectrum::new(Rgb(Vec3::new(1.0, 1.0, 0.95)), &RgbColorSpace::srgb());
         let light_spectrum = DenselySampledSpectrum::new_from_spectrum(
             &light_spectrum,
             LAMBDA_MIN as u32,
             LAMBDA_MAX as u32,
         );
-        let point_light = Box::new(PointLight::new(
-            Vec3::new(0.0, 5.0, 0.0),
+        let distant_light = Box::new(DistantLight::new(
+            Vec3::new(0.0, -1.0, 0.2).normalize(),
             light_spectrum,
             100.0,
+            1000.0,
         ));
 
-        let light_sampler = Box::new(UniformLightSourceSampler::new(vec![point_light]));
+        let light_sampler = Box::new(UniformLightSourceSampler::new(vec![distant_light]));
 
         let infinite_light_texture = texture_assets
             .get("assets/evening_road_01_puresky_4k.png")
             .unwrap();
         let infinite_light =
-            InfiniteLight::new(infinite_light_texture, RgbColorSpace::srgb(), 5.0, 100.0);
+            InfiniteLight::new(infinite_light_texture, RgbColorSpace::srgb(), 5.0, 1000.0);
 
         Self {
             models: HashMap::new(),

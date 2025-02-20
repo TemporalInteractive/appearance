@@ -117,10 +117,38 @@ impl PathIntegrator {
 
         let mut depth = 0;
         loop {
-            geometry_resources.tlas().intersect(&mut ray);
+            let hit_data = loop {
+                geometry_resources.tlas().intersect(&mut ray);
+
+                let hit_data = geometry_resources.get_hit_data(&ray.hit);
+
+                if ray.hit.t == 1e30 {
+                    break hit_data;
+                }
+
+                if let Some(tex_coord) = hit_data.tex_coord {
+                    if let Some(base_color_texture) = &hit_data.material.base_color_texture {
+                        let alpha = base_color_texture
+                            .sample(
+                                tex_coord,
+                                TextureSampleRepeat::Repeat,
+                                TextureSampleInterpolation::Linear,
+                            )
+                            .w;
+
+                        if alpha < 0.1 {
+                            let new_origin =
+                                Vec3::from(ray.O) + Vec3::from(ray.D) * (ray.hit.t + 0.001);
+                            ray = Ray::new(new_origin, ray.D.into());
+                            continue;
+                        }
+                    }
+                }
+
+                break hit_data;
+            };
 
             let hit_point = Vec3::from(ray.O) + Vec3::from(ray.D) * ray.hit.t;
-            let hit_data = geometry_resources.get_hit_data(&ray.hit);
 
             let interaction = Interaction {
                 point: hit_point,
@@ -201,13 +229,13 @@ impl PathIntegrator {
             }
 
             let bsdf = if metallic_factor > 0.9 {
-                let eta = PiecewiseLinearSpectrum::al_eta().sample(wavelengths);
-                let k = PiecewiseLinearSpectrum::al_k().sample(wavelengths);
-                let microfacet = ThrowbridgeReitzDistribution::new(0.01, 0.01);
+                let eta = PiecewiseLinearSpectrum::au_eta().sample(wavelengths);
+                let k = PiecewiseLinearSpectrum::au_k().sample(wavelengths);
+                let microfacet = ThrowbridgeReitzDistribution::new(0.04, 0.04);
                 let conductor_bxdf = Box::new(ConductorBxdf::new(microfacet, eta, k));
                 Bsdf::new(conductor_bxdf, Normal(hit_data.normal), Vec3::ZERO)
             } else if hit_data.material.transmission_factor > 0.0 {
-                let microfacet = ThrowbridgeReitzDistribution::new(0.05, 0.05);
+                let microfacet = ThrowbridgeReitzDistribution::new(0.0, 0.0);
                 let dielectric_bxdf = Box::new(DielectricBxdf::new(microfacet, 1.5));
                 Bsdf::new(dielectric_bxdf, Normal(hit_data.normal), Vec3::ZERO)
             } else {
