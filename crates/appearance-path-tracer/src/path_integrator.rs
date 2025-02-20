@@ -117,10 +117,38 @@ impl PathIntegrator {
 
         let mut depth = 0;
         loop {
-            geometry_resources.tlas().intersect(&mut ray);
+            let hit_data = loop {
+                geometry_resources.tlas().intersect(&mut ray);
+
+                let hit_data = geometry_resources.get_hit_data(&ray.hit);
+
+                if ray.hit.t == 1e30 {
+                    break hit_data;
+                }
+
+                if let Some(tex_coord) = hit_data.tex_coord {
+                    if let Some(base_color_texture) = &hit_data.material.base_color_texture {
+                        let alpha = base_color_texture
+                            .sample(
+                                tex_coord,
+                                TextureSampleRepeat::Repeat,
+                                TextureSampleInterpolation::Linear,
+                            )
+                            .w;
+
+                        if alpha < 0.1 {
+                            let new_origin =
+                                Vec3::from(ray.O) + Vec3::from(ray.D) * (ray.hit.t + 0.001);
+                            ray = Ray::new(new_origin, ray.D.into());
+                            continue;
+                        }
+                    }
+                }
+
+                break hit_data;
+            };
 
             let hit_point = Vec3::from(ray.O) + Vec3::from(ray.D) * ray.hit.t;
-            let hit_data = geometry_resources.get_hit_data(&ray.hit);
 
             let interaction = Interaction {
                 point: hit_point,

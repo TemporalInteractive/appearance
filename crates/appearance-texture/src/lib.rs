@@ -79,7 +79,7 @@ impl Texture {
     pub fn load(&self, id: UVec2) -> Vec4 {
         let pixel_id = (id.y * self.width + id.x) as usize;
 
-        let mut result = Vec4::ZERO;
+        let mut result = Vec4::ONE;
         for i in 0..self.format.num_channels() {
             result[i] = self.data[pixel_id * self.format.num_channels() + i] as f32 / 255.0;
         }
