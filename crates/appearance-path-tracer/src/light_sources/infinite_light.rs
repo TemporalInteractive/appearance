@@ -72,7 +72,7 @@ impl InfiniteLight {
             .sample(
                 uv,
                 TextureSampleRepeat::Clamp,
-                TextureSampleInterpolation::Nearest,
+                TextureSampleInterpolation::Linear,
             )
             .xyz());
         let spectrum = RgbIlluminantSpectrum::new(rgb, &self.color_space);
@@ -144,9 +144,6 @@ impl LightSource for InfiniteLight {
 
     fn le(&self, ray: &Ray, wavelengths: &SampledWavelengths) -> SampledSpectrum {
         let uv = unit_vector_to_panorama_coords(ray.D.into());
-        if uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0 {
-            println!("{:?} {:?}", uv, Vec3::from(ray.D));
-        }
         self.image_le(uv, wavelengths)
     }
 }

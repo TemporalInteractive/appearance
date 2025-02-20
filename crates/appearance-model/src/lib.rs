@@ -12,11 +12,12 @@ pub struct ModelNode {
     pub transform: Transform,
     pub children: Vec<u32>,
 
-    pub mesh: Option<Mesh>,
+    pub mesh: Option<u32>,
 }
 
 pub struct Model {
     pub root_nodes: Vec<u32>,
     pub materials: Vec<Material>,
+    pub meshes: Vec<Mesh>,
     pub nodes: Vec<ModelNode>,
 }

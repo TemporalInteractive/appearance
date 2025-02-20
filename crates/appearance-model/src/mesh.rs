@@ -8,8 +8,8 @@ pub struct Mesh {
     pub vertex_normals: Vec<Vec3>,
     pub vertex_tangents: Vec<Vec4>,
     pub vertex_tex_coords: Vec<Vec2>,
+    pub triangle_material_indices: Vec<u32>,
     pub indices: Vec<u32>,
-    pub material_idx: u32,
 
     pub blas: Arc<BvhSoA>,
 }
@@ -20,9 +20,11 @@ impl Mesh {
         vertex_normals: Vec<Vec3>,
         vertex_tangents: Vec<Vec4>,
         vertex_tex_coords: Vec<Vec2>,
+        triangle_material_indices: Vec<u32>,
         indices: Vec<u32>,
-        material_idx: u32,
     ) -> Self {
+        debug_assert_eq!(triangle_material_indices.len(), indices.len() / 3);
+
         let mut blas = BvhSoA::new();
         if indices.is_empty() {
             blas.build(vertex_positions.clone(), BvhBuildQuality::High);
@@ -39,8 +41,8 @@ impl Mesh {
             vertex_normals,
             vertex_tangents,
             vertex_tex_coords,
+            triangle_material_indices,
             indices,
-            material_idx,
             blas: Arc::new(blas),
         }
     }
