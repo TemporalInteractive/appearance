@@ -15,8 +15,9 @@ use crate::{
         SampledWavelengths, Spectrum,
     },
     reflectance::{
-        conductor::ConductorBxdf, diffuse::DiffuseBxdf, microfacet::ThrowbridgeReitzDistribution,
-        Bsdf, Bxdf, BxdfFlags, BxdfReflTransFlags, TransportMode,
+        conductor::ConductorBxdf, dielectric::DielectricBxdf, diffuse::DiffuseBxdf,
+        microfacet::ThrowbridgeReitzDistribution, Bsdf, BxdfFlags, BxdfReflTransFlags,
+        TransportMode,
     },
     sampling::{power_heuristic, Sampler},
 };
@@ -172,6 +173,7 @@ impl PathIntegrator {
             }
 
             let mut base_color_factor = hit_data.material.base_color_factor.xyz();
+            let mut metallic_factor = hit_data.material.metallic_factor;
 
             if let Some(tex_coord) = hit_data.tex_coord {
                 if let Some(base_color_texture) = &hit_data.material.base_color_texture {
@@ -183,18 +185,37 @@ impl PathIntegrator {
                         )
                         .xyz();
                 }
+
+                if let Some(metallic_roughness_texture) =
+                    &hit_data.material.metallic_roughness_texture
+                {
+                    let metallic_roughness = metallic_roughness_texture
+                        .sample(
+                            tex_coord,
+                            TextureSampleRepeat::Repeat,
+                            TextureSampleInterpolation::Linear,
+                        )
+                        .xyz();
+                    metallic_factor *= metallic_roughness.z;
+                }
             }
 
-            // TODO: get bsdf from intersection material
-            let spectrum = RgbAlbedoSpectrum::new(Rgb(base_color_factor), &RgbColorSpace::srgb());
-            let diffuse_bxdf = Box::new(DiffuseBxdf::new(spectrum.sample(wavelengths)));
-            let bsdf = Bsdf::new(diffuse_bxdf, Normal(hit_data.normal), Vec3::ZERO);
-
-            // let eta = PiecewiseLinearSpectrum::au_eta().sample(wavelengths);
-            // let k = PiecewiseLinearSpectrum::au_k().sample(wavelengths);
-            // let microfacet = ThrowbridgeReitzDistribution::new(0.01, 0.01);
-            // let conductor_bxdf = Box::new(ConductorBxdf::new(microfacet, eta, k));
-            // let bsdf = Bsdf::new(conductor_bxdf, Normal(hit_data.normal), Vec3::ZERO);
+            let bsdf = if metallic_factor > 0.9 {
+                let eta = PiecewiseLinearSpectrum::al_eta().sample(wavelengths);
+                let k = PiecewiseLinearSpectrum::al_k().sample(wavelengths);
+                let microfacet = ThrowbridgeReitzDistribution::new(0.01, 0.01);
+                let conductor_bxdf = Box::new(ConductorBxdf::new(microfacet, eta, k));
+                Bsdf::new(conductor_bxdf, Normal(hit_data.normal), Vec3::ZERO)
+            } else if hit_data.material.transmission_factor > 0.0 {
+                let microfacet = ThrowbridgeReitzDistribution::new(0.05, 0.05);
+                let dielectric_bxdf = Box::new(DielectricBxdf::new(microfacet, 1.5));
+                Bsdf::new(dielectric_bxdf, Normal(hit_data.normal), Vec3::ZERO)
+            } else {
+                let spectrum =
+                    RgbAlbedoSpectrum::new(Rgb(base_color_factor), &RgbColorSpace::srgb());
+                let diffuse_bxdf = Box::new(DiffuseBxdf::new(spectrum.sample(wavelengths)));
+                Bsdf::new(diffuse_bxdf, Normal(hit_data.normal), Vec3::ZERO)
+            };
 
             if bsdf.flags().is_non_specular() {
                 let ld = Self::sample_ld(

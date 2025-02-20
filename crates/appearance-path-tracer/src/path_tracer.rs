@@ -35,7 +35,7 @@ pub fn render_pixels(
     sample_idx: u32,
     sampels_per_pixel: u32,
 ) -> [SamplePixelResult; RAYS_PER_PACKET] {
-    let path_integrator = PathIntegrator::new(3);
+    let path_integrator = PathIntegrator::new(4);
 
     let mut results = [SamplePixelResult::default(); RAYS_PER_PACKET];
     for i in 0..RAYS_PER_PACKET {
