@@ -25,10 +25,7 @@ pub enum LightSourceType {
 
 impl LightSourceType {
     pub fn is_delta(&self) -> bool {
-        match self {
-            Self::DeltaDirection | Self::DeltaPosition => true,
-            _ => false,
-        }
+        matches!(self, Self::DeltaDirection | Self::DeltaPosition)
     }
 }
 
