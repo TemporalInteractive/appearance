@@ -192,7 +192,7 @@ impl PathIntegrator {
 
             // let eta = PiecewiseLinearSpectrum::au_eta().sample(wavelengths);
             // let k = PiecewiseLinearSpectrum::au_k().sample(wavelengths);
-            // let microfacet = ThrowbridgeReitzDistribution::new(0.1, 0.1);
+            // let microfacet = ThrowbridgeReitzDistribution::new(0.01, 0.01);
             // let conductor_bxdf = Box::new(ConductorBxdf::new(microfacet, eta, k));
             // let bsdf = Bsdf::new(conductor_bxdf, Normal(hit_data.normal), Vec3::ZERO);
 
@@ -240,58 +240,20 @@ impl PathIntegrator {
                     eta_scale *= sqr(bsdf_sample.eta);
                 }
                 prev_light_ctx = LightSourceSampleCtx::new_from_surface(surface_interaction);
+
+                ray = Ray::new(interaction.point + bsdf_sample.wi * 0.0001, bsdf_sample.wi);
             } else {
                 break;
             }
 
-            // let wo = -Vec3::from(ray.D);
-
-            // if let Some(light_source_sample) =
-            //     geometry_resources.light_sampler.sample(sampler.get_1d())
-            // {
-            //     if let Some(light_sample) = light_source_sample.light_source.sample_li(
-            //         LightSourceSampleCtx::new_from_medium(interaction.clone()),
-            //         sampler.get_2d(),
-            //         wavelengths,
-            //         false,
-            //     ) {
-            //         if light_sample.pdf > 0.0 && light_sample.l.has_contribution() {
-            //             let wi = light_sample.wi;
-            //             let f = SampledSpectrum::new(
-            //                 bsdf.f(wo, wi, TransportMode::Radiance).0
-            //                     * wi.dot(hit_data.normal).abs(),
-            //             );
-
-            //             if f.has_contribution() {
-            //                 let mut shadow_ray = Ray::new(interaction.point + wi * 0.0001, wi);
-            //                 shadow_ray.hit.t = interaction
-            //                     .point
-            //                     .distance(light_sample.light_interaction.point);
-            //                 if !geometry_resources.tlas().is_occluded(&shadow_ray) {
-            //                     l += throughput * f.0 * light_sample.l.0
-            //                         / (light_source_sample.pdf * light_sample.pdf);
-            //                     // TODO: dont forget the light sampler pdf in the future
-            //                 }
-            //             }
-            //         }
-            //     }
-            // }
-
-            // let uc = sampler.get_1d();
-            // let u = sampler.get_2d();
-            // if let Some(bsdf_sample) = bsdf.sample_f(
-            //     wo,
-            //     uc,
-            //     u,
-            //     TransportMode::Radiance,
-            //     BxdfReflTransFlags::all(),
-            // ) {
-            //     throughput *=
-            //         bsdf_sample.f.0 * bsdf_sample.wi.dot(hit_data.normal).abs() / bsdf_sample.pdf;
-            //     ray = Ray::new(interaction.point + bsdf_sample.wi * 0.0001, bsdf_sample.wi);
-            // } else {
-            //     break;
-            // }
+            let russian_roulette = throughput * eta_scale;
+            if russian_roulette.max_element() < 1.0 && depth > 1 {
+                let r = (1.0 - russian_roulette.max_element()).max(0.0);
+                if sampler.get_1d() < r {
+                    break;
+                }
+                throughput /= 1.0 - r;
+            }
         }
 
         SampledSpectrum::new(l)

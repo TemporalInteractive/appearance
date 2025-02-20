@@ -79,7 +79,7 @@ impl From<BxdfReflTransFlags> for BxdfFlags {
 
 impl BxdfFlags {
     pub fn is_non_specular(&self) -> bool {
-        self.contains(Self::DIFFUSE | Self::GLOSSY)
+        self.contains(Self::DIFFUSE) || self.contains(Self::GLOSSY)
     }
 }
 
