@@ -14,11 +14,14 @@ use crate::{
 };
 
 pub mod conductor;
+pub mod dielectric;
 pub mod diffuse;
 pub mod microfacet;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TransportMode {
     Radiance,
+    Importance,
 }
 
 pub struct BsdfSample {
@@ -194,7 +197,7 @@ impl Bsdf {
         sample_flags: BxdfReflTransFlags,
     ) -> Option<BsdfSample> {
         let wo = self.render_to_local(wo_render);
-        if wo.z == 0.0 || self.bxdf.flags().contains(BxdfFlags::from(sample_flags)) {
+        if wo.z == 0.0 || !self.bxdf.flags().contains(BxdfFlags::from(sample_flags)) {
             None
         } else {
             let mut bs = self.bxdf.sample_f(wo, u, u2, transport_mode, sample_flags);
