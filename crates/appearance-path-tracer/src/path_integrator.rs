@@ -16,7 +16,7 @@ use crate::{
     },
     reflectance::{
         conductor::ConductorBxdf, dielectric::DielectricBxdf, diffuse::DiffuseBxdf,
-        microfacet::ThrowbridgeReitzDistribution, Bsdf, Bxdf, BxdfFlags, BxdfReflTransFlags,
+        microfacet::ThrowbridgeReitzDistribution, Bsdf, BxdfFlags, BxdfReflTransFlags,
         TransportMode,
     },
     sampling::{power_heuristic, Sampler},
@@ -207,7 +207,7 @@ impl PathIntegrator {
                 let conductor_bxdf = Box::new(ConductorBxdf::new(microfacet, eta, k));
                 Bsdf::new(conductor_bxdf, Normal(hit_data.normal), Vec3::ZERO)
             } else if hit_data.material.transmission_factor > 0.0 {
-                let microfacet = ThrowbridgeReitzDistribution::new(0.0, 0.0);
+                let microfacet = ThrowbridgeReitzDistribution::new(0.05, 0.05);
                 let dielectric_bxdf = Box::new(DielectricBxdf::new(microfacet, 1.5));
                 Bsdf::new(dielectric_bxdf, Normal(hit_data.normal), Vec3::ZERO)
             } else {
@@ -216,21 +216,6 @@ impl PathIntegrator {
                 let diffuse_bxdf = Box::new(DiffuseBxdf::new(spectrum.sample(wavelengths)));
                 Bsdf::new(diffuse_bxdf, Normal(hit_data.normal), Vec3::ZERO)
             };
-
-            // TODO: get bsdf from intersection material
-            // let spectrum = RgbAlbedoSpectrum::new(Rgb(base_color_factor), &RgbColorSpace::srgb());
-            // let diffuse_bxdf = Box::new(DiffuseBxdf::new(spectrum.sample(wavelengths)));
-            // let bsdf = Bsdf::new(diffuse_bxdf, Normal(hit_data.normal), Vec3::ZERO);
-
-            // let eta = PiecewiseLinearSpectrum::au_eta().sample(wavelengths);
-            // let k = PiecewiseLinearSpectrum::au_k().sample(wavelengths);
-            // let microfacet = ThrowbridgeReitzDistribution::new(0.01, 0.01);
-            // let conductor_bxdf = Box::new(ConductorBxdf::new(microfacet, eta, k));
-            // let bsdf = Bsdf::new(conductor_bxdf, Normal(hit_data.normal), Vec3::ZERO);
-
-            // let microfacet = ThrowbridgeReitzDistribution::new(0.0, 0.0);
-            // let dielectric_bxdf = Box::new(DielectricBxdf::new(microfacet, 1.5));
-            // let bsdf = Bsdf::new(dielectric_bxdf, Normal(hit_data.normal), Vec3::ZERO);
 
             if bsdf.flags().is_non_specular() {
                 let ld = Self::sample_ld(

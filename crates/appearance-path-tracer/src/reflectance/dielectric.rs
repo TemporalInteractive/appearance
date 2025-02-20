@@ -175,7 +175,7 @@ impl Bxdf for DielectricBxdf {
                 }
             } else if let Some(refract_result) = refract(wo, Normal(wm), self.eta) {
                 let wi = refract_result.wt;
-                if !same_hemisphere(wo, wi) || wi.z == 0.0 {
+                if same_hemisphere(wo, wi) || wi.z == 0.0 {
                     None
                 } else {
                     let denom = sqr(wi.dot(wm) + wo.dot(wm) / refract_result.eta);
