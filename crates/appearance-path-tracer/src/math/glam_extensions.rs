@@ -4,6 +4,7 @@ use super::safe_div;
 
 pub trait Vec3Extensions {
     fn max_element_idx(&self) -> usize;
+    fn avg(&self) -> f32;
 }
 
 impl Vec3Extensions for Vec3 {
@@ -19,6 +20,10 @@ impl Vec3Extensions for Vec3 {
         } else {
             2
         }
+    }
+
+    fn avg(&self) -> f32 {
+        self.element_sum() / 3.0
     }
 }
 

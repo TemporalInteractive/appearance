@@ -1,4 +1,7 @@
-use glam::{Vec2, Vec3};
+use core::marker::{Send, Sync};
+
+use glam::{Vec2, Vec3, Vec4};
+use tinybvh::Ray;
 
 use crate::{
     math::{
@@ -8,7 +11,10 @@ use crate::{
     radiometry::{SampledSpectrum, SampledWavelengths},
 };
 
+pub mod infinite_light;
 pub mod point_light;
+
+pub mod uniform_light_sampler;
 
 pub enum LightSourceType {
     DeltaPosition,
@@ -17,6 +23,16 @@ pub enum LightSourceType {
     Infinite,
 }
 
+impl LightSourceType {
+    pub fn is_delta(&self) -> bool {
+        match self {
+            Self::DeltaDirection | Self::DeltaPosition => true,
+            _ => false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
 pub struct LightSourceSampleCtx {
     pub point: Vec3,
     pub normal: Normal,
@@ -39,6 +55,10 @@ impl LightSourceSampleCtx {
             shading_normal: Normal::new(Vec3::ZERO),
         }
     }
+
+    pub fn offset_ray_origin(&mut self, pt: Vec3) {
+        self.point += (pt - self.point) * 0.00001; // TODO: ??
+    }
 }
 
 pub struct LightSourceLiSample {
@@ -48,7 +68,7 @@ pub struct LightSourceLiSample {
     pub light_interaction: Interaction,
 }
 
-pub trait LightSource {
+pub trait LightSource: Send + Sync {
     fn phi(&self, wavelengths: &SampledWavelengths) -> SampledSpectrum;
     fn ty(&self) -> LightSourceType;
     fn sample_li(
@@ -59,4 +79,31 @@ pub trait LightSource {
         allow_incomplete_pdf: bool,
     ) -> Option<LightSourceLiSample>;
     fn pdf_li(&self, ctx: LightSourceSampleCtx, wi: Vec3, allow_incomplete_pdf: bool) -> f32;
+
+    fn l(
+        &self,
+        _p: Vec3,
+        _n: Normal,
+        _uv: Vec2,
+        _w: Vec3,
+        _wavelengths: &SampledWavelengths,
+    ) -> SampledSpectrum {
+        SampledSpectrum(Vec4::ZERO)
+    }
+
+    fn le(&self, _ray: &Ray, _wavelengths: &SampledWavelengths) -> SampledSpectrum {
+        SampledSpectrum(Vec4::ZERO)
+    }
+}
+
+pub struct SampledLightSource<'a> {
+    pub light_source: &'a dyn LightSource,
+    pub pdf: f32,
+}
+
+pub trait LightSourceSampler: Send + Sync {
+    fn sample_with_ctx(&self, ctx: LightSourceSampleCtx, u: f32) -> Option<SampledLightSource>;
+    fn sample(&self, u: f32) -> Option<SampledLightSource>;
+    fn pmf_with_ctx(&self, ctx: LightSourceSampleCtx, light_source: &dyn LightSource) -> f32;
+    fn pmf(&self, light_source: &dyn LightSource) -> f32;
 }

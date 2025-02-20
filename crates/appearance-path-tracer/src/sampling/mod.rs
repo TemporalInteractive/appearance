@@ -10,6 +10,7 @@ use crate::math::{safe_sqrt, sqr};
 
 pub mod filter;
 pub mod independent_sampler;
+pub mod piecewise_constant;
 pub mod zsobol_sampler;
 
 pub trait Sampler: Debug {
@@ -59,4 +60,29 @@ pub fn sample_cosine_hemisphere(u: Vec2) -> Vec3 {
 
 pub fn cosine_hemisphere_pdf(cos_theta: f32) -> f32 {
     cos_theta * FRAC_1_PI
+}
+
+pub fn unit_vector_to_panorama_coords(direction: Vec3) -> Vec2 {
+    let phi = (direction.z).atan2(direction.x) + PI;
+    let theta = direction.y.acos();
+
+    Vec2::new(phi / (2.0 * PI), theta * FRAC_1_PI)
+}
+
+pub fn panorama_coords_to_unit_vector(uv: Vec2) -> Vec3 {
+    let phi = uv.x * (2.0 * PI);
+    let theta = uv.y / FRAC_1_PI;
+    let sin_theta = theta.sin();
+
+    let x = sin_theta * phi.cos() - PI;
+    let y = theta.cos();
+    let z = sin_theta * phi.sin() - PI;
+
+    Vec3::new(x, y, z)
+}
+
+pub fn power_heuristic(nf: u32, f_pdf: f32, ng: u32, g_pdf: f32) -> f32 {
+    let f = nf as f32 * f_pdf;
+    let g = ng as f32 * g_pdf;
+    sqr(f) / (sqr(f) + sqr(g))
 }
