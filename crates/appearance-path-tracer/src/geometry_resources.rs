@@ -131,8 +131,9 @@ impl GeometryResources {
     ) -> u32 {
         let transform = parent_transform * model.nodes[node as usize].transform.get_matrix();
 
-        if let Some(mesh) = &model.nodes[node as usize].mesh {
+        if let Some(mesh_idx) = &model.nodes[node as usize].mesh {
             if let Some(blasses) = blasses {
+                let mesh = &model.meshes[*mesh_idx as usize];
                 blasses.push(mesh.blas.clone() as Arc<dyn BvhBase>);
             }
 
@@ -227,10 +228,11 @@ impl GeometryResources {
         let blas_instance = intersection.inst;
         let instance_mapping = self.blas_idx_to_mesh_mapping.get(&blas_instance).unwrap();
         let model = &self.models.get(&instance_mapping.0).unwrap().0;
-        let mesh = model.nodes[instance_mapping.1 as usize]
+        let mesh_idx = model.nodes[instance_mapping.1 as usize]
             .mesh
             .as_ref()
             .unwrap();
+        let mesh = &model.meshes[*mesh_idx as usize];
 
         let barycentrics = Vec3::new(
             1.0 - intersection.u - intersection.v,

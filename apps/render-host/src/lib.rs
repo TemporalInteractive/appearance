@@ -2,7 +2,7 @@ use anyhow::Result;
 use appearance::appearance_camera::CameraController;
 use appearance::appearance_input::InputHandler;
 use appearance::appearance_render_loop::winit::keyboard::KeyCode;
-use appearance::appearance_transform::{Transform, RIGHT};
+use appearance::appearance_transform::{Transform, RIGHT, UP};
 use appearance::appearance_world::components::{ModelComponent, TransformComponent};
 use appearance::appearance_world::{specs, World};
 use clap::Parser;
@@ -44,6 +44,7 @@ pub struct HostRenderLoop {
     world: World,
 
     duck_entity: Option<specs::Entity>,
+    toy_car_entity: specs::Entity,
 }
 
 impl RenderLoop for HostRenderLoop {
@@ -86,9 +87,14 @@ impl RenderLoop for HostRenderLoop {
                 builder.with(ModelComponent::new("assets/Duck.glb"))
             });
         let _ = world.create_entity(
-            "Buggy",
+            "Sponza",
             Transform::new(Vec3::new(3.0, 0.0, 0.0), Quat::IDENTITY, Vec3::splat(1.0)),
             |builder| builder.with(ModelComponent::new("assets/Sponza.glb")),
+        );
+        let toy_car_entity = world.create_entity(
+            "ToyCar",
+            Transform::new(Vec3::new(3.0, 0.5, 0.0), Quat::IDENTITY, Vec3::splat(45.0)),
+            |builder| builder.with(ModelComponent::new("assets/ToyCar.glb")),
         );
 
         Self {
@@ -103,6 +109,7 @@ impl RenderLoop for HostRenderLoop {
             world,
 
             duck_entity: Some(duck_entity),
+            toy_car_entity,
         }
     }
 
@@ -163,6 +170,14 @@ impl RenderLoop for HostRenderLoop {
 
             let duck_transform = transforms_mut.get_mut(duck_entity).unwrap();
             duck_transform.transform.translate(RIGHT * delta_time * 0.5);
+        }
+
+        {
+            let mut transforms_mut = self.world.entities_mut::<TransformComponent>();
+            let transform = transforms_mut.get_mut(self.toy_car_entity).unwrap();
+            transform
+                .transform
+                .rotate(Quat::from_axis_angle(UP, delta_time * 0.3));
         }
 
         if self.input_handler.key(KeyCode::KeyX) {
