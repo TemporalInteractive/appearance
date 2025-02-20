@@ -201,13 +201,13 @@ impl PathIntegrator {
             }
 
             let bsdf = if metallic_factor > 0.9 {
-                let eta = PiecewiseLinearSpectrum::al_eta().sample(wavelengths);
-                let k = PiecewiseLinearSpectrum::al_k().sample(wavelengths);
-                let microfacet = ThrowbridgeReitzDistribution::new(0.01, 0.01);
+                let eta = PiecewiseLinearSpectrum::au_eta().sample(wavelengths);
+                let k = PiecewiseLinearSpectrum::au_k().sample(wavelengths);
+                let microfacet = ThrowbridgeReitzDistribution::new(0.04, 0.04);
                 let conductor_bxdf = Box::new(ConductorBxdf::new(microfacet, eta, k));
                 Bsdf::new(conductor_bxdf, Normal(hit_data.normal), Vec3::ZERO)
             } else if hit_data.material.transmission_factor > 0.0 {
-                let microfacet = ThrowbridgeReitzDistribution::new(0.05, 0.05);
+                let microfacet = ThrowbridgeReitzDistribution::new(0.0, 0.0);
                 let dielectric_bxdf = Box::new(DielectricBxdf::new(microfacet, 1.5));
                 Bsdf::new(dielectric_bxdf, Normal(hit_data.normal), Vec3::ZERO)
             } else {
