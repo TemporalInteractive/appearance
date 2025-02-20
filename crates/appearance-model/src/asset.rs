@@ -103,8 +103,8 @@ fn process_node(
         let mut mesh_vertex_tex_coords = vec![];
         let mut mesh_vertex_normals = vec![];
         let mut mesh_vertex_tangents = vec![];
+        let mut mesh_triangle_material_indices = vec![];
         let mut mesh_indices = vec![];
-        let mut material_idx = 0;
 
         for primitive in mesh.primitives() {
             if primitive.mode() == gltf::mesh::Mode::Triangles {
@@ -151,6 +151,8 @@ fn process_node(
                     vec![]
                 };
 
+                let num_triangles = indices.len() / 3;
+
                 let mut indices = indices
                     .into_iter()
                     .map(|index| index + mesh_vertex_positions.len() as u32)
@@ -163,7 +165,10 @@ fn process_node(
 
                 let prim_material = primitive.material();
                 let pbr = prim_material.pbr_metallic_roughness();
-                material_idx = primitive.material().index().unwrap_or(0);
+                let material_idx = primitive.material().index().unwrap_or(0);
+
+                mesh_triangle_material_indices
+                    .append(&mut vec![material_idx as u32; num_triangles]);
 
                 let material = &mut materials[material_idx];
                 if material.index.is_none() {
@@ -238,8 +243,8 @@ fn process_node(
             mesh_vertex_normals,
             mesh_vertex_tangents,
             mesh_vertex_tex_coords,
+            mesh_triangle_material_indices,
             mesh_indices,
-            material_idx as u32,
         );
         if !mesh.has_normals() {
             mesh.generate_normals();

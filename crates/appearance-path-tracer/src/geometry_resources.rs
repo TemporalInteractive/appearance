@@ -265,7 +265,9 @@ impl GeometryResources {
             None
         };
 
-        let material = &model.materials[mesh.material_idx as usize];
+        let material_idx = mesh.triangle_material_indices[intersection.prim as usize] as usize;
+
+        let material = &model.materials[material_idx];
 
         GeometryHitData {
             position,
