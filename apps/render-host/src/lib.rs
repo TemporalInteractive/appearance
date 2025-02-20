@@ -96,6 +96,15 @@ impl RenderLoop for HostRenderLoop {
             Transform::new(Vec3::new(3.0, 0.5, 0.0), Quat::IDENTITY, Vec3::splat(45.0)),
             |builder| builder.with(ModelComponent::new("assets/ToyCar.glb")),
         );
+        let _ = world.create_entity(
+            "Glass",
+            Transform::new(
+                Vec3::new(0.0, 1.0, 0.0),
+                Quat::from_axis_angle(UP, 90.0f32.to_radians()),
+                Vec3::splat(1.0),
+            ),
+            |builder| builder.with(ModelComponent::new("assets/GlassPanel.glb")),
+        );
 
         Self {
             host,
