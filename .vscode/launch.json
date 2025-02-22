@@ -9,7 +9,7 @@
             "args": [
             ],
             "cwd": "${workspaceFolder}",
-            "preLaunchTask": "rust: cargo build"
+            "preLaunchTask": "rust: cargo build host"
         },
         {
             "name": "Node",
@@ -19,7 +19,7 @@
             "args": [
             ],
            "cwd": "${workspaceFolder}",
-            "preLaunchTask": "rust: cargo build"
+            "preLaunchTask": "rust: cargo build node"
         },
         {
             "name": "Host Release",
@@ -29,7 +29,7 @@
             "args": [
             ],
             "cwd": "${workspaceFolder}",
-            "preLaunchTask": "rust: cargo build -r"
+            "preLaunchTask": "rust: cargo build host -r"
         },
         {
             "name": "Node Release",
@@ -39,7 +39,7 @@
             "args": [
             ],
             "cwd": "${workspaceFolder}",
-            "preLaunchTask": "rust: cargo build -r"
+            "preLaunchTask": "rust: cargo build node -r"
         },
     ],
     "compounds": [

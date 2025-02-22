@@ -52,6 +52,7 @@ impl Asset for Model {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn process_nodes_recursive(
     document: &gltf::Document,
     node: &gltf::Node,

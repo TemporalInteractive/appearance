@@ -3,6 +3,7 @@ use appearance::appearance_camera::CameraController;
 use appearance::appearance_input::InputHandler;
 use appearance::appearance_render_loop::winit::keyboard::KeyCode;
 use appearance::appearance_transform::{Transform, RIGHT, UP};
+use appearance::appearance_wgpu::pipeline_database::PipelineDatabase;
 use appearance::appearance_world::components::{ModelComponent, TransformComponent};
 use appearance::appearance_world::{specs, World};
 use clap::Parser;
@@ -33,6 +34,7 @@ struct Args {
 }
 
 pub struct HostRenderLoop {
+    pipeline_database: PipelineDatabase,
     host: Host,
     texture: wgpu::Texture,
     swapchain_format: wgpu::TextureFormat,
@@ -107,6 +109,7 @@ impl RenderLoop for HostRenderLoop {
         );
 
         Self {
+            pipeline_database: PipelineDatabase::new(),
             host,
             texture,
             swapchain_format: config.view_formats[0],
@@ -248,12 +251,14 @@ impl RenderLoop for HostRenderLoop {
             self.swapchain_format,
             device,
             &mut command_encoder,
+            &mut self.pipeline_database,
         );
 
         queue.submit(Some(command_encoder.finish()));
 
         self.input_handler.update();
         self.world.update();
+        self.pipeline_database.update();
 
         false
     }

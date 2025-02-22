@@ -2,20 +2,45 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "rust: cargo build",
+            "label": "rust: cargo build host",
             "type": "process",
             "command": "cargo",
             "args": [
                 "build",
+                "-p",
+                "render-host",
             ],
         },
         {
-            "label": "rust: cargo build -r",
+            "label": "rust: cargo build host -r",
             "type": "process",
             "command": "cargo",
             "args": [
                 "build",
                 "-r",
+                "-p",
+                "render-host",
+            ],
+        },
+        {
+            "label": "rust: cargo build node",
+            "type": "process",
+            "command": "cargo",
+            "args": [
+                "build",
+                "-p",
+                "render-node",
+            ],
+        },
+        {
+            "label": "rust: cargo build node -r",
+            "type": "process",
+            "command": "cargo",
+            "args": [
+                "build",
+                "-r",
+                "-p",
+                "render-node",
             ],
         },
     ]
