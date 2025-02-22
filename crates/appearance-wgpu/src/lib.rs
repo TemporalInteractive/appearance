@@ -118,7 +118,7 @@ impl Surface {
                 wgpu::SurfaceError::Outdated
                 | wgpu::SurfaceError::Lost
                 // If OutOfMemory happens, reconfiguring may not help, but we might as well try
-                | wgpu::SurfaceError::OutOfMemory,
+                | wgpu::SurfaceError::OutOfMemory | wgpu::SurfaceError::Other,
             ) => {
                 surface.configure(&context.device, self.config());
                 surface
@@ -164,15 +164,10 @@ impl Context {
     ) -> Self {
         log::info!("Initializing wgpu...");
 
-        let backends = wgpu::util::backend_bits_from_env().unwrap_or_default();
-        let dx12_shader_compiler = wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default();
-        let gles_minor_version = wgpu::util::gles_minor_version_from_env().unwrap_or_default();
-
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends,
-            flags: wgpu::InstanceFlags::DEBUG, //wgpu::InstanceFlags::from_build_config().with_env(),
-            dx12_shader_compiler,
-            gles_minor_version,
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::VULKAN,
+            flags: wgpu::InstanceFlags::DEBUG,
+            backend_options: wgpu::BackendOptions::default(),
         });
         surface.pre_adapter(&instance, window);
 
