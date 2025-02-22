@@ -8,6 +8,7 @@ use winit::{
 };
 
 pub mod helper_passes;
+pub mod pipeline_database;
 
 pub use wgpu;
 

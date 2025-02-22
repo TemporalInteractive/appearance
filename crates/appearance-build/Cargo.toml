@@ -6,3 +6,8 @@ license.workspace = true
 name = "appearance-build"
 publish.workspace = true
 version = "0.1.0"
+
+[dependencies]
+appearance-asset-database.workspace = true
+
+xshell.workspace = true

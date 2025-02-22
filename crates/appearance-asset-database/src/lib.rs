@@ -2,6 +2,8 @@ use std::{collections::HashMap, fs, io::Read, sync::Arc};
 
 use anyhow::Result;
 
+pub mod asset_paths;
+
 pub trait Asset
 where
     Self: Sized,
@@ -55,5 +57,9 @@ impl<A: Asset> AssetDatabase<A> {
             self.assets.insert(path.to_owned(), asset.clone());
             Ok(asset)
         }
+    }
+
+    pub fn update(&mut self) {
+        // TODO: cleanup unused assets
     }
 }
