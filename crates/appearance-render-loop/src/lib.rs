@@ -39,7 +39,7 @@ pub trait RenderLoop: 'static + Sized {
         wgpu::Limits::downlevel_webgl2_defaults()
     }
 
-    fn init(config: &wgpu::SurfaceConfiguration, ctx: &Context, window: Arc<Window>) -> Self;
+    fn init(config: &wgpu::SurfaceConfiguration, ctx: &Arc<Context>, window: Arc<Window>) -> Self;
 
     fn resize(&mut self, config: &wgpu::SurfaceConfiguration, ctx: &Context);
 
@@ -52,21 +52,23 @@ pub trait RenderLoop: 'static + Sized {
 struct RenderLoopState<R: RenderLoop> {
     window: Arc<Window>,
     surface: Surface,
-    context: Context,
+    context: Arc<Context>,
     render_loop: R,
 }
 
 impl<R: RenderLoop> RenderLoopState<R> {
     pub async fn from_window(mut surface: Surface, window: Arc<Window>) -> Self {
-        let context = Context::init_with_window(
-            &mut surface,
-            window.clone(),
-            R::optional_features(),
-            R::required_features(),
-            R::required_downlevel_capabilities(),
-            R::required_limits(),
-        )
-        .await;
+        let context = Arc::new(
+            Context::init_with_window(
+                &mut surface,
+                window.clone(),
+                R::optional_features(),
+                R::required_features(),
+                R::required_downlevel_capabilities(),
+                R::required_limits(),
+            )
+            .await,
+        );
 
         surface.resume(&context, window.clone(), R::SRGB);
 

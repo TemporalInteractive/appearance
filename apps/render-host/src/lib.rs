@@ -1,14 +1,17 @@
 use anyhow::Result;
 use appearance::appearance_camera::CameraController;
+use appearance::appearance_distributed_renderer::DistributedRenderer;
 use appearance::appearance_input::InputHandler;
+use appearance::appearance_render_loop::node::NodeRenderer;
 use appearance::appearance_render_loop::winit::keyboard::KeyCode;
 use appearance::appearance_transform::{Transform, RIGHT, UP};
 use appearance::appearance_wgpu::pipeline_database::PipelineDatabase;
 use appearance::appearance_wgpu::Context;
 use appearance::appearance_world::components::{ModelComponent, TransformComponent};
+use appearance::appearance_world::visible_world_action::VisibleWorldActionType;
 use appearance::appearance_world::{specs, World};
 use clap::Parser;
-use glam::{Quat, Vec3};
+use glam::{Quat, UVec2, Vec3};
 use std::collections::VecDeque;
 use std::sync::Arc;
 
@@ -22,6 +25,11 @@ use appearance::appearance_wgpu::helper_passes::blit_pass;
 use appearance::appearance_wgpu::wgpu::{self, Extent3d, Origin3d};
 use appearance::Appearance;
 
+enum RenderingStrategy {
+    Distributed(Host),
+    Local(DistributedRenderer),
+}
+
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
@@ -32,11 +40,14 @@ struct Args {
     /// Node port to receive events
     #[arg(long, default_value_t = 34235)]
     node_port: u16,
+
+    #[arg(long, default_value_t = false)]
+    render_local: bool,
 }
 
 pub struct HostRenderLoop {
     pipeline_database: PipelineDatabase,
-    host: Host,
+    rendering_strategy: RenderingStrategy,
     texture: wgpu::Texture,
     swapchain_format: wgpu::TextureFormat,
     timer: Timer,
@@ -51,17 +62,32 @@ pub struct HostRenderLoop {
 }
 
 impl RenderLoop for HostRenderLoop {
+    fn required_features() -> wgpu::Features {
+        wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
+            | wgpu::Features::MAPPABLE_PRIMARY_BUFFERS
+    }
+
     fn required_limits() -> wgpu::Limits {
         wgpu::Limits {
-            max_texture_dimension_1d: 4096,
-            max_texture_dimension_2d: 4096,
-            ..wgpu::Limits::downlevel_webgl2_defaults()
+            max_compute_invocations_per_workgroup: 512,
+            max_compute_workgroup_size_x: 512,
+            max_buffer_size: (1024 << 20),
+            max_storage_buffer_binding_size: (1024 << 20),
+            ..wgpu::Limits::default()
         }
     }
 
-    fn init(config: &wgpu::SurfaceConfiguration, ctx: &Context, _window: Arc<Window>) -> Self {
+    fn init(config: &wgpu::SurfaceConfiguration, ctx: &Arc<Context>, _window: Arc<Window>) -> Self {
         let args = Args::parse();
-        let host = Host::new(args.host_port, args.node_port, config.width, config.height).unwrap();
+
+        let rendering_strategy = if args.render_local {
+            let distributed_renderer = DistributedRenderer::new_with_context(ctx.clone());
+            RenderingStrategy::Local(distributed_renderer)
+        } else {
+            let host =
+                Host::new(args.host_port, args.node_port, config.width, config.height).unwrap();
+            RenderingStrategy::Distributed(host)
+        };
 
         let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("texture"),
@@ -105,7 +131,7 @@ impl RenderLoop for HostRenderLoop {
 
         Self {
             pipeline_database: PipelineDatabase::new(),
-            host,
+            rendering_strategy,
             texture,
             swapchain_format: config.view_formats[0],
             timer: Timer::new(),
@@ -193,36 +219,77 @@ impl RenderLoop for HostRenderLoop {
                     .update(camera, &self.input_handler, delta_time);
         });
 
-        if self.host.handle_new_connections() {
-            self.world.resync_all_visible_world_actions();
-        } else {
-            self.world.finalize_visible_world_actions();
+        //let render_finished_callback = ;
+
+        match &mut self.rendering_strategy {
+            RenderingStrategy::Distributed(host) => {
+                if host.handle_new_connections() {
+                    self.world.resync_all_visible_world_actions();
+                } else {
+                    self.world.finalize_visible_world_actions();
+                }
+
+                host.send_visible_world_actions(self.world.get_visible_world_actions());
+
+                host.render(|pixels| {
+                    ctx.queue.write_texture(
+                        wgpu::TexelCopyTextureInfo {
+                            texture: &self.texture,
+                            mip_level: 0,
+                            origin: Origin3d::ZERO,
+                            aspect: wgpu::TextureAspect::All,
+                        },
+                        pixels,
+                        wgpu::TexelCopyBufferLayout {
+                            offset: 0,
+                            bytes_per_row: Some(4 * self.texture.width()),
+                            rows_per_image: None,
+                        },
+                        Extent3d {
+                            width: self.texture.width(),
+                            height: self.texture.height(),
+                            depth_or_array_layers: 1,
+                        },
+                    );
+                });
+            }
+            RenderingStrategy::Local(distributed_renderer) => {
+                let visible_world_actions = self.world.get_visible_world_actions();
+                for action in visible_world_actions {
+                    let visible_world_action =
+                        VisibleWorldActionType::from_ty_and_bytes(action.ty, action.data.as_ref());
+
+                    distributed_renderer.visible_world_action(&visible_world_action);
+                }
+
+                distributed_renderer.render(
+                    UVec2::new(self.texture.width(), self.texture.height()),
+                    0,
+                    self.texture.height(),
+                    |pixels| {
+                        ctx.queue.write_texture(
+                            wgpu::TexelCopyTextureInfo {
+                                texture: &self.texture,
+                                mip_level: 0,
+                                origin: Origin3d::ZERO,
+                                aspect: wgpu::TextureAspect::All,
+                            },
+                            pixels,
+                            wgpu::TexelCopyBufferLayout {
+                                offset: 0,
+                                bytes_per_row: Some(4 * self.texture.width()),
+                                rows_per_image: None,
+                            },
+                            Extent3d {
+                                width: self.texture.width(),
+                                height: self.texture.height(),
+                                depth_or_array_layers: 1,
+                            },
+                        );
+                    },
+                );
+            }
         }
-
-        self.host
-            .send_visible_world_actions(self.world.get_visible_world_actions());
-
-        self.host.render(|pixels| {
-            ctx.queue.write_texture(
-                wgpu::TexelCopyTextureInfo {
-                    texture: &self.texture,
-                    mip_level: 0,
-                    origin: Origin3d::ZERO,
-                    aspect: wgpu::TextureAspect::All,
-                },
-                pixels,
-                wgpu::TexelCopyBufferLayout {
-                    offset: 0,
-                    bytes_per_row: Some(4 * self.texture.width()),
-                    rows_per_image: None,
-                },
-                Extent3d {
-                    width: self.texture.width(),
-                    height: self.texture.height(),
-                    depth_or_array_layers: 1,
-                },
-            );
-        });
 
         let mut command_encoder = ctx
             .device
