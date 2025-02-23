@@ -13,6 +13,7 @@ appearance = { version = "0.1.0", path = "crates/appearance" }
 appearance-asset-database = { version = "0.1.0", path = "crates/appearance-asset-database" }
 appearance-build = { version = "0.1.0", path = "crates/appearance-build" }
 appearance-camera = { version = "0.1.0", path = "crates/appearance-camera" }
+appearance-distributed-renderer = { version = "0.1.0", path = "crates/appearance-distributed-renderer" }
 appearance-input = { version = "0.1.0", path = "crates/appearance-input" }
 appearance-model = { version = "0.1.0", path = "crates/appearance-model" }
 appearance-path-tracer = { version = "0.1.0", path = "crates/appearance-path-tracer" }
@@ -78,6 +79,7 @@ members = [
     "crates/appearance-asset-database",
     "crates/appearance-build",
     "crates/appearance-camera",
+    "crates/appearance-distributed-renderer",
     "crates/appearance-input",
     "crates/appearance-model",
     "crates/appearance-path-tracer",

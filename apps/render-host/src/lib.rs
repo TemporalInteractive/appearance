@@ -4,6 +4,7 @@ use appearance::appearance_input::InputHandler;
 use appearance::appearance_render_loop::winit::keyboard::KeyCode;
 use appearance::appearance_transform::{Transform, RIGHT, UP};
 use appearance::appearance_wgpu::pipeline_database::PipelineDatabase;
+use appearance::appearance_wgpu::Context;
 use appearance::appearance_world::components::{ModelComponent, TransformComponent};
 use appearance::appearance_world::{specs, World};
 use clap::Parser;
@@ -58,17 +59,11 @@ impl RenderLoop for HostRenderLoop {
         }
     }
 
-    fn init(
-        config: &wgpu::SurfaceConfiguration,
-        _adapter: &wgpu::Adapter,
-        device: &wgpu::Device,
-        _queue: &wgpu::Queue,
-        _window: Arc<Window>,
-    ) -> Self {
+    fn init(config: &wgpu::SurfaceConfiguration, ctx: &Context, _window: Arc<Window>) -> Self {
         let args = Args::parse();
         let host = Host::new(args.host_port, args.node_port, config.width, config.height).unwrap();
 
-        let texture = device.create_texture(&wgpu::TextureDescriptor {
+        let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("texture"),
             size: wgpu::Extent3d {
                 width: config.width,
@@ -125,13 +120,8 @@ impl RenderLoop for HostRenderLoop {
         }
     }
 
-    fn resize(
-        &mut self,
-        config: &wgpu::SurfaceConfiguration,
-        device: &wgpu::Device,
-        _queue: &wgpu::Queue,
-    ) {
-        self.texture = device.create_texture(&wgpu::TextureDescriptor {
+    fn resize(&mut self, config: &wgpu::SurfaceConfiguration, ctx: &Context) {
+        self.texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("texture"),
             size: wgpu::Extent3d {
                 width: config.width,
@@ -155,12 +145,7 @@ impl RenderLoop for HostRenderLoop {
         self.input_handler.handle_device_input(&event);
     }
 
-    fn render(
-        &mut self,
-        view: &wgpu::TextureView,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-    ) -> bool {
+    fn render(&mut self, view: &wgpu::TextureView, ctx: &Context) -> bool {
         let delta_time = self.timer.elapsed();
         self.timer.reset();
         let fps = 1.0 / delta_time;
@@ -218,7 +203,7 @@ impl RenderLoop for HostRenderLoop {
             .send_visible_world_actions(self.world.get_visible_world_actions());
 
         self.host.render(|pixels| {
-            queue.write_texture(
+            ctx.queue.write_texture(
                 wgpu::TexelCopyTextureInfo {
                     texture: &self.texture,
                     mip_level: 0,
@@ -239,8 +224,9 @@ impl RenderLoop for HostRenderLoop {
             );
         });
 
-        let mut command_encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        let mut command_encoder = ctx
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
         let texture_view = self
             .texture
@@ -249,12 +235,12 @@ impl RenderLoop for HostRenderLoop {
             &texture_view,
             view,
             self.swapchain_format,
-            device,
+            &ctx.device,
             &mut command_encoder,
             &mut self.pipeline_database,
         );
 
-        queue.submit(Some(command_encoder.finish()));
+        ctx.queue.submit(Some(command_encoder.finish()));
 
         self.input_handler.update();
         self.world.update();

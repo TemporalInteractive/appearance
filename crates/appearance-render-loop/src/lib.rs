@@ -39,30 +39,14 @@ pub trait RenderLoop: 'static + Sized {
         wgpu::Limits::downlevel_webgl2_defaults()
     }
 
-    fn init(
-        config: &wgpu::SurfaceConfiguration,
-        adapter: &wgpu::Adapter,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        window: Arc<Window>,
-    ) -> Self;
+    fn init(config: &wgpu::SurfaceConfiguration, ctx: &Context, window: Arc<Window>) -> Self;
 
-    fn resize(
-        &mut self,
-        config: &wgpu::SurfaceConfiguration,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-    );
+    fn resize(&mut self, config: &wgpu::SurfaceConfiguration, ctx: &Context);
 
     fn window_event(&mut self, _event: winit::event::WindowEvent) {}
     fn device_event(&mut self, _event: winit::event::DeviceEvent) {}
 
-    fn render(
-        &mut self,
-        view: &wgpu::TextureView,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-    ) -> bool;
+    fn render(&mut self, view: &wgpu::TextureView, ctx: &Context) -> bool;
 }
 
 struct RenderLoopState<R: RenderLoop> {
@@ -86,13 +70,7 @@ impl<R: RenderLoop> RenderLoopState<R> {
 
         surface.resume(&context, window.clone(), R::SRGB);
 
-        let render_loop = R::init(
-            surface.config(),
-            &context.adapter,
-            &context.device,
-            &context.queue,
-            window.clone(),
-        );
+        let render_loop = R::init(surface.config(), &context, window.clone());
 
         Self {
             window,
@@ -189,10 +167,7 @@ impl<R: RenderLoop> ApplicationHandler for RenderLoopHandler<R> {
                         format: Some(state.surface.config().view_formats[0]),
                         ..wgpu::TextureViewDescriptor::default()
                     });
-                    if state
-                        .render_loop
-                        .render(&view, &state.context.device, &state.context.queue)
-                    {
+                    if state.render_loop.render(&view, &state.context) {
                         event_loop.exit();
                     }
 
@@ -207,11 +182,9 @@ impl<R: RenderLoop> ApplicationHandler for RenderLoopHandler<R> {
                 if let Some(state) = &mut self.state {
                     state.surface.resize(&state.context, size);
 
-                    state.render_loop.resize(
-                        state.surface.config(),
-                        &state.context.device,
-                        &state.context.queue,
-                    );
+                    state
+                        .render_loop
+                        .resize(state.surface.config(), &state.context);
 
                     state.window.request_redraw();
                 }
