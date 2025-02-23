@@ -226,7 +226,7 @@ impl Context {
         log::info!("Initializing wgpu...");
 
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::VULKAN,
+            backends: wgpu::Backends::DX12,
             flags: wgpu::InstanceFlags::DEBUG | wgpu::InstanceFlags::VALIDATION,
             backend_options: wgpu::BackendOptions::default(),
         });
@@ -251,7 +251,7 @@ impl Context {
         log::info!("Initializing wgpu...");
 
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::VULKAN,
+            backends: wgpu::Backends::DX12,
             flags: wgpu::InstanceFlags::DEBUG | wgpu::InstanceFlags::VALIDATION,
             backend_options: wgpu::BackendOptions::default(),
         });

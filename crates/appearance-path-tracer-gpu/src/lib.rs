@@ -6,6 +6,7 @@ use appearance_wgpu::{
     ComputePipelineDescriptorExtensions, Context,
 };
 use appearance_world::visible_world_action::VisibleWorldActionType;
+use bytemuck::{Pod, Zeroable};
 use glam::UVec2;
 
 pub struct PathTracerGpu {
@@ -14,6 +15,15 @@ pub struct PathTracerGpu {
     render_target: wgpu::Texture,
     render_target_view: wgpu::TextureView,
     render_target_readback_buffer: wgpu::Buffer,
+}
+
+#[derive(Pod, Clone, Copy, Zeroable)]
+#[repr(C)]
+struct RaygenConstants {
+    width: u32,
+    height: u32,
+    _padding0: u32,
+    _padding1: u32,
 }
 
 impl PathTracerGpu {
@@ -120,7 +130,12 @@ impl PathTracerGpu {
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("appearance-path-tracer-gpu::raygen constants"),
-                contents: bytemuck::bytes_of(&resolution),
+                contents: bytemuck::bytes_of(&RaygenConstants {
+                    width: self.local_resolution.x,
+                    height: self.local_resolution.y,
+                    _padding0: 0,
+                    _padding1: 0,
+                }),
                 usage: wgpu::BufferUsages::UNIFORM,
             });
 

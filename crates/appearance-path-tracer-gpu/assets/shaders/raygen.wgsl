@@ -1,6 +1,8 @@
 struct Constants {
     width: u32,
     height: u32,
+    _padding0: u32,
+    _padding1: u32,
 }
 
 @group(0)
@@ -9,7 +11,7 @@ var<uniform> constants: Constants;
 
 @group(0)
 @binding(1)
-var texture: texture_storage_2d<rgba8unorm, write>;
+var texture: texture_storage_2d<rgba8unorm, read_write>;
 
 @compute
 @workgroup_size(16, 16)
@@ -21,5 +23,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     var pixel_center = vec2<f32>(f32(id.x) + 0.5, f32(id.y) + 0.5);
     var uv: vec2<f32> = (pixel_center / vec2<f32>(f32(constants.width), f32(constants.height)));// * 2.0 - 1.0;
     
-    textureStore(texture, vec2(i32(id.x), i32(id.y)), vec4(0.0, 0.0, f32(id.x) / 1000.0, 1.0));
+    textureStore(texture, vec2(i32(id.x), i32(id.y)), vec4(uv.x, uv.y, 0.0, 1.0));
 }
+
+//TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
