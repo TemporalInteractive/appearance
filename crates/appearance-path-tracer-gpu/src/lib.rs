@@ -1,8 +1,9 @@
 use appearance_wgpu::{
+    helper_passes::texture_to_buffer_pass,
     include_shader_src,
     pipeline_database::PipelineDatabase,
     readback_buffer,
-    wgpu::{self, util::DeviceExt},
+    wgpu::{self, util::DeviceExt, Extent3d},
     ComputePipelineDescriptorExtensions, Context,
 };
 use appearance_world::visible_world_action::VisibleWorldActionType;
@@ -48,7 +49,7 @@ impl PathTracerGpu {
 
         let render_target_readback_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("appearance-path-tracer-gpu render_target_readback_buffer"),
-            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::STORAGE,
             size: (resolution.x * resolution.y * 4) as u64,
             mapped_at_creation: false,
         });
@@ -92,7 +93,7 @@ impl PathTracerGpu {
             self.render_target_readback_buffer =
                 ctx.device.create_buffer(&wgpu::BufferDescriptor {
                     label: Some("appearance-path-tracer-gpu render_target_readback_buffer"),
-                    usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+                    usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::STORAGE,
                     size: (local_resolution.x * local_resolution.y * 4) as u64,
                     mapped_at_creation: false,
                 });
@@ -177,27 +178,40 @@ impl PathTracerGpu {
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
-        assert!((self.local_resolution.x * 4) % 256 == 0);
-        command_encoder.copy_texture_to_buffer(
-            wgpu::TexelCopyTextureInfo {
-                texture: &self.render_target,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
-            wgpu::TexelCopyBufferInfo {
-                buffer: &self.render_target_readback_buffer,
-                layout: wgpu::TexelCopyBufferLayout {
-                    offset: 0,
-                    bytes_per_row: Some(self.local_resolution.x * 4),
-                    rows_per_image: None,
-                },
-            },
-            wgpu::Extent3d {
+        // assert!((self.local_resolution.x * 4) % 256 == 0);
+        // command_encoder.copy_texture_to_buffer(
+        //     wgpu::TexelCopyTextureInfo {
+        //         texture: &self.render_target,
+        //         mip_level: 0,
+        //         origin: wgpu::Origin3d::ZERO,
+        //         aspect: wgpu::TextureAspect::All,
+        //     },
+        //     wgpu::TexelCopyBufferInfo {
+        //         buffer: &self.render_target_readback_buffer,
+        //         layout: wgpu::TexelCopyBufferLayout {
+        //             offset: 0,
+        //             bytes_per_row: Some(self.local_resolution.x * 4),
+        //             rows_per_image: None,
+        //         },
+        //     },
+        //     wgpu::Extent3d {
+        //         width: self.local_resolution.x,
+        //         height: self.local_resolution.y,
+        //         depth_or_array_layers: 1,
+        //     },
+        // );
+
+        texture_to_buffer_pass::encode(
+            Extent3d {
                 width: self.local_resolution.x,
                 height: self.local_resolution.y,
                 depth_or_array_layers: 1,
             },
+            &self.render_target_view,
+            &self.render_target_readback_buffer,
+            &ctx.device,
+            &mut command_encoder,
+            pipeline_database,
         );
 
         ctx.queue.submit(Some(command_encoder.finish()));
