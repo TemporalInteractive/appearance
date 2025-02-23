@@ -18,7 +18,7 @@ pub const RENDER_BLOCK_SIZE: u32 = 64;
 pub const BYTES_PER_PIXEL: usize = 4;
 pub const NODE_BYTES_PER_PIXEL: usize = 4;
 
-pub const ENABLE_COMPRESSION: bool = false;
+pub const ENABLE_COMPRESSION: bool = true;
 pub const NODE_PIXEL_FORMAT: turbojpeg::PixelFormat = turbojpeg::PixelFormat::RGBX;
 
 pub struct RenderPartialFinishedData {
