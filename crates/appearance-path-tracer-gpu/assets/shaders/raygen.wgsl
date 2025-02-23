@@ -13,7 +13,7 @@ var<uniform> constants: Constants;
 
 @group(0)
 @binding(1)
-var texture: texture_storage_2d<rgba8unorm, read_write>;
+var texture: texture_storage_2d<rgba8unorm, write>;
 
 @compute
 @workgroup_size(16, 16)

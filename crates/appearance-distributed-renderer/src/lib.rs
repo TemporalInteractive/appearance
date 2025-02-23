@@ -24,8 +24,7 @@ impl DistributedRenderer {
     pub fn new() -> Self {
         let ctx = Arc::new(block_on(Context::init(
             wgpu::Features::empty(),
-            wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
-                | wgpu::Features::MAPPABLE_PRIMARY_BUFFERS,
+            wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
             wgpu::DownlevelCapabilities {
                 flags: wgpu::DownlevelFlags::empty(),
                 shader_model: wgpu::ShaderModel::Sm5,
