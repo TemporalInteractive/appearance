@@ -41,6 +41,7 @@ struct Args {
     #[arg(long, default_value_t = 34235)]
     node_port: u16,
 
+    /// Run the renderer inside the host as a traditional engine would
     #[arg(long, default_value_t = false)]
     render_local: bool,
 }

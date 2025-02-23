@@ -17,6 +17,8 @@ use unreliable::{Socket, SocketEvent};
 pub const RENDER_BLOCK_SIZE: u32 = 64;
 pub const BYTES_PER_PIXEL: usize = 4;
 pub const NODE_BYTES_PER_PIXEL: usize = 4;
+
+pub const ENABLE_COMPRESSION: bool = false;
 pub const NODE_PIXEL_FORMAT: turbojpeg::PixelFormat = turbojpeg::PixelFormat::RGBX;
 
 pub struct RenderPartialFinishedData {
@@ -314,13 +316,21 @@ impl Host {
                             if let Ok(message) = NodeToHostMessage::from_bytes(packet.payload()) {
                                 match message {
                                     NodeToHostMessage::RenderPartialFinished(data) => {
-                                        let image = turbojpeg::decompress(
-                                            &data.compressed_pixel_bytes,
-                                            NODE_PIXEL_FORMAT,
-                                        )
-                                        .unwrap();
+                                        let uncompressed_pixels = if ENABLE_COMPRESSION {
+                                            turbojpeg::decompress(
+                                                &data.compressed_pixel_bytes,
+                                                NODE_PIXEL_FORMAT,
+                                            )
+                                            .unwrap()
+                                            .pixels
+                                        } else {
+                                            data.compressed_pixel_bytes.clone()
+                                        };
 
-                                        pixels.write_render_finished_pixels(&image.pixels, data);
+                                        pixels.write_render_finished_pixels(
+                                            &uncompressed_pixels,
+                                            data,
+                                        );
 
                                         // TODO: in the future the 8x8 blocks can be memcpied, however this will require a more advanced blit pass to display correctly
                                         // let first_dst_pixel = (data.row * width) + data.row_start;
