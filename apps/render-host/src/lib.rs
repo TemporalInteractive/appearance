@@ -219,14 +219,14 @@ impl RenderLoop for HostRenderLoop {
 
         self.host.render(|pixels| {
             queue.write_texture(
-                wgpu::ImageCopyTexture {
+                wgpu::TexelCopyTextureInfo {
                     texture: &self.texture,
                     mip_level: 0,
                     origin: Origin3d::ZERO,
                     aspect: wgpu::TextureAspect::All,
                 },
                 pixels,
-                wgpu::ImageDataLayout {
+                wgpu::TexelCopyBufferLayout {
                     offset: 0,
                     bytes_per_row: Some(4 * self.texture.width()),
                     rows_per_image: None,

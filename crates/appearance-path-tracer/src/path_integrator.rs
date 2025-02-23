@@ -112,7 +112,6 @@ impl PathIntegrator {
         let mut p_b = 1.0;
         let mut eta_scale = 1.0;
         let mut specular_bounce = false;
-        let mut any_non_specular_bounces = false;
         let mut prev_light_ctx = LightSourceSampleCtx::default();
 
         let mut depth = 0;
@@ -284,7 +283,6 @@ impl PathIntegrator {
                 };
 
                 specular_bounce = bsdf_sample.flags.contains(BxdfFlags::SPECULAR);
-                any_non_specular_bounces |= !bsdf_sample.flags.contains(BxdfFlags::SPECULAR);
                 if bsdf_sample.flags.contains(BxdfFlags::TRANSMISSION) {
                     eta_scale *= sqr(bsdf_sample.eta);
                 }

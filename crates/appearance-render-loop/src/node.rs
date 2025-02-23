@@ -1,4 +1,5 @@
 use core::{net::SocketAddr, ops::FnMut, sync::atomic::Ordering};
+use glam::UVec2;
 use std::thread;
 
 use anyhow::Result;
@@ -16,8 +17,7 @@ pub trait NodeRenderer {
 
     fn render<F: FnMut(&[u8])>(
         &mut self,
-        width: u32,
-        height: u32,
+        resolution: UVec2,
         start_row: u32,
         end_row: u32,
         result_callback: F,
@@ -45,8 +45,7 @@ impl<T: NodeRenderer + 'static> Node<T> {
         log::info!("start render: {:?}", data);
 
         self.renderer.render(
-            data.width,
-            data.height,
+            UVec2::new(data.width, data.height),
             data.row_start,
             data.row_end,
             |pixels| {

@@ -3,25 +3,22 @@ authors.workspace = true
 edition.workspace = true
 homepage.workspace = true
 license.workspace = true
-name = "appearance"
+name = "appearance-path-tracer-gpu"
 publish.workspace = true
 version = "0.1.0"
 
 [dependencies]
 appearance-asset-database.workspace = true
 appearance-camera.workspace = true
-appearance-input.workspace = true
 appearance-model.workspace = true
-appearance-path-tracer.workspace = true
-appearance-path-tracer-gpu.workspace = true
 appearance-profiling.workspace = true
 appearance-render-loop.workspace = true
-appearance-time.workspace = true
+appearance-texture.workspace = true
 appearance-transform.workspace = true
 appearance-wgpu.workspace = true
 appearance-world.workspace = true
 
-anyhow.workspace = true
-env_logger.workspace = true
+bytemuck.workspace = true
+glam.workspace = true
 log.workspace = true
-puffin.workspace = true
+uuid.workspace = true

@@ -78,12 +78,14 @@ impl PathTracer {
 
     pub fn render<F: FnMut(&[u8])>(
         &mut self,
-        width: u32,
-        height: u32,
+        resolution: UVec2,
         start_row: u32,
         end_row: u32,
         mut result_callback: F,
     ) {
+        let width = resolution.x;
+        let height = resolution.y;
+
         let num_rows = end_row - start_row;
         let num_blocks_x = width / RENDER_BLOCK_SIZE;
         let num_blocks_y = num_rows / RENDER_BLOCK_SIZE;

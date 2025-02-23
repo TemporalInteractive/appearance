@@ -15,6 +15,7 @@ appearance-world.workspace = true
 anyhow.workspace = true
 bytemuck.workspace = true
 futures.workspace = true
+glam.workspace = true
 log.workspace = true
 rayon.workspace = true
 turbojpeg.workspace = true

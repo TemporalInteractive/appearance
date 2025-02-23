@@ -1,5 +1,7 @@
-use std::sync::Arc;
+use std::{future::IntoFuture, sync::Arc};
 
+use bytemuck::Pod;
+use futures::{channel::oneshot, executor::block_on};
 use wgpu::{DownlevelCapabilities, Features, Instance, Limits, PowerPreference};
 use winit::{
     dpi::PhysicalSize,
@@ -154,23 +156,13 @@ pub struct Context {
 }
 
 impl Context {
-    pub async fn init_async(
-        surface: &mut Surface,
-        window: Arc<Window>,
+    async fn init_with_instance(
+        instance: Instance,
         optional_features: Features,
         required_features: Features,
         required_downlevel_capabilities: DownlevelCapabilities,
         required_limits: Limits,
     ) -> Self {
-        log::info!("Initializing wgpu...");
-
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::VULKAN,
-            flags: wgpu::InstanceFlags::DEBUG,
-            backend_options: wgpu::BackendOptions::default(),
-        });
-        surface.pre_adapter(&instance, window);
-
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: PowerPreference::HighPerformance,
@@ -222,6 +214,57 @@ impl Context {
             queue,
         }
     }
+
+    pub async fn init_with_window(
+        surface: &mut Surface,
+        window: Arc<Window>,
+        optional_features: Features,
+        required_features: Features,
+        required_downlevel_capabilities: DownlevelCapabilities,
+        required_limits: Limits,
+    ) -> Self {
+        log::info!("Initializing wgpu...");
+
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::VULKAN,
+            flags: wgpu::InstanceFlags::DEBUG | wgpu::InstanceFlags::VALIDATION,
+            backend_options: wgpu::BackendOptions::default(),
+        });
+        surface.pre_adapter(&instance, window);
+
+        Self::init_with_instance(
+            instance,
+            optional_features,
+            required_features,
+            required_downlevel_capabilities,
+            required_limits,
+        )
+        .await
+    }
+
+    pub async fn init(
+        optional_features: Features,
+        required_features: Features,
+        required_downlevel_capabilities: DownlevelCapabilities,
+        required_limits: Limits,
+    ) -> Self {
+        log::info!("Initializing wgpu...");
+
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::VULKAN,
+            flags: wgpu::InstanceFlags::DEBUG | wgpu::InstanceFlags::VALIDATION,
+            backend_options: wgpu::BackendOptions::default(),
+        });
+
+        Self::init_with_instance(
+            instance,
+            optional_features,
+            required_features,
+            required_downlevel_capabilities,
+            required_limits,
+        )
+        .await
+    }
 }
 
 pub trait ComputePipelineDescriptorExtensions<'a> {
@@ -239,4 +282,26 @@ impl<'a> ComputePipelineDescriptorExtensions<'a> for wgpu::ComputePipelineDescri
             cache: None,
         }
     }
+}
+
+pub async fn readback_buffer_async<T: Pod>(
+    staging_buffer: &wgpu::Buffer,
+    device: &wgpu::Device,
+) -> Vec<T> {
+    let buffer_slice = staging_buffer.slice(..);
+    let (sender, receiver) = oneshot::channel();
+    buffer_slice.map_async(wgpu::MapMode::Read, move |v| sender.send(v).unwrap());
+
+    device.poll(wgpu::Maintain::Wait);
+    receiver.into_future().await.unwrap().unwrap();
+
+    let data = buffer_slice.get_mapped_range();
+    let result = bytemuck::cast_slice(&data).to_vec();
+    drop(data);
+    staging_buffer.unmap();
+    result
+}
+
+pub fn readback_buffer<T: Pod>(staging_buffer: &wgpu::Buffer, device: &wgpu::Device) -> Vec<T> {
+    block_on(readback_buffer_async(staging_buffer, device))
 }

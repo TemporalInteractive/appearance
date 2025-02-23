@@ -74,7 +74,7 @@ struct RenderLoopState<R: RenderLoop> {
 
 impl<R: RenderLoop> RenderLoopState<R> {
     pub async fn from_window(mut surface: Surface, window: Arc<Window>) -> Self {
-        let context = Context::init_async(
+        let context = Context::init_with_window(
             &mut surface,
             window.clone(),
             R::optional_features(),

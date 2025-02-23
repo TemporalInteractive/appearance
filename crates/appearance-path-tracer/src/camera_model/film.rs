@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use appearance_render_loop::host::NODE_BYTES_PER_PIXEL;
 use glam::{Mat3, UVec2, Vec3};
 
 use crate::radiometry::{Rgb, RgbColorSpace, SampledSpectrum, SampledWavelengths};
@@ -50,7 +51,7 @@ impl Film {
         let output_rgb_from_sensor_rgb =
             *rgb_color_space.rgb_from_xyz_mat3() * *sensor.xyz_from_sensor_rgb_mat3();
 
-        let pixels_out = vec![0u8; (resolution.x * resolution.y * 3) as usize];
+        let pixels_out = vec![0u8; (resolution.x * resolution.y) as usize * NODE_BYTES_PER_PIXEL];
         let mut pixels = vec![0.0; (resolution.x * resolution.y * 3) as usize];
         let pixel_ptr = PixelDataPtr::new(&mut pixels);
 
@@ -92,7 +93,7 @@ impl Film {
 
     pub fn resize(&mut self, resolution: UVec2) {
         self.resolution = resolution;
-        self.pixels_out = vec![0u8; (resolution.x * resolution.y * 3) as usize];
+        self.pixels_out = vec![0u8; (resolution.x * resolution.y) as usize * NODE_BYTES_PER_PIXEL];
         self.pixels = vec![0.0; (resolution.x * resolution.y * 3) as usize];
         self.pixel_ptr = PixelDataPtr::new(&mut self.pixels);
     }
@@ -117,9 +118,9 @@ impl Film {
 
                 let rgb = Rgb::new(self.output_rgb_from_sensor_rgb * rgb.0);
 
-                self.pixels_out[i * 3] = (rgb.0.x * 255.0) as u8;
-                self.pixels_out[i * 3 + 1] = (rgb.0.y * 255.0) as u8;
-                self.pixels_out[i * 3 + 2] = (rgb.0.z * 255.0) as u8;
+                self.pixels_out[i * NODE_BYTES_PER_PIXEL] = (rgb.0.x * 255.0) as u8;
+                self.pixels_out[i * NODE_BYTES_PER_PIXEL + 1] = (rgb.0.y * 255.0) as u8;
+                self.pixels_out[i * NODE_BYTES_PER_PIXEL + 2] = (rgb.0.z * 255.0) as u8;
             }
         }
 
