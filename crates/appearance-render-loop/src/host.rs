@@ -330,7 +330,7 @@ impl Host {
         pixels: Arc<BufferedPixelData>,
     ) {
         while receive_events_running.load(Ordering::SeqCst) {
-            if let Ok(socket_event) = event_receiver.recv() {
+            if let Ok(socket_event) = event_receiver.try_recv() {
                 match socket_event {
                     SocketEvent::Packet(packet, delay) => {
                         if delay > 1 {
@@ -412,7 +412,7 @@ impl Host {
         self.height = height;
 
         // Invalidate any current incoming pixels by skipping a few frames ahead
-        //self.frame_idx += 3;
+        self.frame_idx += 3;
         self.pixels = Arc::new(BufferedPixelData::new(width, height));
 
         self.respawn_recieve_events();

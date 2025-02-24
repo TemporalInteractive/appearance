@@ -15,7 +15,7 @@ use glam::{Quat, UVec2, Vec3};
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use appearance::appearance_render_loop::host::Host;
+use appearance::appearance_render_loop::host::{Host, RENDER_BLOCK_SIZE};
 use appearance::appearance_render_loop::winit::window::Window;
 use appearance::appearance_render_loop::{
     winit, RenderLoop, RenderLoopHandler, RenderLoopWindowDesc,
@@ -147,11 +147,14 @@ impl RenderLoop for HostRenderLoop {
     }
 
     fn resize(&mut self, config: &wgpu::SurfaceConfiguration, ctx: &Context) {
+        let width = config.width.div_ceil(RENDER_BLOCK_SIZE) * RENDER_BLOCK_SIZE;
+        let height = config.height.div_ceil(RENDER_BLOCK_SIZE) * RENDER_BLOCK_SIZE;
+
         self.texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("texture"),
             size: wgpu::Extent3d {
-                width: config.width,
-                height: config.height,
+                width,
+                height,
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
@@ -163,7 +166,7 @@ impl RenderLoop for HostRenderLoop {
         });
 
         if let RenderingStrategy::Distributed(host) = &mut self.rendering_strategy {
-            host.resize(config.width, config.height);
+            host.resize(width, height);
         }
     }
 
