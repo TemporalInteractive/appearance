@@ -257,6 +257,9 @@ pub struct Host {
     socket: Socket,
     node_port: u16,
 
+    receive_events_thread: Option<thread::JoinHandle<()>>,
+    receive_events_running: Arc<AtomicBool>,
+
     width: u32,
     height: u32,
     pixels: Arc<BufferedPixelData>,
@@ -268,42 +271,65 @@ impl Host {
         let connected_nodes = Arc::new(Mutex::new(Vec::new()));
         let has_received_new_connections = Arc::new(AtomicBool::new(false));
         let pixels = Arc::new(BufferedPixelData::new(width, height));
+        let socket = Socket::new(None, host_port)?;
 
-        let mut socket = Socket::new(None, host_port)?;
-
-        let receive_events_event_receiver = socket.event_receiver().clone();
-        let recieve_events_connected_nodes = connected_nodes.clone();
-        let recieve_events_has_received_new_connections = has_received_new_connections.clone();
-        let recieve_events_pixels = pixels.clone();
-        thread::spawn(move || {
-            Self::receive_events(
-                receive_events_event_receiver,
-                recieve_events_connected_nodes,
-                recieve_events_has_received_new_connections,
-                recieve_events_pixels,
-            )
-        });
-
-        Ok(Self {
+        let mut host = Self {
             connected_nodes,
             has_received_new_connections,
             socket,
             node_port,
 
+            receive_events_thread: None,
+            receive_events_running: Arc::new(AtomicBool::new(false)),
+
             width,
             height,
             pixels,
             frame_idx: 0,
-        })
+        };
+
+        host.respawn_recieve_events();
+
+        Ok(host)
+    }
+
+    fn respawn_recieve_events(&mut self) {
+        println!("Respawn recieve events...");
+
+        if let Some(receive_events_thread) = self.receive_events_thread.take() {
+            println!("Trying to kill current thread");
+            self.receive_events_running.store(false, Ordering::SeqCst);
+            let _ = receive_events_thread.join();
+            println!("Killed current thread!");
+        }
+
+        self.receive_events_running.store(true, Ordering::SeqCst);
+
+        let receive_events_event_receiver = self.socket.event_receiver().clone();
+        let recieve_events_connected_nodes = self.connected_nodes.clone();
+        let recieve_events_has_received_new_connections = self.has_received_new_connections.clone();
+        let recieve_events_receive_events_running = self.receive_events_running.clone();
+        let recieve_events_pixels = self.pixels.clone();
+        self.receive_events_thread = Some(thread::spawn(move || {
+            Self::receive_events(
+                receive_events_event_receiver,
+                recieve_events_connected_nodes,
+                recieve_events_has_received_new_connections,
+                recieve_events_receive_events_running,
+                recieve_events_pixels,
+            )
+        }));
+        println!("Spawned new thread!");
     }
 
     fn receive_events(
         event_receiver: Receiver<SocketEvent>,
         connected_nodes: Arc<Mutex<Vec<SocketAddr>>>,
         has_received_new_connections: Arc<AtomicBool>,
+        receive_events_running: Arc<AtomicBool>,
         pixels: Arc<BufferedPixelData>,
     ) {
-        loop {
+        while receive_events_running.load(Ordering::SeqCst) {
             if let Ok(socket_event) = event_receiver.recv() {
                 match socket_event {
                     SocketEvent::Packet(packet, delay) => {
@@ -379,6 +405,17 @@ impl Host {
 
             thread::yield_now();
         }
+    }
+
+    pub fn resize(&mut self, width: u32, height: u32) {
+        self.width = width;
+        self.height = height;
+
+        // Invalidate any current incoming pixels by skipping a few frames ahead
+        //self.frame_idx += 3;
+        self.pixels = Arc::new(BufferedPixelData::new(width, height));
+
+        self.respawn_recieve_events();
     }
 
     pub fn send_visible_world_actions(&mut self, visible_world_actions: Vec<VisibleWorldAction>) {

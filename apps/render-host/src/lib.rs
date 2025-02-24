@@ -161,6 +161,10 @@ impl RenderLoop for HostRenderLoop {
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
+
+        if let RenderingStrategy::Distributed(host) = &mut self.rendering_strategy {
+            host.resize(config.width, config.height);
+        }
     }
 
     fn window_event(&mut self, event: winit::event::WindowEvent) {
@@ -218,8 +222,6 @@ impl RenderLoop for HostRenderLoop {
                 self.camera_controller
                     .update(camera, &self.input_handler, delta_time);
         });
-
-        //let render_finished_callback = ;
 
         match &mut self.rendering_strategy {
             RenderingStrategy::Distributed(host) => {
@@ -323,7 +325,7 @@ pub fn internal_main() -> Result<()> {
         title: "Render Host".to_owned(),
         width: 1280,
         height: 640,
-        resizeable: false,
+        resizeable: true,
         maximized: false,
     })
     .run()?;
