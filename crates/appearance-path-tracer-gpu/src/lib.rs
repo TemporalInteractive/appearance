@@ -1,16 +1,17 @@
 use appearance_wgpu::{
+    bindless::{Bindless, BindlessBuffer},
     include_shader_spirv,
     pipeline_database::PipelineDatabase,
     readback_buffer,
     wgpu::{
-        self, util::DeviceExt, BufferBindingType, ShaderStages, StorageTextureAccess,
+        self, util::DeviceExt, BufferBindingType, BufferUsages, ShaderStages, StorageTextureAccess,
         TextureViewDimension,
     },
     ComputePipelineDescriptorExtensions, Context,
 };
 use appearance_world::visible_world_action::VisibleWorldActionType;
 use bytemuck::{Pod, Zeroable};
-use glam::UVec2;
+use glam::{UVec2, Vec4};
 
 pub struct PathTracerGpu {
     resolution: UVec2,
@@ -18,6 +19,9 @@ pub struct PathTracerGpu {
     render_target: wgpu::Texture,
     render_target_view: wgpu::TextureView,
     render_target_readback_buffer: wgpu::Buffer,
+
+    bindless: Bindless,
+    clear_color_buffer: BindlessBuffer,
 }
 
 #[derive(Pod, Clone, Copy, Zeroable)]
@@ -25,8 +29,8 @@ pub struct PathTracerGpu {
 struct RaygenConstants {
     width: u32,
     height: u32,
+    clear_color_buffer: u32,
     _padding0: u32,
-    _padding1: u32,
 }
 
 impl PathTracerGpu {
@@ -56,12 +60,24 @@ impl PathTracerGpu {
             mapped_at_creation: false,
         });
 
+        let mut bindless = Bindless::new(&ctx.device);
+        let clear_color_buffer = bindless.create_storage_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: None,
+                contents: bytemuck::bytes_of(&Vec4::new(0.0, 1.0, 0.0, 0.0)),
+                usage: wgpu::BufferUsages::STORAGE,
+            },
+            &ctx.device,
+        );
+
         Self {
             resolution,
             local_resolution: resolution,
             render_target,
             render_target_view,
             render_target_readback_buffer,
+            bindless,
+            clear_color_buffer,
         }
     }
 
@@ -128,33 +144,35 @@ impl PathTracerGpu {
             .device
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("appearance-path-tracer-gpu::raygen"),
-                bind_group_layouts: &[&ctx.device.create_bind_group_layout(
-                    &wgpu::BindGroupLayoutDescriptor {
-                        label: None,
-                        entries: &[
-                            wgpu::BindGroupLayoutEntry {
-                                binding: 0,
-                                visibility: ShaderStages::COMPUTE,
-                                ty: wgpu::BindingType::Buffer {
-                                    ty: BufferBindingType::Uniform,
-                                    has_dynamic_offset: false,
-                                    min_binding_size: None,
+                bind_group_layouts: &[
+                    self.bindless.bind_group_layout(),
+                    &ctx.device
+                        .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                            label: None,
+                            entries: &[
+                                wgpu::BindGroupLayoutEntry {
+                                    binding: 0,
+                                    visibility: ShaderStages::COMPUTE,
+                                    ty: wgpu::BindingType::Buffer {
+                                        ty: BufferBindingType::Uniform,
+                                        has_dynamic_offset: false,
+                                        min_binding_size: None,
+                                    },
+                                    count: None,
                                 },
-                                count: None,
-                            },
-                            wgpu::BindGroupLayoutEntry {
-                                binding: 1,
-                                visibility: ShaderStages::COMPUTE,
-                                ty: wgpu::BindingType::StorageTexture {
-                                    access: StorageTextureAccess::ReadWrite,
-                                    format: wgpu::TextureFormat::Rgba8Unorm,
-                                    view_dimension: TextureViewDimension::D2,
+                                wgpu::BindGroupLayoutEntry {
+                                    binding: 1,
+                                    visibility: ShaderStages::COMPUTE,
+                                    ty: wgpu::BindingType::StorageTexture {
+                                        access: StorageTextureAccess::ReadWrite,
+                                        format: wgpu::TextureFormat::Rgba8Unorm,
+                                        view_dimension: TextureViewDimension::D2,
+                                    },
+                                    count: None,
                                 },
-                                count: None,
-                            },
-                        ],
-                    },
-                )],
+                            ],
+                        }),
+                ],
                 push_constant_ranges: &[],
             });
         let pipeline = pipeline_database.compute_pipeline(
@@ -173,13 +191,13 @@ impl PathTracerGpu {
                 contents: bytemuck::bytes_of(&RaygenConstants {
                     width: self.local_resolution.x,
                     height: self.local_resolution.y,
+                    clear_color_buffer: self.clear_color_buffer.binding(),
                     _padding0: 0,
-                    _padding1: 0,
                 }),
                 usage: wgpu::BufferUsages::UNIFORM,
             });
 
-        let bind_group_layout = pipeline.get_bind_group_layout(0);
+        let bind_group_layout = pipeline.get_bind_group_layout(1);
         let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
             layout: &bind_group_layout,
@@ -201,7 +219,8 @@ impl PathTracerGpu {
                 timestamp_writes: None,
             });
             cpass.set_pipeline(&pipeline);
-            cpass.set_bind_group(0, &bind_group, &[]);
+            cpass.set_bind_group(0, &self.bindless.bind_group(&ctx.device), &[]);
+            cpass.set_bind_group(1, &bind_group, &[]);
             cpass.insert_debug_marker("appearance-path-tracer-gpu::raygen");
             cpass.dispatch_workgroups(
                 self.local_resolution.x.div_ceil(16),

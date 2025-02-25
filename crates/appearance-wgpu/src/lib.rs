@@ -1,5 +1,6 @@
 use std::{future::IntoFuture, sync::Arc};
 
+use bindless::Bindless;
 use bytemuck::Pod;
 use futures::{channel::oneshot, executor::block_on};
 use wgpu::{DownlevelCapabilities, Features, Instance, Limits, PowerPreference};

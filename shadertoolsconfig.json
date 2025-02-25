@@ -2,7 +2,8 @@
     "hlsl.preprocessorDefinitions": {
     },
     "hlsl.additionalIncludeDirectories": [
-        "crates\\appearance-render-loop\\assets\\shaders"
+        "crates\\appearance-render-loop\\assets\\shaders",
+        "crates\\appearance-wgpu\\assets\\shaders"
     ],
     "hlsl.virtualDirectoryMappings": {
     }

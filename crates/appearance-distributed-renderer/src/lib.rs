@@ -24,7 +24,10 @@ impl DistributedRenderer {
     pub fn new() -> Self {
         let ctx = Arc::new(block_on(Context::init(
             wgpu::Features::empty(),
-            wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
+            wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
+                | wgpu::Features::BUFFER_BINDING_ARRAY
+                | wgpu::Features::STORAGE_RESOURCE_BINDING_ARRAY
+                | wgpu::Features::VERTEX_WRITABLE_STORAGE,
             wgpu::DownlevelCapabilities {
                 flags: wgpu::DownlevelFlags::empty(),
                 shader_model: wgpu::ShaderModel::Sm5,
@@ -35,6 +38,7 @@ impl DistributedRenderer {
                 max_compute_workgroup_size_x: 512,
                 max_buffer_size: (1024 << 20),
                 max_storage_buffer_binding_size: (1024 << 20),
+                max_storage_buffers_per_shader_stage: 1024 * 64,
                 ..wgpu::Limits::default()
             },
         )));
