@@ -1,67 +1,77 @@
-use appearance_wgpu::{
-    include_shader_spirv,
-    pipeline_database::PipelineDatabase,
-    readback_buffer,
-    wgpu::{
-        self, util::DeviceExt, BufferBindingType, ShaderStages, StorageTextureAccess,
-        TextureViewDimension,
-    },
-    ComputePipelineDescriptorExtensions, Context,
-};
+use appearance_wgpu::{pipeline_database::PipelineDatabase, wgpu, Context};
 use appearance_world::visible_world_action::VisibleWorldActionType;
-use bytemuck::{Pod, Zeroable};
-use glam::UVec2;
+use film::Film;
+use glam::{Mat4, UVec2, Vec3};
+use raygen_pass::RaygenPassParameters;
+use resolve_pass::ResolvePassParameters;
+use trace_pass::TracePassParameters;
+
+mod film;
+mod raygen_pass;
+mod resolve_pass;
+mod trace_pass;
+
+#[repr(C)]
+struct Ray {
+    origin: Vec3,
+    _padding0: u32,
+    direction: Vec3,
+    _padding1: u32,
+}
+
+#[repr(C)]
+struct Payload {
+    accumulated: Vec3,
+    _padding0: u32,
+}
+
+struct SizedResources {
+    film: Film,
+    rays: wgpu::Buffer,
+    payloads: wgpu::Buffer,
+}
+
+impl SizedResources {
+    fn new(resolution: UVec2, device: &wgpu::Device) -> Self {
+        let film = Film::new(resolution, device);
+
+        let rays = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("appearance-path-tracer-gpu rays"),
+            size: (std::mem::size_of::<Ray>() as u32 * resolution.x * resolution.y) as u64,
+            mapped_at_creation: false,
+            usage: wgpu::BufferUsages::STORAGE,
+        });
+
+        let payloads = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("appearance-path-tracer-gpu payloads"),
+            size: (std::mem::size_of::<Payload>() as u32 * resolution.x * resolution.y) as u64,
+            mapped_at_creation: false,
+            usage: wgpu::BufferUsages::STORAGE,
+        });
+
+        Self {
+            film,
+            rays,
+            payloads,
+        }
+    }
+}
 
 pub struct PathTracerGpu {
     resolution: UVec2,
     local_resolution: UVec2,
-    render_target: wgpu::Texture,
-    render_target_view: wgpu::TextureView,
-    render_target_readback_buffer: wgpu::Buffer,
-}
-
-#[derive(Pod, Clone, Copy, Zeroable)]
-#[repr(C)]
-struct RaygenConstants {
-    width: u32,
-    height: u32,
-    _padding0: u32,
-    _padding1: u32,
+    sized_resources: SizedResources,
 }
 
 impl PathTracerGpu {
     pub fn new(ctx: &Context) -> Self {
         let resolution = UVec2::new(1920, 1080);
-
-        let render_target = ctx.device.create_texture(&wgpu::TextureDescriptor {
-            size: wgpu::Extent3d {
-                width: resolution.x,
-                height: resolution.y,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8Unorm,
-            usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::COPY_SRC,
-            label: None,
-            view_formats: &[],
-        });
-        let render_target_view = render_target.create_view(&wgpu::TextureViewDescriptor::default());
-
-        let render_target_readback_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("appearance-path-tracer-gpu render_target_readback_buffer"),
-            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-            size: (resolution.x * resolution.y * 4) as u64,
-            mapped_at_creation: false,
-        });
+        let sized_resources = SizedResources::new(resolution, &ctx.device);
 
         Self {
             resolution,
             local_resolution: resolution,
-            render_target,
-            render_target_view,
-            render_target_readback_buffer,
+            sized_resources,
         }
     }
 
@@ -73,32 +83,7 @@ impl PathTracerGpu {
         if self.resolution != resolution || self.local_resolution != local_resolution {
             self.resolution = resolution;
             self.local_resolution = local_resolution;
-
-            self.render_target = ctx.device.create_texture(&wgpu::TextureDescriptor {
-                size: wgpu::Extent3d {
-                    width: local_resolution.x,
-                    height: local_resolution.y,
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Rgba8Unorm,
-                usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::COPY_SRC,
-                label: None,
-                view_formats: &[],
-            });
-            self.render_target_view = self
-                .render_target
-                .create_view(&wgpu::TextureViewDescriptor::default());
-
-            self.render_target_readback_buffer =
-                ctx.device.create_buffer(&wgpu::BufferDescriptor {
-                    label: Some("appearance-path-tracer-gpu render_target_readback_buffer"),
-                    usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-                    size: (local_resolution.x * local_resolution.y * 4) as u64,
-                    mapped_at_creation: false,
-                });
+            self.sized_resources = SizedResources::new(self.local_resolution, &ctx.device);
         }
     }
 
@@ -117,125 +102,47 @@ impl PathTracerGpu {
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
-        let shader = pipeline_database.shader_from_spirv(
+        raygen_pass::encode(
+            &RaygenPassParameters {
+                inv_view: Mat4::IDENTITY,
+                inv_proj: Mat4::IDENTITY,
+                resolution: self.local_resolution,
+                rays: &self.sized_resources.rays,
+            },
             &ctx.device,
-            "appearance-path-tracer-gpu::raygen",
-            include_shader_spirv!(
-                "crates/appearance-path-tracer-gpu/assets/shaders/raygen.cs.hlsl"
-            ),
+            &mut command_encoder,
+            pipeline_database,
         );
-        let pipeline = pipeline_database.compute_pipeline(
+
+        trace_pass::encode(
+            &TracePassParameters {
+                ray_count: self.local_resolution.x * self.local_resolution.y,
+                rays: &self.sized_resources.rays,
+                payloads: &self.sized_resources.payloads,
+            },
             &ctx.device,
-            wgpu::ComputePipelineDescriptor {
-                label: Some("appearance-path-tracer-gpu::raygen"),
-                ..wgpu::ComputePipelineDescriptor::partial_default(&shader)
-            },
-            || {
-                ctx.device
-                    .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                        label: Some("appearance-path-tracer-gpu::raygen"),
-                        bind_group_layouts: &[&ctx.device.create_bind_group_layout(
-                            &wgpu::BindGroupLayoutDescriptor {
-                                label: None,
-                                entries: &[
-                                    wgpu::BindGroupLayoutEntry {
-                                        binding: 0,
-                                        visibility: ShaderStages::COMPUTE,
-                                        ty: wgpu::BindingType::Buffer {
-                                            ty: BufferBindingType::Uniform,
-                                            has_dynamic_offset: false,
-                                            min_binding_size: None,
-                                        },
-                                        count: None,
-                                    },
-                                    wgpu::BindGroupLayoutEntry {
-                                        binding: 1,
-                                        visibility: ShaderStages::COMPUTE,
-                                        ty: wgpu::BindingType::StorageTexture {
-                                            access: StorageTextureAccess::ReadWrite,
-                                            format: wgpu::TextureFormat::Rgba8Unorm,
-                                            view_dimension: TextureViewDimension::D2,
-                                        },
-                                        count: None,
-                                    },
-                                ],
-                            },
-                        )],
-                        push_constant_ranges: &[],
-                    })
-            },
+            &mut command_encoder,
+            pipeline_database,
         );
 
-        let constants = ctx
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("appearance-path-tracer-gpu::raygen constants"),
-                contents: bytemuck::bytes_of(&RaygenConstants {
-                    width: self.local_resolution.x,
-                    height: self.local_resolution.y,
-                    _padding0: 0,
-                    _padding1: 0,
-                }),
-                usage: wgpu::BufferUsages::UNIFORM,
-            });
-
-        let bind_group_layout = pipeline.get_bind_group_layout(0);
-        let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: None,
-            layout: &bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: constants.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&self.render_target_view),
-                },
-            ],
-        });
-
-        {
-            let mut cpass = command_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("appearance-path-tracer-gpu::raygen"),
-                timestamp_writes: None,
-            });
-            cpass.set_pipeline(&pipeline);
-            cpass.set_bind_group(0, &bind_group, &[]);
-            cpass.insert_debug_marker("appearance-path-tracer-gpu::raygen");
-            cpass.dispatch_workgroups(
-                self.local_resolution.x.div_ceil(16),
-                self.local_resolution.y.div_ceil(16),
-                1,
-            );
-        }
-
-        command_encoder.copy_texture_to_buffer(
-            wgpu::TexelCopyTextureInfo {
-                texture: &self.render_target,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
+        resolve_pass::encode(
+            &ResolvePassParameters {
+                resolution: self.local_resolution,
+                payloads: &self.sized_resources.payloads,
+                target_view: self.sized_resources.film.texture_view(),
             },
-            wgpu::TexelCopyBufferInfo {
-                buffer: &self.render_target_readback_buffer,
-                layout: wgpu::TexelCopyBufferLayout {
-                    offset: 0,
-                    bytes_per_row: Some(self.local_resolution.x * 4),
-                    rows_per_image: None,
-                },
-            },
-            wgpu::Extent3d {
-                width: self.local_resolution.x,
-                height: self.local_resolution.y,
-                depth_or_array_layers: 1,
-            },
+            &ctx.device,
+            &mut command_encoder,
+            pipeline_database,
         );
+
+        self.sized_resources
+            .film
+            .prepare_pixel_readback(&mut command_encoder);
 
         ctx.queue.submit(Some(command_encoder.finish()));
 
-        let pixels = readback_buffer(&self.render_target_readback_buffer, &ctx.device);
-
+        let pixels = self.sized_resources.film.readback_pixels(&ctx.device);
         result_callback(&pixels);
     }
 }

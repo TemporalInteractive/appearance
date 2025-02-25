@@ -51,12 +51,14 @@ fn copy_assets(shell: &Shell, root_dir: &Path, dir: &PathBuf, target_dir: &PathB
                 };
 
                 let src = std::fs::read_to_string(file).expect("Invalid shader name.");
-                //let resolved_shader_src = parse_shader_includes(contents);
 
-                let include_dirs: Vec<String> = CRATES
+                let mut include_dirs: Vec<String> = CRATES
                     .iter()
                     .map(|crate_name| format!("-I crates/{}/assets/shaders", crate_name))
                     .collect();
+
+                let parent_dir = file.parent().unwrap().to_str().unwrap();
+                include_dirs.push(format!("-I {}", parent_dir));
 
                 let mut args = vec!["-spirv", "-WX"];
                 for include_dir in &include_dirs {
