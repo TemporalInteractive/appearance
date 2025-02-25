@@ -1,7 +1,8 @@
+use appearance_camera::Camera;
 use appearance_wgpu::{pipeline_database::PipelineDatabase, wgpu, Context};
 use appearance_world::visible_world_action::VisibleWorldActionType;
 use film::Film;
-use glam::{Mat4, UVec2, Vec3};
+use glam::{UVec2, Vec3};
 use raygen_pass::RaygenPassParameters;
 use resolve_pass::ResolvePassParameters;
 use trace_pass::TracePassParameters;
@@ -61,6 +62,7 @@ pub struct PathTracerGpu {
     resolution: UVec2,
     local_resolution: UVec2,
     sized_resources: SizedResources,
+    camera: Camera,
 }
 
 impl PathTracerGpu {
@@ -72,10 +74,20 @@ impl PathTracerGpu {
             resolution,
             local_resolution: resolution,
             sized_resources,
+            camera: Camera::default(),
         }
     }
 
-    pub fn handle_visible_world_action(&mut self, _action: &VisibleWorldActionType) {}
+    pub fn handle_visible_world_action(&mut self, action: &VisibleWorldActionType) {
+        if let VisibleWorldActionType::CameraUpdate(data) = action {
+            self.camera.set_near(data.near);
+            self.camera.set_far(data.far);
+            self.camera.set_fov(data.fov);
+            self.camera
+                .transform
+                .set_matrix(data.transform_matrix_bytes);
+        }
+    }
 
     fn resize(&mut self, resolution: UVec2, start_row: u32, end_row: u32, ctx: &Context) {
         let local_resolution = UVec2::new(resolution.x, end_row - start_row);
@@ -98,14 +110,19 @@ impl PathTracerGpu {
     ) {
         self.resize(resolution, start_row, end_row, ctx);
 
+        self.camera
+            .set_aspect_ratio(resolution.x as f32 / resolution.y as f32);
+        let inv_view = self.camera.transform.get_matrix();
+        let inv_proj = self.camera.get_matrix().inverse();
+
         let mut command_encoder = ctx
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
         raygen_pass::encode(
             &RaygenPassParameters {
-                inv_view: Mat4::IDENTITY,
-                inv_proj: Mat4::IDENTITY,
+                inv_view,
+                inv_proj,
                 resolution: self.local_resolution,
                 rays: &self.sized_resources.rays,
             },

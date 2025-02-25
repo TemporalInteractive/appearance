@@ -21,5 +21,9 @@ void main(uint3 global_id : SV_DispatchThreadID) {
     if (id >= rayCount) return;
     
     Ray ray = rays[id];
-    payloads[id].accumulated = lerp(float3(0.7, 0.7, 0.8), float3(1.0, 1.0, 1.0), ray.direction.y * 0.5 + 0.5);
+
+    float a = 0.5 * (ray.direction.y + 1.0);
+    float3 color = (1.0 - a) * float3(1.0, 1.0, 1.0) + a * float3(0.5, 0.7, 1.0);
+
+    payloads[id].accumulated = color;
 }
