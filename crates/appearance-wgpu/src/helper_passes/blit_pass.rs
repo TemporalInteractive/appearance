@@ -20,38 +20,11 @@ pub fn encode(
         "appearance-wgpu::blit_fs",
         include_shader_spirv!("crates/appearance-wgpu/assets/shaders/blit.fs.hlsl"),
     );
-    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-        label: Some("appearance-path-tracer-gpu::raygen"),
-        bind_group_layouts: &[
-            &device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: None,
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Texture {
-                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                            multisampled: false,
-                        },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                        count: None,
-                    },
-                ],
-            }),
-        ],
-        push_constant_ranges: &[],
-    });
     let pipeline = pipeline_database.render_pipeline(
         device,
         wgpu::RenderPipelineDescriptor {
             label: Some("appearance-wgpu::blit"),
-            layout: Some(&pipeline_layout),
+            layout: None,
             vertex: wgpu::VertexState {
                 module: &shader_vs,
                 entry_point: None,
@@ -69,6 +42,37 @@ pub fn encode(
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
             cache: None,
+        },
+        || {
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("appearance-path-tracer-gpu::raygen"),
+                bind_group_layouts: &[&device.create_bind_group_layout(
+                    &wgpu::BindGroupLayoutDescriptor {
+                        label: None,
+                        entries: &[
+                            wgpu::BindGroupLayoutEntry {
+                                binding: 0,
+                                visibility: wgpu::ShaderStages::FRAGMENT,
+                                ty: wgpu::BindingType::Texture {
+                                    sample_type: wgpu::TextureSampleType::Float {
+                                        filterable: true,
+                                    },
+                                    view_dimension: wgpu::TextureViewDimension::D2,
+                                    multisampled: false,
+                                },
+                                count: None,
+                            },
+                            wgpu::BindGroupLayoutEntry {
+                                binding: 1,
+                                visibility: wgpu::ShaderStages::FRAGMENT,
+                                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                                count: None,
+                            },
+                        ],
+                    },
+                )],
+                push_constant_ranges: &[],
+            })
         },
     );
 

@@ -9,7 +9,6 @@ use winit::{
     window::Window,
 };
 
-pub mod bindless;
 pub mod helper_passes;
 pub mod pipeline_database;
 

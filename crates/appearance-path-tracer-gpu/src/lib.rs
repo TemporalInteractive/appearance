@@ -124,45 +124,45 @@ impl PathTracerGpu {
                 "crates/appearance-path-tracer-gpu/assets/shaders/raygen.cs.hlsl"
             ),
         );
-        let pipeline_layout = ctx
-            .device
-            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("appearance-path-tracer-gpu::raygen"),
-                bind_group_layouts: &[&ctx.device.create_bind_group_layout(
-                    &wgpu::BindGroupLayoutDescriptor {
-                        label: None,
-                        entries: &[
-                            wgpu::BindGroupLayoutEntry {
-                                binding: 0,
-                                visibility: ShaderStages::COMPUTE,
-                                ty: wgpu::BindingType::Buffer {
-                                    ty: BufferBindingType::Uniform,
-                                    has_dynamic_offset: false,
-                                    min_binding_size: None,
-                                },
-                                count: None,
-                            },
-                            wgpu::BindGroupLayoutEntry {
-                                binding: 1,
-                                visibility: ShaderStages::COMPUTE,
-                                ty: wgpu::BindingType::StorageTexture {
-                                    access: StorageTextureAccess::ReadWrite,
-                                    format: wgpu::TextureFormat::Rgba8Unorm,
-                                    view_dimension: TextureViewDimension::D2,
-                                },
-                                count: None,
-                            },
-                        ],
-                    },
-                )],
-                push_constant_ranges: &[],
-            });
         let pipeline = pipeline_database.compute_pipeline(
             &ctx.device,
             wgpu::ComputePipelineDescriptor {
                 label: Some("appearance-path-tracer-gpu::raygen"),
-                layout: Some(&pipeline_layout),
                 ..wgpu::ComputePipelineDescriptor::partial_default(&shader)
+            },
+            || {
+                ctx.device
+                    .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                        label: Some("appearance-path-tracer-gpu::raygen"),
+                        bind_group_layouts: &[&ctx.device.create_bind_group_layout(
+                            &wgpu::BindGroupLayoutDescriptor {
+                                label: None,
+                                entries: &[
+                                    wgpu::BindGroupLayoutEntry {
+                                        binding: 0,
+                                        visibility: ShaderStages::COMPUTE,
+                                        ty: wgpu::BindingType::Buffer {
+                                            ty: BufferBindingType::Uniform,
+                                            has_dynamic_offset: false,
+                                            min_binding_size: None,
+                                        },
+                                        count: None,
+                                    },
+                                    wgpu::BindGroupLayoutEntry {
+                                        binding: 1,
+                                        visibility: ShaderStages::COMPUTE,
+                                        ty: wgpu::BindingType::StorageTexture {
+                                            access: StorageTextureAccess::ReadWrite,
+                                            format: wgpu::TextureFormat::Rgba8Unorm,
+                                            view_dimension: TextureViewDimension::D2,
+                                        },
+                                        count: None,
+                                    },
+                                ],
+                            },
+                        )],
+                        push_constant_ranges: &[],
+                    })
             },
         );
 
