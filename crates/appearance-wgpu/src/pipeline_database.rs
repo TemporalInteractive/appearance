@@ -10,17 +10,15 @@ use appearance_asset_database::{Asset, AssetDatabase};
 
 pub struct ShaderAsset {
     pub file_path: String,
-    pub src: String,
+    pub spirv: Vec<u8>,
     shader_module: OnceLock<wgpu::ShaderModule>,
 }
 
 impl Asset for ShaderAsset {
     fn load(file_path: &str, data: &[u8]) -> Result<Self> {
-        let src = str::from_utf8(data)?.to_owned();
-
         Ok(Self {
             file_path: file_path.to_owned(),
-            src,
+            spirv: data.to_vec(),
             shader_module: OnceLock::new(),
         })
     }
@@ -31,7 +29,7 @@ impl ShaderAsset {
         self.shader_module.get_or_init(|| {
             device.create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: Some(&self.file_path),
-                source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(self.src.as_str())),
+                source: wgpu::util::make_spirv(&self.spirv),
             })
         })
     }
@@ -41,6 +39,16 @@ impl ShaderAsset {
 macro_rules! include_shader_src {
     ($NAME:literal) => {
         include_str!(concat!(
+            concat!(env!("OUT_DIR"), "/../../../assets/"),
+            $NAME
+        ))
+    };
+}
+
+#[macro_export]
+macro_rules! include_shader_spirv {
+    ($NAME:literal) => {
+        include_bytes!(concat!(
             concat!(env!("OUT_DIR"), "/../../../assets/"),
             $NAME
         ))
@@ -82,19 +90,24 @@ impl PipelineDatabase {
         self.asset_shader_modules.get(path)
     }
 
-    pub fn shader_from_src(&mut self, device: &wgpu::Device, src: &str) -> Arc<wgpu::ShaderModule> {
+    pub fn shader_from_spirv(
+        &mut self,
+        device: &wgpu::Device,
+        id: &str,
+        spirv: &[u8],
+    ) -> Arc<wgpu::ShaderModule> {
         appearance_profiling::profile_function!();
 
-        if let Some(module) = self.shader_modules.get(src) {
+        if let Some(module) = self.shader_modules.get(id) {
             return module.clone();
         }
 
         let module = Arc::new(device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some(src),
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(src)),
+            label: Some(id),
+            source: wgpu::util::make_spirv(&spirv),
         }));
 
-        self.shader_modules.insert(src.to_owned(), module.clone());
+        self.shader_modules.insert(id.to_owned(), module.clone());
         module
     }
 

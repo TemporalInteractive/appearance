@@ -54,5 +54,5 @@ pub fn parse_shader_includes(mut contents: String) -> String {
         );
     }
 
-    contents.replace("::", "_")
+    contents
 }

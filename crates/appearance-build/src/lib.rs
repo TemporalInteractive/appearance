@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use hassle_rs::compile_hlsl;
 use shader_resolve::parse_shader_includes;
 pub use xshell::Shell;
 
@@ -33,14 +34,46 @@ fn copy_assets(shell: &Shell, root_dir: &Path, dir: &PathBuf, target_dir: &PathB
             let local_dir = file.strip_prefix(root_dir).unwrap();
             let dst = target_dir.join(local_dir);
             shell.create_dir(dst.parent().unwrap()).unwrap();
-            shell.copy_file(file, dst.clone()).unwrap();
+
+            let mut is_shader_file = false;
 
             if let Some(extension) = file.extension() {
-                if extension.to_str().unwrap() == "wgsl" {
+                if extension.to_str().unwrap() == "hlsl" {
+                    let file_name = file.file_name().unwrap().to_str().unwrap();
+                    let target_profile = if file_name.ends_with(".cs") {
+                        "cs_6_5"
+                    } else if file_name.ends_with(".vs") {
+                        "cs_6_5"
+                    } else {
+                        "cs_6_5"
+                    };
+                    println!("cargo::warning={}", target_profile);
+
                     let contents = std::fs::read_to_string(file).expect("Invalid shader name.");
                     let resolved_shader_src = parse_shader_includes(contents);
-                    std::fs::write(dst, resolved_shader_src).unwrap();
+
+                    let spirv = match compile_hlsl(
+                        file_name,
+                        &resolved_shader_src,
+                        "main",
+                        target_profile,
+                        &["-spirv", "-WX"],
+                        &[],
+                    ) {
+                        Ok(spirv) => spirv,
+                        Err(e) => {
+                            println!("cargo::error={}", e);
+                            panic!();
+                        }
+                    };
+
+                    std::fs::write(&dst, spirv).unwrap();
+                    is_shader_file = true;
                 }
+            }
+
+            if !is_shader_file {
+                shell.copy_file(file, dst.clone()).unwrap();
             }
         } else {
             copy_assets(shell, root_dir, file, target_dir);

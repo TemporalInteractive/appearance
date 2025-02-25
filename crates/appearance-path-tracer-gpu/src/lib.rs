@@ -1,8 +1,11 @@
 use appearance_wgpu::{
-    include_shader_src,
+    include_shader_spirv, include_shader_src,
     pipeline_database::PipelineDatabase,
     readback_buffer,
-    wgpu::{self, util::DeviceExt},
+    wgpu::{
+        self, util::DeviceExt, BufferBindingType, ShaderStages, StorageTextureAccess,
+        TextureViewDimension,
+    },
     ComputePipelineDescriptorExtensions, Context,
 };
 use appearance_world::visible_world_action::VisibleWorldActionType;
@@ -114,16 +117,53 @@ impl PathTracerGpu {
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
-        let shader = pipeline_database.shader_from_src(
+        let shader = pipeline_database.shader_from_spirv(
             &ctx.device,
-            include_shader_src!("crates/appearance-path-tracer-gpu/assets/shaders/raygen.wgsl"),
+            "appearance-path-tracer-gpu::raygen",
+            include_shader_spirv!(
+                "crates/appearance-path-tracer-gpu/assets/shaders/raygen.cs.hlsl"
+            ),
         );
+        let pipeline_layout = ctx
+            .device
+            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("appearance-path-tracer-gpu::raygen"),
+                bind_group_layouts: &[&ctx.device.create_bind_group_layout(
+                    &wgpu::BindGroupLayoutDescriptor {
+                        label: None,
+                        entries: &[
+                            wgpu::BindGroupLayoutEntry {
+                                binding: 0,
+                                visibility: ShaderStages::COMPUTE,
+                                ty: wgpu::BindingType::Buffer {
+                                    ty: BufferBindingType::Uniform,
+                                    has_dynamic_offset: false,
+                                    min_binding_size: None,
+                                },
+                                count: None,
+                            },
+                            wgpu::BindGroupLayoutEntry {
+                                binding: 1,
+                                visibility: ShaderStages::COMPUTE,
+                                ty: wgpu::BindingType::StorageTexture {
+                                    access: StorageTextureAccess::ReadWrite,
+                                    format: wgpu::TextureFormat::Rgba8Unorm,
+                                    view_dimension: TextureViewDimension::D2,
+                                },
+                                count: None,
+                            },
+                        ],
+                    },
+                )],
+                push_constant_ranges: &[],
+            });
         let pipeline = pipeline_database.compute_pipeline(
             &ctx.device,
             wgpu::ComputePipelineDescriptor {
                 label: Some("appearance-path-tracer-gpu::raygen"),
+                layout: Some(&pipeline_layout),
                 ..wgpu::ComputePipelineDescriptor::partial_default(&shader)
-            },
+            }, // dgfd
         );
 
         let constants = ctx

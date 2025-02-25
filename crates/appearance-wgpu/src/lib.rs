@@ -9,6 +9,7 @@ use winit::{
     window::Window,
 };
 
+pub mod bindless;
 pub mod helper_passes;
 pub mod pipeline_database;
 
@@ -277,7 +278,7 @@ impl<'a> ComputePipelineDescriptorExtensions<'a> for wgpu::ComputePipelineDescri
             label: None,
             layout: None,
             module,
-            entry_point: Some("main"),
+            entry_point: None,
             compilation_options: wgpu::PipelineCompilationOptions::default(),
             cache: None,
         }
