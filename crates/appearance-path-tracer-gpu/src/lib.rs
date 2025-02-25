@@ -1,5 +1,5 @@
 use appearance_wgpu::{
-    include_shader_spirv, include_shader_src,
+    include_shader_spirv,
     pipeline_database::PipelineDatabase,
     readback_buffer,
     wgpu::{
@@ -163,7 +163,7 @@ impl PathTracerGpu {
                 label: Some("appearance-path-tracer-gpu::raygen"),
                 layout: Some(&pipeline_layout),
                 ..wgpu::ComputePipelineDescriptor::partial_default(&shader)
-            }, // dgfd
+            },
         );
 
         let constants = ctx

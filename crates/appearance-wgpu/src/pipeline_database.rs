@@ -1,7 +1,6 @@
 use anyhow::Result;
 use core::str;
 use std::{
-    borrow::Cow,
     collections::HashMap,
     sync::{Arc, OnceLock},
 };
@@ -104,7 +103,7 @@ impl PipelineDatabase {
 
         let module = Arc::new(device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some(id),
-            source: wgpu::util::make_spirv(&spirv),
+            source: wgpu::util::make_spirv(spirv),
         }));
 
         self.shader_modules.insert(id.to_owned(), module.clone());

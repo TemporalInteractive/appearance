@@ -1,0 +1,9 @@
+{
+    "hlsl.preprocessorDefinitions": {
+    },
+    "hlsl.additionalIncludeDirectories": [
+        "crates\\appearance-render-loop\\assets\\shaders"
+    ],
+    "hlsl.virtualDirectoryMappings": {
+    }
+}

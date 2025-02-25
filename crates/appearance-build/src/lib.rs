@@ -1,10 +1,8 @@
 use std::path::{Path, PathBuf};
 
+use appearance_asset_database::asset_paths::CRATES;
 use hassle_rs::compile_hlsl;
-use shader_resolve::parse_shader_includes;
 pub use xshell::Shell;
-
-mod shader_resolve;
 
 const ASSET_DIR_IGNORE: &[&str] = &["target", ".gitignore", ".vscode"];
 
@@ -37,39 +35,45 @@ fn copy_assets(shell: &Shell, root_dir: &Path, dir: &PathBuf, target_dir: &PathB
 
             let mut is_shader_file = false;
 
-            if let Some(extension) = file.extension() {
-                if extension.to_str().unwrap() == "hlsl" {
-                    let file_name = file.file_name().unwrap().to_str().unwrap();
-                    let target_profile = if file_name.ends_with(".cs") {
-                        "cs_6_5"
-                    } else if file_name.ends_with(".vs") {
-                        "cs_6_5"
-                    } else {
-                        "cs_6_5"
-                    };
-                    println!("cargo::warning={}", target_profile);
+            let file_name = file.file_name().unwrap().to_str().unwrap();
+            if file_name.ends_with(".cs.hlsl")
+                || file_name.ends_with(".vs.hlsl")
+                || file_name.ends_with(".fs.hlsl")
+            {
+                let target_profile = if file_name.ends_with(".cs.hlsl") {
+                    "cs_6_5"
+                } else if file_name.ends_with(".vs.hlsl") {
+                    "vs_6_5"
+                } else if file_name.ends_with(".fs.hlsl") {
+                    "ps_6_5"
+                } else {
+                    panic!()
+                };
 
-                    let contents = std::fs::read_to_string(file).expect("Invalid shader name.");
-                    let resolved_shader_src = parse_shader_includes(contents);
+                let src = std::fs::read_to_string(file).expect("Invalid shader name.");
+                //let resolved_shader_src = parse_shader_includes(contents);
 
-                    let spirv = match compile_hlsl(
-                        file_name,
-                        &resolved_shader_src,
-                        "main",
-                        target_profile,
-                        &["-spirv", "-WX"],
-                        &[],
-                    ) {
-                        Ok(spirv) => spirv,
-                        Err(e) => {
-                            println!("cargo::error={}", e);
-                            panic!();
-                        }
-                    };
+                let include_dirs: Vec<String> = CRATES
+                    .iter()
+                    .map(|crate_name| format!("-I crates/{}/assets/shaders", crate_name))
+                    .collect();
 
-                    std::fs::write(&dst, spirv).unwrap();
-                    is_shader_file = true;
+                let mut args = vec!["-spirv", "-WX"];
+                for include_dir in &include_dirs {
+                    args.push(include_dir);
                 }
+
+                let spirv = match compile_hlsl(file_name, &src, "main", target_profile, &args, &[])
+                {
+                    Ok(spirv) => spirv,
+                    Err(e) => {
+                        println!("cargo::error={}", e);
+                        panic!();
+                    }
+                };
+
+                std::fs::write(&dst, spirv).unwrap();
+                is_shader_file = true;
             }
 
             if !is_shader_file {
