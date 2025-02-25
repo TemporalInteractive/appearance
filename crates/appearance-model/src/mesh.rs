@@ -1,22 +1,18 @@
-use glam::{Vec2, Vec3, Vec4, Vec4Swizzles};
-use std::sync::Arc;
+use glam::{Vec2, Vec3, Vec4};
 
-use tinybvh::{BvhBuildQuality, BvhSoA};
-
+#[derive(Clone)]
 pub struct Mesh {
-    pub vertex_positions: Vec<Vec4>,
+    pub vertex_positions: Vec<Vec3>,
     pub vertex_normals: Vec<Vec3>,
     pub vertex_tangents: Vec<Vec4>,
     pub vertex_tex_coords: Vec<Vec2>,
     pub triangle_material_indices: Vec<u32>,
     pub indices: Vec<u32>,
-
-    pub blas: Arc<BvhSoA>,
 }
 
 impl Mesh {
     pub fn new(
-        vertex_positions: Vec<Vec4>,
+        vertex_positions: Vec<Vec3>,
         vertex_normals: Vec<Vec3>,
         vertex_tangents: Vec<Vec4>,
         vertex_tex_coords: Vec<Vec2>,
@@ -25,17 +21,6 @@ impl Mesh {
     ) -> Self {
         debug_assert_eq!(triangle_material_indices.len(), indices.len() / 3);
 
-        let mut blas = BvhSoA::new();
-        if indices.is_empty() {
-            blas.build(vertex_positions.clone(), BvhBuildQuality::High);
-        } else {
-            blas.build_with_indices(
-                vertex_positions.clone(),
-                indices.clone(),
-                BvhBuildQuality::High,
-            );
-        }
-
         Mesh {
             vertex_positions,
             vertex_normals,
@@ -43,7 +28,6 @@ impl Mesh {
             vertex_tex_coords,
             triangle_material_indices,
             indices,
-            blas: Arc::new(blas),
         }
     }
 
@@ -65,9 +49,9 @@ impl Mesh {
             .resize(self.vertex_positions.len(), Vec3::ZERO);
 
         for i in 0..(self.indices.len() / 3) {
-            let p0 = self.vertex_positions[self.indices[i * 3] as usize].xyz();
-            let p1 = self.vertex_positions[self.indices[i * 3 + 1] as usize].xyz();
-            let p2 = self.vertex_positions[self.indices[i * 3 + 2] as usize].xyz();
+            let p0 = self.vertex_positions[self.indices[i * 3] as usize];
+            let p1 = self.vertex_positions[self.indices[i * 3 + 1] as usize];
+            let p2 = self.vertex_positions[self.indices[i * 3 + 2] as usize];
             let n = (p1 - p0).cross(p2 - p0).normalize();
 
             self.vertex_normals[self.indices[i * 3] as usize] += n;
@@ -96,9 +80,9 @@ impl Mesh {
             let i2 = self.indices[i + 1] as usize;
             let i3 = self.indices[i + 2] as usize;
 
-            let v1 = self.vertex_positions[i1].xyz();
-            let v2 = self.vertex_positions[i2].xyz();
-            let v3 = self.vertex_positions[i3].xyz();
+            let v1 = self.vertex_positions[i1];
+            let v2 = self.vertex_positions[i2];
+            let v3 = self.vertex_positions[i3];
 
             let w1 = self.vertex_tex_coords[i1];
             let w2 = self.vertex_tex_coords[i2];

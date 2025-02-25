@@ -24,7 +24,9 @@ impl DistributedRenderer {
     pub fn new() -> Self {
         let ctx = Arc::new(block_on(Context::init(
             wgpu::Features::empty(),
-            wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
+            wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
+                | wgpu::Features::EXPERIMENTAL_RAY_QUERY
+                | wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE,
             wgpu::DownlevelCapabilities {
                 flags: wgpu::DownlevelFlags::empty(),
                 shader_model: wgpu::ShaderModel::Sm5,
@@ -57,7 +59,8 @@ impl DistributedRenderer {
 
 impl NodeRenderer for DistributedRenderer {
     fn visible_world_action(&mut self, action: &VisibleWorldActionType) {
-        self.path_tracer.handle_visible_world_action(action);
+        self.path_tracer
+            .handle_visible_world_action(action, &self.ctx);
     }
 
     fn render<F: FnMut(&[u8])>(

@@ -65,6 +65,8 @@ pub struct HostRenderLoop {
 impl RenderLoop for HostRenderLoop {
     fn required_features() -> wgpu::Features {
         wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
+            | wgpu::Features::EXPERIMENTAL_RAY_QUERY
+            | wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
     }
 
     fn required_limits() -> wgpu::Limits {

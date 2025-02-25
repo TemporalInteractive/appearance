@@ -128,7 +128,7 @@ fn process_node(
                             .read_positions()
                             .expect("Failed to process mesh node. (Vertices must have positions)");
 
-                        iter.map(|arr| -> Vec4 { Vec4::from((Vec3::from(arr), 0.0)) })
+                        iter.map(|arr| -> Vec3 { Vec3::from(arr) })
                             .collect::<Vec<_>>()
                     };
 

@@ -5,11 +5,13 @@ use film::Film;
 use glam::{UVec2, Vec3};
 use raygen_pass::RaygenPassParameters;
 use resolve_pass::ResolvePassParameters;
+use scene_resources::SceneResources;
 use trace_pass::TracePassParameters;
 
 mod film;
 mod raygen_pass;
 mod resolve_pass;
+mod scene_resources;
 mod trace_pass;
 
 #[repr(C)]
@@ -63,6 +65,9 @@ pub struct PathTracerGpu {
     local_resolution: UVec2,
     sized_resources: SizedResources,
     camera: Camera,
+    scene_resources: SceneResources,
+
+    upload_command_encoder: Option<wgpu::CommandEncoder>,
 }
 
 impl PathTracerGpu {
@@ -70,22 +75,38 @@ impl PathTracerGpu {
         let resolution = UVec2::new(1920, 1080);
         let sized_resources = SizedResources::new(resolution, &ctx.device);
 
+        let scene_resources = SceneResources::new(&ctx.device);
+
+        let upload_command_encoder = Some(
+            ctx.device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None }),
+        );
+
         Self {
             resolution,
             local_resolution: resolution,
             sized_resources,
             camera: Camera::default(),
+            scene_resources,
+            upload_command_encoder,
         }
     }
 
-    pub fn handle_visible_world_action(&mut self, action: &VisibleWorldActionType) {
-        if let VisibleWorldActionType::CameraUpdate(data) = action {
-            self.camera.set_near(data.near);
-            self.camera.set_far(data.far);
-            self.camera.set_fov(data.fov);
-            self.camera
-                .transform
-                .set_matrix(data.transform_matrix_bytes);
+    pub fn handle_visible_world_action(&mut self, action: &VisibleWorldActionType, ctx: &Context) {
+        match action {
+            VisibleWorldActionType::CameraUpdate(data) => {
+                self.camera.set_near(data.near);
+                self.camera.set_far(data.far);
+                self.camera.set_fov(data.fov);
+                self.camera
+                    .transform
+                    .set_matrix(data.transform_matrix_bytes);
+            }
+            _ => self.scene_resources.handle_visible_world_action(
+                action,
+                self.upload_command_encoder.as_mut().unwrap(),
+                &ctx.device,
+            ),
         }
     }
 
@@ -108,6 +129,14 @@ impl PathTracerGpu {
         ctx: &Context,
         pipeline_database: &mut PipelineDatabase,
     ) {
+        if let Some(upload_command_encoder) = self.upload_command_encoder.take() {
+            ctx.queue.submit(Some(upload_command_encoder.finish()));
+            self.upload_command_encoder = Some(
+                ctx.device
+                    .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None }),
+            );
+        }
+
         self.resize(resolution, start_row, end_row, ctx);
 
         self.camera
