@@ -159,7 +159,11 @@ impl SceneResources {
         blas_idx
     }
 
-    pub fn rebuild_tlas(&mut self, command_encoder: &mut wgpu::CommandEncoder) {
+    pub fn rebuild_tlas(
+        &mut self,
+        command_encoder: &mut wgpu::CommandEncoder,
+        queue: &wgpu::Queue,
+    ) {
         let mut blas_instances = vec![];
         let mut blas_idx_to_mesh_mapping = HashMap::new();
 
@@ -203,6 +207,8 @@ impl SceneResources {
         for i in num_blas_instances..1024 {
             tlas_package_instances[i] = None;
         }
+
+        self.vertex_pool.write_slices(queue);
 
         command_encoder
             .build_acceleration_structures(iter::empty(), iter::once(&self.tlas_package));

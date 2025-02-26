@@ -1,6 +1,6 @@
 use appearance_wgpu::wgpu;
 use bytemuck::{Pod, Zeroable};
-use glam::{Vec2, Vec3};
+use glam::{Vec2, Vec4};
 
 pub const MAX_VERTEX_POOL_VERTICES: usize = 1024 * 1024 * 32;
 
@@ -16,6 +16,16 @@ pub struct VertexPoolSlice {
     num_vertices: u32,
     first_index: u32,
     num_indices: u32,
+}
+
+impl VertexPoolSlice {
+    fn last_vertex(&self) -> u32 {
+        self.first_vertex + self.num_vertices
+    }
+
+    fn last_index(&self) -> u32 {
+        self.first_index + self.num_indices
+    }
 }
 
 pub struct VertexPool {
@@ -36,7 +46,7 @@ impl VertexPool {
         let vertex_position_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("appearance-path-tracer-gpu::vertex_pool vertex_positions"),
             mapped_at_creation: false,
-            size: (std::mem::size_of::<Vec3>() * MAX_VERTEX_POOL_VERTICES) as u64,
+            size: (std::mem::size_of::<Vec4>() * MAX_VERTEX_POOL_VERTICES) as u64,
             usage: wgpu::BufferUsages::BLAS_INPUT
                 | wgpu::BufferUsages::STORAGE
                 | wgpu::BufferUsages::COPY_DST,
@@ -45,7 +55,7 @@ impl VertexPool {
         let vertex_normal_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("appearance-path-tracer-gpu::vertex_pool vertex_normals"),
             mapped_at_creation: false,
-            size: (std::mem::size_of::<Vec3>() * MAX_VERTEX_POOL_VERTICES) as u64,
+            size: (std::mem::size_of::<Vec4>() * MAX_VERTEX_POOL_VERTICES) as u64,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
 
@@ -169,8 +179,8 @@ impl VertexPool {
 
     pub fn write_vertex_data(
         &self,
-        vertex_positions: &[Vec3],
-        vertex_normals: &[Vec3],
+        vertex_positions: &[Vec4],
+        vertex_normals: &[Vec4],
         vertex_tex_coords: &[Vec2],
         indices: &[u32],
         slice: VertexPoolSlice,
@@ -178,12 +188,12 @@ impl VertexPool {
     ) {
         queue.write_buffer(
             &self.vertex_position_buffer,
-            (slice.first_vertex as usize * std::mem::size_of::<Vec3>()) as u64,
+            (slice.first_vertex as usize * std::mem::size_of::<Vec4>()) as u64,
             bytemuck::cast_slice(vertex_positions),
         );
         queue.write_buffer(
             &self.vertex_normal_buffer,
-            (slice.first_vertex as usize * std::mem::size_of::<Vec3>()) as u64,
+            (slice.first_vertex as usize * std::mem::size_of::<Vec4>()) as u64,
             bytemuck::cast_slice(vertex_normals),
         );
         queue.write_buffer(
@@ -196,6 +206,14 @@ impl VertexPool {
             &self.index_buffer,
             (slice.first_index as usize * std::mem::size_of::<u32>()) as u64,
             bytemuck::cast_slice(indices),
+        );
+    }
+
+    pub fn write_slices(&self, queue: &wgpu::Queue) {
+        queue.write_buffer(
+            &self.slices_buffer,
+            0,
+            bytemuck::cast_slice(self.slices.as_slice()),
         );
     }
 
@@ -226,48 +244,52 @@ impl VertexPool {
     }
 
     fn first_available_vertex(&self, num_vertices: u32) -> Option<u32> {
-        let mut first_vertex = 0;
-        let last_vertex = MAX_VERTEX_POOL_VERTICES as u32;
-
-        if self.slices.is_empty() && (last_vertex - first_vertex) > num_vertices {
+        if self.slices.is_empty() && MAX_VERTEX_POOL_VERTICES as u32 > num_vertices {
             return Some(0);
         }
 
-        for slice in &self.slices {
-            let available_vertices = slice.first_vertex - first_vertex;
-            if available_vertices >= num_vertices {
-                return Some(first_vertex);
-            }
+        for i in 0..self.slices.len() {
+            let prev = if i > 0 {
+                self.slices[i - 1].last_vertex()
+            } else {
+                0
+            };
 
-            first_vertex = slice.first_vertex;
+            let space = self.slices[i].first_vertex - prev;
+            if space >= num_vertices {
+                return Some(prev + num_vertices);
+            }
         }
 
-        if (last_vertex - first_vertex) > num_vertices {
-            return Some(first_vertex);
+        let back = self.slices.last().unwrap().last_vertex();
+        if back + num_vertices <= MAX_VERTEX_POOL_VERTICES as u32 {
+            return Some(back);
         }
 
         None
     }
 
     fn first_available_index(&self, num_indices: u32) -> Option<u32> {
-        let mut first_index = 0;
-        let last_vertex = MAX_VERTEX_POOL_VERTICES as u32 * 3;
-
-        if self.slices.is_empty() && (last_vertex - first_index) > num_indices {
+        if self.slices.is_empty() && MAX_VERTEX_POOL_VERTICES as u32 * 3 > num_indices {
             return Some(0);
         }
 
-        for slice in &self.slices {
-            let available_indices = slice.first_index - first_index;
-            if available_indices >= num_indices {
-                return Some(first_index);
-            }
+        for i in 0..self.slices.len() {
+            let prev = if i > 0 {
+                self.slices[i - 1].last_index()
+            } else {
+                0
+            };
 
-            first_index = slice.first_index;
+            let space = self.slices[i].first_index - prev;
+            if space >= num_indices {
+                return Some(prev + num_indices);
+            }
         }
 
-        if (last_vertex - first_index) > num_indices {
-            return Some(first_index);
+        let back = self.slices.last().unwrap().last_index();
+        if back + num_indices <= MAX_VERTEX_POOL_VERTICES as u32 {
+            return Some(back);
         }
 
         None

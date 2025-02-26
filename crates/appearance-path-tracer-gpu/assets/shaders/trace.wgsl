@@ -47,9 +47,9 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
         let i1: u32 = vertex_indices[vertex_pool_slice.first_index + intersection.primitive_index * 3 + 1];
         let i2: u32 = vertex_indices[vertex_pool_slice.first_index + intersection.primitive_index * 3 + 2];
 
-        let normal0: vec3<f32> = vertex_normals[vertex_pool_slice.first_vertex + i0];
-        let normal1: vec3<f32> = vertex_normals[vertex_pool_slice.first_vertex + i1];
-        let normal2: vec3<f32> = vertex_normals[vertex_pool_slice.first_vertex + i2];
+        let normal0: vec3<f32> = vertex_normals[vertex_pool_slice.first_vertex + i0].xyz;
+        let normal1: vec3<f32> = vertex_normals[vertex_pool_slice.first_vertex + i1].xyz;
+        let normal2: vec3<f32> = vertex_normals[vertex_pool_slice.first_vertex + i2].xyz;
 
         let barycentrics = vec3<f32>(1.0 - intersection.barycentrics.x - intersection.barycentrics.y, intersection.barycentrics);
 

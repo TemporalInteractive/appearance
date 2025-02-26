@@ -149,7 +149,8 @@ impl PathTracerGpu {
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
-        self.scene_resources.rebuild_tlas(&mut command_encoder);
+        self.scene_resources
+            .rebuild_tlas(&mut command_encoder, &ctx.queue);
 
         raygen_pass::encode(
             &RaygenPassParameters {

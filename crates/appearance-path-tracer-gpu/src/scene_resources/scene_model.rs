@@ -2,9 +2,9 @@ use std::iter;
 
 use appearance_model::{material::Material, mesh::Mesh, Model, ModelNode};
 use appearance_wgpu::wgpu::{self, util::DeviceExt};
-use glam::Vec3;
+use glam::{Vec3, Vec4};
 
-use super::vertex_pool::{VertexPool, VertexPoolAlloc, VertexPoolSlice};
+use super::vertex_pool::{VertexPool, VertexPoolAlloc};
 
 pub struct SceneModel {
     pub root_nodes: Vec<u32>,
@@ -48,9 +48,19 @@ impl SceneModel {
                 mesh.vertex_positions.len() as u32,
                 mesh.indices.len() as u32,
             );
+            let vertex_positions: Vec<Vec4> = mesh
+                .vertex_positions
+                .iter()
+                .map(|x| Vec4::from((*x, 0.0)))
+                .collect();
+            let vertex_normals: Vec<Vec4> = mesh
+                .vertex_normals
+                .iter()
+                .map(|x| Vec4::from((*x, 0.0)))
+                .collect();
             vertex_pool.write_vertex_data(
-                &mesh.vertex_positions,
-                &mesh.vertex_normals,
+                &vertex_positions,
+                &vertex_normals,
                 &mesh.vertex_tex_coords,
                 &mesh.indices,
                 vertex_pool_alloc.slice,
