@@ -148,6 +148,8 @@ impl PathTracerGpu {
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
+        self.scene_resources.rebuild_tlas(&mut command_encoder);
+
         raygen_pass::encode(
             &RaygenPassParameters {
                 inv_view,
@@ -165,6 +167,7 @@ impl PathTracerGpu {
                 ray_count: self.local_resolution.x * self.local_resolution.y,
                 rays: &self.sized_resources.rays,
                 payloads: &self.sized_resources.payloads,
+                scene_resources: &self.scene_resources,
             },
             &ctx.device,
             &mut command_encoder,

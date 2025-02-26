@@ -60,7 +60,13 @@ fn copy_assets(shell: &Shell, root_dir: &Path, dir: &PathBuf, target_dir: &PathB
                 let parent_dir = file.parent().unwrap().to_str().unwrap();
                 include_dirs.push(format!("-I {}", parent_dir));
 
-                let mut args = vec!["-spirv", "-WX"];
+                let mut args = vec![
+                    "-spirv",
+                    "-WX",
+                    "-fspv-target-env=vulkan1.2",
+                    "-fspv-extension=SPV_KHR_ray_query",
+                    "-fspv-extension=SPV_KHR_ray_tracing",
+                ];
                 for include_dir in &include_dirs {
                     args.push(include_dir);
                 }

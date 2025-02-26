@@ -6,6 +6,8 @@ use appearance_wgpu::{
 };
 use bytemuck::{Pod, Zeroable};
 
+use crate::scene_resources::SceneResources;
+
 #[derive(Pod, Clone, Copy, Zeroable)]
 #[repr(C)]
 struct Constants {
@@ -19,6 +21,7 @@ pub struct TracePassParameters<'a> {
     pub ray_count: u32,
     pub rays: &'a wgpu::Buffer,
     pub payloads: &'a wgpu::Buffer,
+    pub scene_resources: &'a SceneResources,
 }
 
 pub fn encode(
@@ -75,6 +78,12 @@ pub fn encode(
                                 },
                                 count: None,
                             },
+                            wgpu::BindGroupLayoutEntry {
+                                binding: 3,
+                                visibility: wgpu::ShaderStages::COMPUTE,
+                                ty: wgpu::BindingType::AccelerationStructure,
+                                count: None,
+                            },
                         ],
                     },
                 )],
@@ -110,6 +119,12 @@ pub fn encode(
             wgpu::BindGroupEntry {
                 binding: 2,
                 resource: parameters.payloads.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 3,
+                resource: wgpu::BindingResource::AccelerationStructure(
+                    parameters.scene_resources.tlas(),
+                ),
             },
         ],
     });
