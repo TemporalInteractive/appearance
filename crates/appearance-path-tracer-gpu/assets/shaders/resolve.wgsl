@@ -1,4 +1,5 @@
 @include appearance-path-tracer-gpu::ray
+@include appearance-render-loop::block
 
 struct Constants {
     width: u32,
@@ -30,5 +31,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     var payload: Payload = payloads[i];
     var accumulated: vec3<f32> = payload.accumulated;
 
-    textureStore(texture, vec2(i32(id.x), i32(id.y)), vec4(accumulated.x, accumulated.y, accumulated.z, 1.0));
+    let block_id: vec2<u32> = linear_to_block_pixel_idx(id, constants.width);
+    textureStore(texture, vec2(i32(block_id.x), i32(block_id.y)), vec4(accumulated.x, accumulated.y, accumulated.z, 1.0));
 }
