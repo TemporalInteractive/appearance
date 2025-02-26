@@ -1,4 +1,4 @@
-use crate::{include_shader_spirv, pipeline_database::PipelineDatabase};
+use crate::{include_shader_src, pipeline_database::PipelineDatabase};
 
 pub fn encode(
     src_view: &wgpu::TextureView,
@@ -10,15 +10,9 @@ pub fn encode(
 ) {
     appearance_profiling::profile_function!();
 
-    let shader_vs = pipeline_database.shader_from_spirv(
+    let shader = pipeline_database.shader_from_src(
         device,
-        "appearance-wgpu::blit_vs",
-        include_shader_spirv!("crates/appearance-wgpu/assets/shaders/blit.vs.hlsl"),
-    );
-    let shader_fs = pipeline_database.shader_from_spirv(
-        device,
-        "appearance-wgpu::blit_fs",
-        include_shader_spirv!("crates/appearance-wgpu/assets/shaders/blit.fs.hlsl"),
+        include_shader_src!("crates/appearance-wgpu/assets/shaders/blit.wgsl"),
     );
     let pipeline = pipeline_database.render_pipeline(
         device,
@@ -26,14 +20,14 @@ pub fn encode(
             label: Some("appearance-wgpu::blit"),
             layout: None,
             vertex: wgpu::VertexState {
-                module: &shader_vs,
-                entry_point: None,
+                module: &shader,
+                entry_point: Some("vs_main"),
                 buffers: &[],
                 compilation_options: Default::default(),
             },
             fragment: Some(wgpu::FragmentState {
-                module: &shader_fs,
-                entry_point: None,
+                module: &shader,
+                entry_point: Some("fs_main"),
                 compilation_options: Default::default(),
                 targets: &[Some(target_format.into())],
             }),

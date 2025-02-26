@@ -10,5 +10,4 @@ version = "0.1.0"
 [dependencies]
 appearance-asset-database.workspace = true
 
-hassle-rs.workspace = true
 xshell.workspace = true

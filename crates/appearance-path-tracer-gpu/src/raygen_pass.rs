@@ -1,5 +1,5 @@
 use appearance_wgpu::{
-    include_shader_spirv,
+    include_shader_src,
     pipeline_database::PipelineDatabase,
     wgpu::{self, util::DeviceExt},
     ComputePipelineDescriptorExtensions,
@@ -31,10 +31,9 @@ pub fn encode(
     command_encoder: &mut wgpu::CommandEncoder,
     pipeline_database: &mut PipelineDatabase,
 ) {
-    let shader = pipeline_database.shader_from_spirv(
+    let shader = pipeline_database.shader_from_src(
         device,
-        "appearance-path-tracer-gpu::raygen",
-        include_shader_spirv!("crates/appearance-path-tracer-gpu/assets/shaders/raygen.cs.hlsl"),
+        include_shader_src!("crates/appearance-path-tracer-gpu/assets/shaders/raygen.wgsl"),
     );
     let pipeline = pipeline_database.compute_pipeline(
         device,
