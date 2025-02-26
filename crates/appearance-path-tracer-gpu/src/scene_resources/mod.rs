@@ -4,6 +4,7 @@ use appearance_asset_database::AssetDatabase;
 use appearance_model::{material::Material, mesh::Mesh, Model, ModelNode};
 use appearance_wgpu::wgpu::{self, util::DeviceExt, TlasPackage};
 use appearance_world::visible_world_action::VisibleWorldActionType;
+use bytemuck::{Pod, Zeroable};
 use glam::{Mat4, Vec3};
 use scene_model::SceneModel;
 use uuid::Uuid;
@@ -12,11 +13,22 @@ use vertex_pool::VertexPool;
 mod scene_model;
 mod vertex_pool;
 
+#[derive(Pod, Clone, Copy, Zeroable)]
+#[repr(C)]
+struct BlasInstance {
+    vertex_pool_slice_index: u32,
+    _padding0: u32,
+    _padding1: u32,
+    _padding2: u32,
+}
+
 pub struct SceneResources {
     model_assets: AssetDatabase<Model>,
     models: HashMap<String, (SceneModel, Vec<Uuid>)>,
     model_instances: HashMap<Uuid, Mat4>,
     vertex_pool: VertexPool,
+
+    blas_instance_buffer: wgpu::Buffer,
 
     tlas_package: wgpu::TlasPackage,
     blas_idx_to_mesh_mapping: HashMap<u32, (String, u32, Mat4)>,
@@ -35,11 +47,19 @@ impl SceneResources {
 
         let vertex_pool = VertexPool::new(device);
 
+        let blas_instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("appearance-path-tracer-gpu::scene_resources blas_instances"),
+            mapped_at_creation: false,
+            size: (std::mem::size_of::<BlasInstance>() * 1024) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        });
+
         Self {
             model_assets,
             models: HashMap::new(),
             model_instances: HashMap::new(),
             vertex_pool,
+            blas_instance_buffer,
             tlas_package: TlasPackage::new(tlas),
             blas_idx_to_mesh_mapping: HashMap::new(),
         }
@@ -112,8 +132,14 @@ impl SceneResources {
                 .unwrap();
 
             let blas = &model.blases[*mesh_idx as usize];
+            let vertex_slice_index = model.vertex_pool_allocs[*mesh_idx as usize].index;
 
-            blas_instances.push(wgpu::TlasInstance::new(blas, transform, 0, 0xff));
+            blas_instances.push(wgpu::TlasInstance::new(
+                blas,
+                transform,
+                vertex_slice_index,
+                0xff,
+            ));
 
             blas_idx += 1;
         }
