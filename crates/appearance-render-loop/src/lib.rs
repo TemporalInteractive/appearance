@@ -11,6 +11,7 @@ use winit::{
     window::{Window, WindowId},
 };
 
+pub mod block_to_linear_pass;
 pub mod host;
 pub mod node;
 

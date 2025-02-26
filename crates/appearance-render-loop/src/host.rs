@@ -196,21 +196,17 @@ impl BufferedPixelData {
         }
 
         if let Ok(mut pixels) = self.pixels[idx].lock() {
-            for local_y in 0..RENDER_BLOCK_SIZE {
-                for local_x in 0..RENDER_BLOCK_SIZE {
-                    let x =
-                        local_x + (render_partial_finished_data.column_block * RENDER_BLOCK_SIZE);
-                    let y = local_y + render_partial_finished_data.row;
+            unsafe {
+                let bytes_per_block = RENDER_BLOCK_SIZE * RENDER_BLOCK_SIZE * 4;
+                let blocks_per_row = self.width / RENDER_BLOCK_SIZE;
+                let offset = render_partial_finished_data.column_block * bytes_per_block
+                    + (render_partial_finished_data.row / RENDER_BLOCK_SIZE)
+                        * blocks_per_row
+                        * bytes_per_block;
 
-                    let id = (y * self.width + x) as usize;
-                    let local_id = (local_y * RENDER_BLOCK_SIZE + local_x) as usize;
-
-                    for i in 0..NODE_BYTES_PER_PIXEL {
-                        pixels[id * BYTES_PER_PIXEL + i] =
-                            render_pixels[local_id * NODE_BYTES_PER_PIXEL + i];
-                    }
-                    pixels[id * BYTES_PER_PIXEL + BYTES_PER_PIXEL - 1] = 255;
-                }
+                let dst_ptr = &mut pixels[offset as usize] as *mut u8;
+                let src_ptr = &render_pixels[0] as *const u8;
+                std::ptr::copy_nonoverlapping(src_ptr, dst_ptr, bytes_per_block as usize);
             }
         }
 

@@ -39,7 +39,7 @@ pub fn encode(
         },
         || {
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("appearance-path-tracer-gpu::raygen"),
+                label: Some("appearance-wgpu::blit"),
                 bind_group_layouts: &[&device.create_bind_group_layout(
                     &wgpu::BindGroupLayoutDescriptor {
                         label: None,

@@ -2,6 +2,7 @@ use anyhow::Result;
 use appearance::appearance_camera::CameraController;
 use appearance::appearance_distributed_renderer::DistributedRenderer;
 use appearance::appearance_input::InputHandler;
+use appearance::appearance_render_loop::block_to_linear_pass::BlockToLinearPassParameters;
 use appearance::appearance_render_loop::node::NodeRenderer;
 use appearance::appearance_render_loop::winit::keyboard::KeyCode;
 use appearance::appearance_transform::{Transform, RIGHT, UP};
@@ -18,7 +19,7 @@ use std::sync::Arc;
 use appearance::appearance_render_loop::host::{Host, RENDER_BLOCK_SIZE};
 use appearance::appearance_render_loop::winit::window::Window;
 use appearance::appearance_render_loop::{
-    winit, RenderLoop, RenderLoopHandler, RenderLoopWindowDesc,
+    block_to_linear_pass, winit, RenderLoop, RenderLoopHandler, RenderLoopWindowDesc,
 };
 use appearance::appearance_time::Timer;
 use appearance::appearance_wgpu::helper_passes::blit_pass;
@@ -42,14 +43,14 @@ struct Args {
     node_port: u16,
 
     /// Run the renderer inside the host as a traditional engine would
-    #[arg(long, default_value_t = false)]
+    #[arg(long, default_value_t = true)]
     render_local: bool,
 }
 
 pub struct HostRenderLoop {
     pipeline_database: PipelineDatabase,
     rendering_strategy: RenderingStrategy,
-    texture: wgpu::Texture,
+    texture: [wgpu::Texture; 2],
     swapchain_format: wgpu::TextureFormat,
     timer: Timer,
     fps_history: VecDeque<f32>,
@@ -91,19 +92,23 @@ impl RenderLoop for HostRenderLoop {
             RenderingStrategy::Distributed(host)
         };
 
-        let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("texture"),
-            size: wgpu::Extent3d {
-                width: config.width,
-                height: config.height,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            view_formats: &[],
+        let texture = std::array::from_fn(|_| {
+            ctx.device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("texture"),
+                size: wgpu::Extent3d {
+                    width: config.width,
+                    height: config.height,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8Unorm,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING
+                    | wgpu::TextureUsages::COPY_DST
+                    | wgpu::TextureUsages::STORAGE_BINDING,
+                view_formats: &[],
+            })
         });
 
         let mut world = World::new();
@@ -152,19 +157,23 @@ impl RenderLoop for HostRenderLoop {
         let width = config.width.div_ceil(RENDER_BLOCK_SIZE) * RENDER_BLOCK_SIZE;
         let height = config.height.div_ceil(RENDER_BLOCK_SIZE) * RENDER_BLOCK_SIZE;
 
-        self.texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("texture"),
-            size: wgpu::Extent3d {
-                width,
-                height,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8Unorm,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            view_formats: &[],
+        self.texture = std::array::from_fn(|_| {
+            ctx.device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("texture"),
+                size: wgpu::Extent3d {
+                    width,
+                    height,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8Unorm,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING
+                    | wgpu::TextureUsages::COPY_DST
+                    | wgpu::TextureUsages::STORAGE_BINDING,
+                view_formats: &[],
+            })
         });
 
         if let RenderingStrategy::Distributed(host) = &mut self.rendering_strategy {
@@ -241,7 +250,7 @@ impl RenderLoop for HostRenderLoop {
                 host.render(|pixels| {
                     ctx.queue.write_texture(
                         wgpu::TexelCopyTextureInfo {
-                            texture: &self.texture,
+                            texture: &self.texture[0],
                             mip_level: 0,
                             origin: Origin3d::ZERO,
                             aspect: wgpu::TextureAspect::All,
@@ -249,12 +258,12 @@ impl RenderLoop for HostRenderLoop {
                         pixels,
                         wgpu::TexelCopyBufferLayout {
                             offset: 0,
-                            bytes_per_row: Some(4 * self.texture.width()),
+                            bytes_per_row: Some(4 * self.texture[0].width()),
                             rows_per_image: None,
                         },
                         Extent3d {
-                            width: self.texture.width(),
-                            height: self.texture.height(),
+                            width: self.texture[0].width(),
+                            height: self.texture[0].height(),
                             depth_or_array_layers: 1,
                         },
                     );
@@ -271,13 +280,13 @@ impl RenderLoop for HostRenderLoop {
                 }
 
                 distributed_renderer.render(
-                    UVec2::new(self.texture.width(), self.texture.height()),
+                    UVec2::new(self.texture[0].width(), self.texture[0].height()),
                     0,
-                    self.texture.height(),
+                    self.texture[0].height(),
                     |pixels| {
                         ctx.queue.write_texture(
                             wgpu::TexelCopyTextureInfo {
-                                texture: &self.texture,
+                                texture: &self.texture[0],
                                 mip_level: 0,
                                 origin: Origin3d::ZERO,
                                 aspect: wgpu::TextureAspect::All,
@@ -285,12 +294,12 @@ impl RenderLoop for HostRenderLoop {
                             pixels,
                             wgpu::TexelCopyBufferLayout {
                                 offset: 0,
-                                bytes_per_row: Some(4 * self.texture.width()),
+                                bytes_per_row: Some(4 * self.texture[0].width()),
                                 rows_per_image: None,
                             },
                             Extent3d {
-                                width: self.texture.width(),
-                                height: self.texture.height(),
+                                width: self.texture[0].width(),
+                                height: self.texture[0].height(),
                                 depth_or_array_layers: 1,
                             },
                         );
@@ -303,11 +312,24 @@ impl RenderLoop for HostRenderLoop {
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
-        let texture_view = self
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
+        let unresolved_texture_view =
+            self.texture[0].create_view(&wgpu::TextureViewDescriptor::default());
+        let resolved_texture_view =
+            self.texture[1].create_view(&wgpu::TextureViewDescriptor::default());
+
+        block_to_linear_pass::encode(
+            &BlockToLinearPassParameters {
+                resolution: UVec2::new(self.texture[0].width(), self.texture[0].height()),
+                target_view: &unresolved_texture_view,
+                resolve_target_view: &resolved_texture_view,
+            },
+            &ctx.device,
+            &mut command_encoder,
+            &mut self.pipeline_database,
+        );
+
         blit_pass::encode(
-            &texture_view,
+            &resolved_texture_view,
             view,
             self.swapchain_format,
             &ctx.device,
