@@ -1,0 +1,21 @@
+@include appearance-path-tracer-gpu::vertex_pool
+
+@group(1)
+@binding(0)
+var<storage, read> vertex_positions: array<vec3<f32>>;
+
+@group(1)
+@binding(1)
+var<storage, read> vertex_normals: array<vec3<f32>>;
+
+@group(1)
+@binding(2)
+var<storage, read> vertex_tex_coords: array<vec2<f32>>;
+
+@group(1)
+@binding(3)
+var<storage, read> vertex_indices: array<u32>;
+
+@group(1)
+@binding(4)
+var<storage, read> vertex_pool_slices: array<VertexPoolSlice>;

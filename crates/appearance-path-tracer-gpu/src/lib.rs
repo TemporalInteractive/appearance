@@ -106,6 +106,7 @@ impl PathTracerGpu {
                 action,
                 self.upload_command_encoder.as_mut().unwrap(),
                 &ctx.device,
+                &ctx.queue,
             ),
         }
     }

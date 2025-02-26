@@ -1,5 +1,7 @@
 @include appearance-path-tracer-gpu::ray
 
+@include appearance-path-tracer-gpu::vertex_pool_bindings
+
 struct Constants {
     ray_count: u32,
     _padding0: u32,

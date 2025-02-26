@@ -43,8 +43,8 @@ pub fn encode(
         || {
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("appearance-path-tracer-gpu::trace"),
-                bind_group_layouts: &[&device.create_bind_group_layout(
-                    &wgpu::BindGroupLayoutDescriptor {
+                bind_group_layouts: &[
+                    &device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                         label: None,
                         entries: &[
                             wgpu::BindGroupLayoutEntry {
@@ -84,8 +84,9 @@ pub fn encode(
                                 count: None,
                             },
                         ],
-                    },
-                )],
+                    }),
+                    parameters.scene_resources.vertex_pool().bind_group_layout(),
+                ],
                 push_constant_ranges: &[],
             })
         },
@@ -135,6 +136,11 @@ pub fn encode(
         });
         cpass.set_pipeline(&pipeline);
         cpass.set_bind_group(0, &bind_group, &[]);
+        cpass.set_bind_group(
+            1,
+            parameters.scene_resources.vertex_pool().bind_group(),
+            &[],
+        );
         cpass.insert_debug_marker("appearance-path-tracer-gpu::trace");
         cpass.dispatch_workgroups(parameters.ray_count.div_ceil(128), 1, 1);
     }
