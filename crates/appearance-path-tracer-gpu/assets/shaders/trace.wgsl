@@ -53,7 +53,16 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
 
         let barycentrics = vec3<f32>(1.0 - intersection.barycentrics.x - intersection.barycentrics.y, intersection.barycentrics);
 
-        let normal: vec3<f32> = normalize(normal0 * barycentrics.x + normal1 * barycentrics.y + normal2 * barycentrics.z);
+        var normal: vec3<f32> = normalize(normal0 * barycentrics.x + normal1 * barycentrics.y + normal2 * barycentrics.z);
+
+        var trans_transform = mat4x4<f32>(
+            vec4<f32>(intersection.world_to_object[0], 0.0),
+            vec4<f32>(intersection.world_to_object[1], 0.0),
+            vec4<f32>(intersection.world_to_object[2], 0.0),
+            vec4<f32>(0.0, 0.0, 0.0, 1.0)
+        );
+        var inv_trans_transform = transpose(trans_transform);
+        normal = normalize((inv_trans_transform * vec4<f32>(normal, 1.0)).xyz);
 
         let color = normal * 0.5 + 0.5;
 

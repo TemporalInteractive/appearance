@@ -261,6 +261,7 @@ impl RenderLoop for HostRenderLoop {
                 });
             }
             RenderingStrategy::Local(distributed_renderer) => {
+                self.world.finalize_visible_world_actions();
                 let visible_world_actions = self.world.get_visible_world_actions();
                 for action in visible_world_actions {
                     let visible_world_action =

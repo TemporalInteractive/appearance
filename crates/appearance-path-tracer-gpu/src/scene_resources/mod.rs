@@ -104,6 +104,19 @@ impl SceneResources {
                 self.model_instances
                     .insert(data.entity_uuid, data.transform_matrix);
             }
+            VisibleWorldActionType::TransformModel(data) => {
+                if let Some(instance_transform) = self.model_instances.get_mut(&data.entity_uuid) {
+                    *instance_transform = data.transform_matrix;
+                } else {
+                    log::warn!("Failed to update model instance transform.");
+                }
+            }
+            VisibleWorldActionType::DestroyModel(data) => {
+                self.model_instances.remove(&data.entity_uuid);
+            }
+            VisibleWorldActionType::Clear(_) => {
+                self.models.clear();
+            }
             _ => log::warn!("Unable to process world action: {:?}.", action),
         }
     }
