@@ -1,6 +1,7 @@
 @include ::random
 @include appearance-path-tracer-gpu::shared/ray
 @include appearance-path-tracer-gpu::shared/diffuse_brdf
+@include appearance-path-tracer-gpu::shared/disney_bsdf
 
 @include appearance-path-tracer-gpu::shared/vertex_pool_bindings
 
@@ -101,9 +102,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
         } else {
             payload.alive = 0;
         }
-
-        // let color = normal * 0.5 + 0.5;
-        // accumulated += throughput * color;
     } else {
         let a: f32 = 0.5 * (direction.y + 1.0);
         let color = (1.0 - a) * vec3<f32>(1.0, 1.0, 1.0) + a * vec3<f32>(0.5, 0.7, 1.0);
