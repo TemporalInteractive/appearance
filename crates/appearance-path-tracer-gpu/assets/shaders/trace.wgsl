@@ -1,7 +1,6 @@
 @include ::random
 @include appearance-path-tracer-gpu::shared/ray
 @include appearance-path-tracer-gpu::shared/diffuse_brdf
-@include appearance-path-tracer-gpu::shared/disney_bsdf
 
 @include appearance-path-tracer-gpu::shared/vertex_pool_bindings
 

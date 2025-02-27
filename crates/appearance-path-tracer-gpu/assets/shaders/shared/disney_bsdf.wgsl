@@ -100,6 +100,8 @@ struct DisneyBsdf {
     _padding2: u32,
 };
 
+// TODO: clamp roughness in constructor
+
 fn DisneyBsdf::clearcoat_roughness(_self: DisneyBsdf) -> f32 {
     return mix(0.1, 0.001, _self.cleatcoat_gloss);
 }
@@ -198,5 +200,62 @@ fn DisneyBsdf::evaluate_mf(_self: DisneyBsdf, alpha_x: f32, alpha_y: f32, wol: v
 
         *bsdf *= d * g / abs(4.0 * wol.z * wil.z);
         return GgxMdf::pdf(ggx_mdf, wol, m) / abs(4.0 * cos_oh);
+    }
+}
+
+fn DisneyBsdf::evaluate_diffuse(_self: DisneyBsdf, i_n: vec3<f32>, wow: vec3<f32>, wiw: vec3<f32>,
+     m: vec3<f32>, value: ptr<function, vec3<f32>>) -> f32 {
+    let cos_on: f32 = dot(i_n, wow);
+    let cos_in: f32 = dot(i_n, wiw);
+    let cos_ih: f32 = dot(wiw, m);
+    let fl: f32 = schlick_fresnel(cos_in);
+    let fv: f32 = schlick_fresnel(cos_on);
+
+    var fd: f32 = 0.0;
+    if (_self.subsurface != 1.0) {
+        let fd90: f32 = 0.5 + 2.0 * sqr(cos_ih) * _self.roughness;
+        fd = mix(1.0, fd90, fl) * mix(1.0, fd90, fv);
+    }
+    if (_self.subsurface > 0.0) {
+        let fss90: f32 = sqr(cos_ih) * _self.roughness;
+        let fss: f32 = mix(1.0, fss90, fl) * mix(1.0, fss90, fv);
+        let ss: f32 = 1.25 * (fss * (1.0 / (abs(cos_on) + abs(cos_in)) - 0.5) + 0.5);
+        fd = mix(fd, ss, _self.subsurface);
+    }
+    *value = _self.color * fd * INV_PI * (1.0 - _self.metallic);
+    return abs(cos_in) * INV_PI;
+}
+
+fn DisneyBsdf::evaluate_sheen(_self: DisneyBsdf, wow: vec3<f32>, wiw: vec3<f32>, m: vec3<f32>,
+     value: ptr<function, vec3<f32>>) -> f32 {
+    let h: vec3<f32> = normalize(wow + wiw);
+    let cos_ih: f32 = dot(wiw, m);
+    let fh: f32 = schlick_fresnel(cos_ih);
+    *value = mix_one_with_spectra(_self.tint, _self.sheen_tint);
+    *value *= fh * _self.sheen * (1.0 - _self.metallic);
+    return 1.0 / (2.0 * PI);
+}
+
+fn DisneyBsdf::sample(_self: DisneyBsdf, _i_n: vec3<f32>, n: vec3<f32>, i_t: vec3<f32>,
+     wow: vec3<f32>, distance: f32, r0: f32, r1: f32, r2: f32,
+     wiw: ptr<function, vec3<f32>>, pdf: ptr<function, f32>, specular: ptr<function, bool>) -> vec3<f32> {
+    // TODO: this flip should also not be necessary
+    var flip: f32;
+    if (dot(wow, n) < 0.0) {
+        flip = -1.0;
+    } else {
+        flip = 1.0;
+    }
+    let i_n: vec3<f32> = _i_n * flip;
+
+    // TODO: we shouldn't have to recalculate the tangent matrix, already precomputed
+    let b: vec3<f32> = normalize(cross(i_n, i_t));
+    let t: vec3<f32> = normalize(cross(i_n, b));
+
+    if (r0 < _self.transmission) {
+        *specular = true;
+
+        let r3: f32 = r0 / _self.transmission;
+        let wol: vec3<f32> = 
     }
 }
