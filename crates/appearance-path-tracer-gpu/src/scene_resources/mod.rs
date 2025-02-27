@@ -9,6 +9,7 @@ use scene_model::SceneModel;
 use uuid::Uuid;
 use vertex_pool::VertexPool;
 
+mod material_pool;
 mod scene_model;
 mod vertex_pool;
 

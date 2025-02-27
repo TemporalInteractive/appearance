@@ -16,6 +16,10 @@ pub struct VertexPoolSlice {
     num_vertices: u32,
     first_index: u32,
     num_indices: u32,
+    pub material_idx: u32,
+    _padding0: u32,
+    _padding1: u32,
+    _padding2: u32,
 }
 
 impl VertexPoolSlice {
@@ -238,6 +242,10 @@ impl VertexPool {
             num_vertices,
             first_index,
             num_indices,
+            material_idx: 0,
+            _padding0: 0,
+            _padding1: 0,
+            _padding2: 0,
         };
         self.slices.push(slice);
 
