@@ -1,4 +1,4 @@
-@include appearance-path-tracer-gpu::ray
+@include appearance-path-tracer-gpu::shared/ray
 @include appearance-render-loop::block
 
 struct Constants {

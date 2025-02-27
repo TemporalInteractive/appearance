@@ -1,4 +1,4 @@
-@include appearance-path-tracer-gpu::ray
+@include appearance-path-tracer-gpu::shared/ray
 
 struct Constants {
     inv_view: mat4x4<f32>,

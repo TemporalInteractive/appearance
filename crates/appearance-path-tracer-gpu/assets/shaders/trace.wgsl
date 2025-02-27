@@ -1,6 +1,6 @@
-@include appearance-path-tracer-gpu::ray
+@include appearance-path-tracer-gpu::shared/ray
 
-@include appearance-path-tracer-gpu::vertex_pool_bindings
+@include appearance-path-tracer-gpu::shared/vertex_pool_bindings
 
 struct Constants {
     ray_count: u32,

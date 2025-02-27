@@ -1,6 +1,6 @@
 use std::{collections::HashMap, iter};
 
-use appearance_asset_database::AssetDatabase;
+use appearance_asset_database::{asset_paths::resolve_asset_path, AssetDatabase};
 use appearance_model::{material::Material, mesh::Mesh, Model, ModelNode};
 use appearance_wgpu::wgpu::{self, util::DeviceExt, TlasPackage};
 use appearance_world::visible_world_action::VisibleWorldActionType;
@@ -82,10 +82,12 @@ impl SceneResources {
     ) {
         match action {
             VisibleWorldActionType::SpawnModel(data) => {
-                if let Some(model) = self.models.get_mut(data.asset_path()) {
+                let resolved_asset_path = resolve_asset_path(data.asset_path(), "");
+
+                if let Some(model) = self.models.get_mut(&resolved_asset_path) {
                     model.1.push(data.entity_uuid);
                 } else {
-                    let model_asset = self.model_assets.get(data.asset_path()).unwrap();
+                    let model_asset = self.model_assets.get(&resolved_asset_path).unwrap();
 
                     let scene_model = SceneModel::new(
                         (*model_asset).clone(),
@@ -95,10 +97,8 @@ impl SceneResources {
                         queue,
                     );
 
-                    self.models.insert(
-                        data.asset_path().to_owned(),
-                        (scene_model, vec![data.entity_uuid]),
-                    );
+                    self.models
+                        .insert(resolved_asset_path, (scene_model, vec![data.entity_uuid]));
                 }
 
                 self.model_instances

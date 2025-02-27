@@ -1,4 +1,4 @@
-@include appearance-path-tracer-gpu::vertex_pool
+@include appearance-path-tracer-gpu::shared/vertex_pool
 
 @group(1)
 @binding(0)

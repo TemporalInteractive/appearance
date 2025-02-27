@@ -114,17 +114,17 @@ impl RenderLoop for HostRenderLoop {
         let mut world = World::new();
         let duck_entity =
             world.create_entity("Duck", Transform::from_scale(Vec3::splat(1.0)), |builder| {
-                builder.with(ModelComponent::new("assets/Duck.glb"))
+                builder.with(ModelComponent::new("::Duck.glb"))
             });
         let _ = world.create_entity(
             "Sponza",
             Transform::new(Vec3::new(3.0, 0.0, 0.0), Quat::IDENTITY, Vec3::splat(1.0)),
-            |builder| builder.with(ModelComponent::new("assets/Sponza.glb")),
+            |builder| builder.with(ModelComponent::new("::Sponza.glb")),
         );
         let toy_car_entity = world.create_entity(
             "ToyCar",
             Transform::new(Vec3::new(3.0, 0.5, 0.0), Quat::IDENTITY, Vec3::splat(45.0)),
-            |builder| builder.with(ModelComponent::new("assets/ToyCar.glb")),
+            |builder| builder.with(ModelComponent::new("::ToyCar.glb")),
         );
         let _ = world.create_entity(
             "Glass",
@@ -133,7 +133,7 @@ impl RenderLoop for HostRenderLoop {
                 Quat::from_axis_angle(UP, 90.0f32.to_radians()),
                 Vec3::splat(1.0),
             ),
-            |builder| builder.with(ModelComponent::new("assets/GlassPanel.glb")),
+            |builder| builder.with(ModelComponent::new("::GlassPanel.glb")),
         );
 
         Self {
