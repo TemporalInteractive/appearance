@@ -1,7 +1,7 @@
 use core::ops::FnMut;
 use std::sync::Arc;
 
-use appearance_path_tracer_gpu::PathTracerGpu;
+use appearance_path_tracer_gpu::{PathTracerGpu, PathTracerGpuConfig};
 use appearance_render_loop::node::NodeRenderer;
 use appearance_wgpu::{pipeline_database::PipelineDatabase, wgpu, Context};
 use appearance_world::visible_world_action::VisibleWorldActionType;
@@ -47,7 +47,7 @@ impl DistributedRenderer {
     pub fn new_with_context(ctx: Arc<Context>) -> Self {
         let pipeline_database = PipelineDatabase::new();
 
-        let path_tracer = PathTracerGpu::new(&ctx);
+        let path_tracer = PathTracerGpu::new(&ctx, PathTracerGpuConfig::default());
 
         Self {
             ctx,

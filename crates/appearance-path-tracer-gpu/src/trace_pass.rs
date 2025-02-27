@@ -12,14 +12,17 @@ use crate::scene_resources::SceneResources;
 #[repr(C)]
 struct Constants {
     ray_count: u32,
+    bounce: u32,
+    seed: u32,
     _padding0: u32,
-    _padding1: u32,
-    _padding2: u32,
 }
 
 pub struct TracePassParameters<'a> {
     pub ray_count: u32,
-    pub rays: &'a wgpu::Buffer,
+    pub bounce: u32,
+    pub seed: u32,
+    pub in_rays: &'a wgpu::Buffer,
+    pub out_rays: &'a wgpu::Buffer,
     pub payloads: &'a wgpu::Buffer,
     pub scene_resources: &'a SceneResources,
 }
@@ -61,7 +64,7 @@ pub fn encode(
                                 binding: 1,
                                 visibility: wgpu::ShaderStages::COMPUTE,
                                 ty: wgpu::BindingType::Buffer {
-                                    ty: wgpu::BufferBindingType::Storage { read_only: false },
+                                    ty: wgpu::BufferBindingType::Storage { read_only: true },
                                     has_dynamic_offset: false,
                                     min_binding_size: None,
                                 },
@@ -80,6 +83,16 @@ pub fn encode(
                             wgpu::BindGroupLayoutEntry {
                                 binding: 3,
                                 visibility: wgpu::ShaderStages::COMPUTE,
+                                ty: wgpu::BindingType::Buffer {
+                                    ty: wgpu::BufferBindingType::Storage { read_only: false },
+                                    has_dynamic_offset: false,
+                                    min_binding_size: None,
+                                },
+                                count: None,
+                            },
+                            wgpu::BindGroupLayoutEntry {
+                                binding: 4,
+                                visibility: wgpu::ShaderStages::COMPUTE,
                                 ty: wgpu::BindingType::AccelerationStructure,
                                 count: None,
                             },
@@ -96,9 +109,9 @@ pub fn encode(
         label: Some("appearance-path-tracer-gpu::trace constants"),
         contents: bytemuck::bytes_of(&Constants {
             ray_count: parameters.ray_count,
+            bounce: parameters.bounce,
+            seed: parameters.seed,
             _padding0: 0,
-            _padding1: 0,
-            _padding2: 0,
         }),
         usage: wgpu::BufferUsages::UNIFORM,
     });
@@ -114,14 +127,18 @@ pub fn encode(
             },
             wgpu::BindGroupEntry {
                 binding: 1,
-                resource: parameters.rays.as_entire_binding(),
+                resource: parameters.in_rays.as_entire_binding(),
             },
             wgpu::BindGroupEntry {
                 binding: 2,
-                resource: parameters.payloads.as_entire_binding(),
+                resource: parameters.out_rays.as_entire_binding(),
             },
             wgpu::BindGroupEntry {
                 binding: 3,
+                resource: parameters.payloads.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 4,
                 resource: wgpu::BindingResource::AccelerationStructure(
                     parameters.scene_resources.tlas(),
                 ),

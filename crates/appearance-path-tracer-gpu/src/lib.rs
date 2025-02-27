@@ -23,11 +23,14 @@ struct Ray {
 #[repr(C)]
 struct Payload {
     accumulated: u32,
+    throughput: u32,
+    rng: u32,
+    alive: u32,
 }
 
 struct SizedResources {
     film: Film,
-    rays: wgpu::Buffer,
+    rays: [wgpu::Buffer; 2],
     payloads: wgpu::Buffer,
 }
 
@@ -35,11 +38,13 @@ impl SizedResources {
     fn new(resolution: UVec2, device: &wgpu::Device) -> Self {
         let film = Film::new(resolution, device);
 
-        let rays = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("appearance-path-tracer-gpu rays"),
-            size: (std::mem::size_of::<Ray>() as u32 * resolution.x * resolution.y) as u64,
-            mapped_at_creation: false,
-            usage: wgpu::BufferUsages::STORAGE,
+        let rays = std::array::from_fn(|i| {
+            device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some(&format!("appearance-path-tracer-gpu rays {}", i)),
+                size: (std::mem::size_of::<Ray>() as u32 * resolution.x * resolution.y) as u64,
+                mapped_at_creation: false,
+                usage: wgpu::BufferUsages::STORAGE,
+            })
         });
 
         let payloads = device.create_buffer(&wgpu::BufferDescriptor {
@@ -57,18 +62,31 @@ impl SizedResources {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct PathTracerGpuConfig {
+    max_bounces: u32,
+}
+
+impl Default for PathTracerGpuConfig {
+    fn default() -> Self {
+        Self { max_bounces: 4 }
+    }
+}
+
 pub struct PathTracerGpu {
+    config: PathTracerGpuConfig,
     resolution: UVec2,
     local_resolution: UVec2,
     sized_resources: SizedResources,
     camera: Camera,
     scene_resources: SceneResources,
+    frame_idx: u32,
 
     upload_command_encoder: Option<wgpu::CommandEncoder>,
 }
 
 impl PathTracerGpu {
-    pub fn new(ctx: &Context) -> Self {
+    pub fn new(ctx: &Context, config: PathTracerGpuConfig) -> Self {
         let resolution = UVec2::new(1920, 1080);
         let sized_resources = SizedResources::new(resolution, &ctx.device);
 
@@ -80,12 +98,14 @@ impl PathTracerGpu {
         );
 
         Self {
+            config,
             resolution,
             local_resolution: resolution,
             sized_resources,
             camera: Camera::default(),
             scene_resources,
             upload_command_encoder,
+            frame_idx: 0,
         }
     }
 
@@ -154,24 +174,32 @@ impl PathTracerGpu {
                 inv_view,
                 inv_proj,
                 resolution: self.local_resolution,
-                rays: &self.sized_resources.rays,
+                rays: &self.sized_resources.rays[0],
             },
             &ctx.device,
             &mut command_encoder,
             pipeline_database,
         );
 
-        trace_pass::encode(
-            &TracePassParameters {
-                ray_count: self.local_resolution.x * self.local_resolution.y,
-                rays: &self.sized_resources.rays,
-                payloads: &self.sized_resources.payloads,
-                scene_resources: &self.scene_resources,
-            },
-            &ctx.device,
-            &mut command_encoder,
-            pipeline_database,
-        );
+        for i in 0..self.config.max_bounces {
+            let in_rays = &self.sized_resources.rays[(i as usize) % 2];
+            let out_rays = &self.sized_resources.rays[(i as usize + 1) % 2];
+
+            trace_pass::encode(
+                &TracePassParameters {
+                    ray_count: self.local_resolution.x * self.local_resolution.y,
+                    bounce: i,
+                    seed: self.frame_idx,
+                    in_rays,
+                    out_rays,
+                    payloads: &self.sized_resources.payloads,
+                    scene_resources: &self.scene_resources,
+                },
+                &ctx.device,
+                &mut command_encoder,
+                pipeline_database,
+            );
+        }
 
         resolve_pass::encode(
             &ResolvePassParameters {
@@ -192,5 +220,7 @@ impl PathTracerGpu {
 
         let pixels = self.sized_resources.film.readback_pixels(&ctx.device);
         result_callback(&pixels);
+
+        self.frame_idx += 1;
     }
 }

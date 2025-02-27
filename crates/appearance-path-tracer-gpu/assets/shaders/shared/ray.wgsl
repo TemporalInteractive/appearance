@@ -11,8 +11,11 @@ fn Ray::new(origin: vec3<f32>, direction: vec3<f32>) -> Ray {
 
 struct Payload {
     accumulated: PackedRgb9e5,
+    throughput: PackedRgb9e5,
+    rng: u32,
+    alive: u32,
 };
 
-fn Payload::new(accumulated: vec3<f32>) -> Payload {
-    return Payload(PackedRgb9e5::new(accumulated));
+fn Payload::new(accumulated: vec3<f32>, throughput: vec3<f32>, rng: u32, alive: u32) -> Payload {
+    return Payload(PackedRgb9e5::new(accumulated), PackedRgb9e5::new(throughput), rng, alive);
 }
