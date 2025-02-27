@@ -33,9 +33,11 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     if (id >= constants.ray_count) { return; }
 
     let ray: Ray = rays[id];
+    let origin: vec3<f32> = ray.origin;
+    let direction: vec3<f32> = PackedNormalizedXyz10::unpack(ray.direction, 0);
 
     var rq: ray_query;
-    rayQueryInitialize(&rq, scene, RayDesc(0u, 0xFFu, 0.01, 1000.0, ray.origin, ray.direction));
+    rayQueryInitialize(&rq, scene, RayDesc(0u, 0xFFu, 0.01, 1000.0, origin, direction));
     rayQueryProceed(&rq);
 
     let intersection = rayQueryGetCommittedIntersection(&rq);
@@ -68,7 +70,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
 
         payloads[id] = Payload::new(color);
     } else {
-        let a: f32 = 0.5 * (ray.direction.y + 1.0);
+        let a: f32 = 0.5 * (direction.y + 1.0);
         let color = (1.0 - a) * vec3<f32>(1.0, 1.0, 1.0) + a * vec3<f32>(0.5, 0.7, 1.0);
         payloads[id] = Payload::new(color);
     }

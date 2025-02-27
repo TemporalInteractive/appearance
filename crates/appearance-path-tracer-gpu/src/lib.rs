@@ -17,15 +17,12 @@ mod trace_pass;
 #[repr(C)]
 struct Ray {
     origin: Vec3,
-    _padding0: u32,
-    direction: Vec3,
-    _padding1: u32,
+    direction: u32,
 }
 
 #[repr(C)]
 struct Payload {
-    accumulated: Vec3,
-    _padding0: u32,
+    accumulated: u32,
 }
 
 struct SizedResources {

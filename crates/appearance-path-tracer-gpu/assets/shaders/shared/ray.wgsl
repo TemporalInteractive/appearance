@@ -1,19 +1,18 @@
+@include ::packing
+
 struct Ray {
     origin: vec3<f32>,
-    _padding0: u32,
-    direction: vec3<f32>,
-    _padding1: u32,
+    direction: PackedNormalizedXyz10,
 };
 
 fn Ray::new(origin: vec3<f32>, direction: vec3<f32>) -> Ray {
-    return Ray(origin, 0, direction, 0);
+    return Ray(origin, PackedNormalizedXyz10::new(direction, 0));
 }
 
 struct Payload {
-    accumulated: vec3<f32>,
-    _padding0: u32,
+    accumulated: PackedRgb9e5,
 };
 
 fn Payload::new(accumulated: vec3<f32>) -> Payload {
-    return Payload(accumulated, 0);
+    return Payload(PackedRgb9e5::new(accumulated));
 }

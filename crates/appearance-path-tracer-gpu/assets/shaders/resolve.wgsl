@@ -29,8 +29,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     var i: u32 = id.y * constants.width + id.x;
 
     var payload: Payload = payloads[i];
-    var accumulated: vec3<f32> = payload.accumulated;
+    var accumulated: vec3<f32> = PackedRgb9e5::unpack(payload.accumulated);
 
     let block_id: vec2<u32> = linear_to_block_pixel_idx(id, constants.width);
-    textureStore(texture, vec2(i32(block_id.x), i32(block_id.y)), vec4(accumulated.x, accumulated.y, accumulated.z, 1.0));
+    textureStore(texture, vec2(i32(block_id.x), i32(block_id.y)), vec4(accumulated, 1.0));
 }
