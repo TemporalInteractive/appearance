@@ -126,3 +126,71 @@ fn GgxMdf::pdf(_self: GgxMdf, v: vec3<f32>, m: vec3<f32>) -> f32{
     }
     return GgxMdf::g1(_self, v, m) * abs(dot(v, m)) * GgxMdf::d(_self, m) / abs(cos_theta_v);
 }
+
+struct Gtr1Mdf {
+    alpha_x: f32,
+    alpha_y: f32,
+};
+
+fn Gtr1Mdf::new(alpha_x: f32, alpha_y: f32) -> Gtr1Mdf {
+    return Gtr1Mdf(alpha_x, alpha_y);
+}
+
+fn Gtr1Mdf::d(_self: Gtr1Mdf, m: vec3<f32>) -> f32 {
+    let alpha: f32 = clamp(_self.alpha_x, 0.001, 0.999);
+    let alpha_x_2: f32 = sqr(alpha);
+    let a: f32 = (alpha_x_2 - 1.0) / (PI * log(alpha_x_2));
+    let b: f32 = (1.0 / (1.0 + (alpha_x_2 - 1.0) * sqr(m.z)));
+    return a * b;
+}
+
+fn Gtr1Mdf::lambda(_self: Gtr1Mdf, v: vec3<f32>) -> f32 {
+    if (v.z == 0.0) {
+        return 0.0;
+    }
+
+    let cos_theta_2: f32 = sqr(v.z);
+    let sin_theta: f32 = sqrt(max(0.0, 1.0 - cos_theta_2));
+
+    if (sin_theta == 0.0) {
+        return 0.0;
+    }
+
+    let cot_theta_2: f32 = cos_theta_2 / sqr(sin_theta);
+    let cot_theta: f32 = sqrt(cot_theta_2);
+    let alpha_2: f32 = sqr(clamp(_self.alpha_x, 0.001, 0.999));
+    let a: f32 = sqrt(cot_theta_2 + alpha_2);
+    let b: f32 = sqrt(cot_theta_2 + 1.0);
+    let c: f32 = log(cot_theta + b);
+    let d: f32 = log(cot_theta + a);
+    return (a - b + cot_theta * (c - d)) / (cot_theta * log(alpha_2));
+}
+
+fn Gtr1Mdf::g(_self: Gtr1Mdf, wi: vec3<f32>, wo: vec3<f32>, m: vec3<f32>) -> f32 {
+    return 1.0 / (1.0 + Gtr1Mdf::lambda(_self, wo) + Gtr1Mdf::lambda(_self, wi));
+}
+
+fn Gtr1Mdf::g1(_self: Gtr1Mdf, v: vec3<f32>, m: vec3<f32>) -> f32 {
+    return 1.0 / (1.0 + Gtr1Mdf::lambda(_self, v));
+}
+
+fn Gtr1Mdf::sample(_self: Gtr1Mdf, r0: f32, r1: f32) -> vec3<f32> {
+    let alpha: f32 = clamp(_self.alpha_x, 0.001, 0.999);
+    let alpha_2: f32 = sqr(alpha);
+    let cos_theta_2: f32 = (1.0 - pow(alpha_2, 1.0 - r0)) / (1.0 - alpha_2);
+    let sin_theta: f32 = sqrt(max(0.0, 1.0 - cos_theta_2));
+
+    let phi: f32 = TWO_PI * r1;
+    let cos_phi: f32 = cos(phi);
+    let sin_phi: f32 = sin(phi);
+
+    return vec3<f32>(
+        cos_phi * sin_theta,
+        sin_phi * sin_theta,
+        sqrt(cos_theta_2)
+    );
+}
+
+fn Gtr1Mdf::pdf(_self: Gtr1Mdf, v: vec3<f32>, m: vec3<f32>) -> f32 {
+    return Gtr1Mdf::d(_self, m) * abs(m.z);
+}

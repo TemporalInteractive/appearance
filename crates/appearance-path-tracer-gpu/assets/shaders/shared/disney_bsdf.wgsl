@@ -116,3 +116,87 @@ fn DisneyBsdf::clearcoat_fresnel(_self: DisneyBsdf, o: vec3<f32>, h: vec3<f32>) 
     let cos_oh: f32 = abs(dot(o, h));
     return vec3<f32>(mix(0.04, 1.0, schlick_fresnel(cos_oh)) * 0.25 * _self.clearcoat);
 }
+
+fn DisneyBsdf::sample_mf(_self: DisneyBsdf, r0: f32, r1: f32, alpha_x: f32, alpha_y: f32, wol: vec3<f32>,
+     mf_clearcoat: bool, wil: ptr<function, vec3<f32>>, pdf: ptr<function, f32>, value: ptr<function, vec3<f32>>) {
+    if (wol.z == 0.0) {
+        *value = vec3<f32>(0.0);
+        *pdf = 0.0;
+        return;
+    }
+
+    if (mf_clearcoat) {
+        let gtr1_mdf = Gtr1Mdf::new(alpha_x, alpha_y);
+
+        let m: vec3<f32> = Gtr1Mdf::sample(gtr1_mdf, r0, r1);
+        *wil = reflect(wol * -1.0, m);
+
+        if ((*wil).z == 0.0) {
+            return;
+        }
+
+        let cos_oh: f32 = dot(wol, m);
+        *pdf = Gtr1Mdf::pdf(gtr1_mdf, wol, m) / abs(4.0 * cos_oh);
+        if (*pdf < 1e-6) {
+            return;
+        }
+
+        let d: f32 = Gtr1Mdf::d(gtr1_mdf, m);
+        let g: f32 = Gtr1Mdf::g(gtr1_mdf, *wil, wol, m);
+        *value = DisneyBsdf::clearcoat_fresnel(_self, wol, m);
+        *value *= d * g;
+    } else {
+        let ggx_mdf = GgxMdf::new(alpha_x, alpha_y);
+
+        let m: vec3<f32> = GgxMdf::sample(ggx_mdf, wol, r0, r1);
+        *wil = reflect(wol * -1.0, m);
+
+        if ((*wil).z == 0.0) {
+            return;
+        }
+
+        let cos_oh: f32 = dot(wol, m);
+        *pdf = GgxMdf::pdf(ggx_mdf, wol, m) / abs(4.0 * cos_oh);
+        if (*pdf < 1e-6) {
+            return;
+        }
+
+        let d: f32 = GgxMdf::d(ggx_mdf, m);
+        let g: f32 = GgxMdf::g(ggx_mdf, *wil, wol, m);
+        *value = DisneyBsdf::specular_fresnel(_self, wol, m);
+        *value *= d * g;
+    }
+}
+
+fn DisneyBsdf::evaluate_mf(_self: DisneyBsdf, alpha_x: f32, alpha_y: f32, wol: vec3<f32>,
+     wil: vec3<f32>, m: vec3<f32>, mf_clearcoat: bool,
+     bsdf: ptr<function, vec3<f32>>) -> f32 {
+    if (wol.z == 0.0 || wil.z == 0.0) {
+        return 0.0;
+    }
+
+    let cos_oh: f32 = dot(wol, m);
+    if (cos_oh == 0.0) {
+        return 0.0;
+    }
+
+    if (mf_clearcoat) {
+        let gtr1_mdf = Gtr1Mdf::new(alpha_x, alpha_y);
+
+        let d: f32 = Gtr1Mdf::d(gtr1_mdf, m);
+        let g: f32 = Gtr1Mdf::g(gtr1_mdf, wil, wol, m);
+        *bsdf = DisneyBsdf::clearcoat_fresnel(_self, wol, m);
+
+        *bsdf *= d * g / abs(4.0 * wol.z * wil.z);
+        return Gtr1Mdf::pdf(gtr1_mdf, wol, m) / abs(4.0 * cos_oh);
+    } else {
+        let ggx_mdf = GgxMdf::new(alpha_x, alpha_y);
+
+        let d: f32 = GgxMdf::d(ggx_mdf, m);
+        let g: f32 = GgxMdf::g(ggx_mdf, wil, wol, m);
+        *bsdf = DisneyBsdf::specular_fresnel(_self, wol, m);
+
+        *bsdf *= d * g / abs(4.0 * wol.z * wil.z);
+        return GgxMdf::pdf(ggx_mdf, wol, m) / abs(4.0 * cos_oh);
+    }
+}
