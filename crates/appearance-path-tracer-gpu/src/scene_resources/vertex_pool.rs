@@ -19,6 +19,14 @@ pub struct VertexPoolSlice {
 }
 
 impl VertexPoolSlice {
+    pub fn first_vertex(&self) -> u32 {
+        self.first_vertex
+    }
+
+    pub fn first_index(&self) -> u32 {
+        self.first_index
+    }
+
     fn last_vertex(&self) -> u32 {
         self.first_vertex + self.num_vertices
     }
@@ -239,7 +247,7 @@ impl VertexPool {
         }
     }
 
-    pub fn free(index: u32) {
+    pub fn free(_index: u32) {
         todo!()
     }
 
@@ -301,5 +309,13 @@ impl VertexPool {
 
     pub fn bind_group(&self) -> &wgpu::BindGroup {
         &self.bind_group
+    }
+
+    pub fn vertex_position_buffer(&self) -> &wgpu::Buffer {
+        &self.vertex_position_buffer
+    }
+
+    pub fn index_buffer(&self) -> &wgpu::Buffer {
+        &self.index_buffer
     }
 }

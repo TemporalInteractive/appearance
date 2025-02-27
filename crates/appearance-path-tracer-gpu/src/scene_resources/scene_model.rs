@@ -1,8 +1,8 @@
 use std::iter;
 
 use appearance_model::{material::Material, mesh::Mesh, Model, ModelNode};
-use appearance_wgpu::wgpu::{self, util::DeviceExt};
-use glam::{Vec3, Vec4};
+use appearance_wgpu::wgpu;
+use glam::Vec4;
 
 use super::vertex_pool::{VertexPool, VertexPoolAlloc};
 
@@ -10,8 +10,6 @@ pub struct SceneModel {
     pub root_nodes: Vec<u32>,
     pub materials: Vec<Material>,
     pub meshes: Vec<Mesh>,
-    pub vertex_buffers: Vec<wgpu::Buffer>,
-    pub index_buffers: Vec<wgpu::Buffer>,
     pub blases: Vec<wgpu::Blas>,
     pub vertex_pool_allocs: Vec<VertexPoolAlloc>,
     pub nodes: Vec<ModelNode>,
@@ -25,25 +23,10 @@ impl SceneModel {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) -> Self {
-        let mut vertex_buffers = vec![];
-        let mut index_buffers = vec![];
         let mut blases = vec![];
         let mut vertex_pool_allocs = vec![];
 
         for mesh in &model.meshes {
-            // TODO: make vertex and index buffer global pools
-            let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: None,
-                contents: bytemuck::cast_slice(&mesh.vertex_positions),
-                usage: wgpu::BufferUsages::BLAS_INPUT,
-            });
-
-            let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: None,
-                contents: bytemuck::cast_slice(&mesh.indices),
-                usage: wgpu::BufferUsages::BLAS_INPUT,
-            });
-
             let vertex_pool_alloc = vertex_pool.alloc(
                 mesh.vertex_positions.len() as u32,
                 mesh.indices.len() as u32,
@@ -88,11 +71,11 @@ impl SceneModel {
 
             let triangle_geometry = wgpu::BlasTriangleGeometry {
                 size: &size_desc,
-                vertex_buffer: &vertex_buffer,
-                first_vertex: 0,
-                vertex_stride: std::mem::size_of::<Vec3>() as u64,
-                index_buffer: Some(&index_buffer),
-                first_index: Some(0),
+                vertex_buffer: vertex_pool.vertex_position_buffer(),
+                first_vertex: vertex_pool_alloc.slice.first_vertex(),
+                vertex_stride: std::mem::size_of::<Vec4>() as u64,
+                index_buffer: Some(vertex_pool.index_buffer()),
+                first_index: Some(vertex_pool_alloc.slice.first_index()),
                 transform_buffer: None,
                 transform_buffer_offset: None,
             };
@@ -104,8 +87,6 @@ impl SceneModel {
 
             command_encoder.build_acceleration_structures(iter::once(&build_entry), iter::empty());
 
-            vertex_buffers.push(vertex_buffer);
-            index_buffers.push(index_buffer);
             blases.push(blas);
             vertex_pool_allocs.push(vertex_pool_alloc);
         }
@@ -114,8 +95,6 @@ impl SceneModel {
             root_nodes: model.root_nodes,
             materials: model.materials,
             meshes: model.meshes,
-            vertex_buffers,
-            index_buffers,
             blases,
             vertex_pool_allocs,
             nodes: model.nodes,
