@@ -1,18 +1,16 @@
 use std::iter;
 
-use appearance_model::{material::Material, mesh::Mesh, Model, ModelNode};
+use appearance_model::{Model, ModelNode};
 use appearance_wgpu::wgpu;
 use glam::Vec4;
 
 use super::{
     material_pool::MaterialPool,
-    vertex_pool::{VertexPool, VertexPoolAlloc},
+    vertex_pool::{VertexPool, VertexPoolAlloc, VertexPoolWriteData},
 };
 
 pub struct SceneModel {
     pub root_nodes: Vec<u32>,
-    pub materials: Vec<Material>,
-    pub meshes: Vec<Mesh>,
     pub blases: Vec<wgpu::Blas>,
     pub vertex_pool_allocs: Vec<VertexPoolAlloc>,
     pub nodes: Vec<ModelNode>,
@@ -32,7 +30,6 @@ impl SceneModel {
 
         // TODO: make this into an offset, supply per triangle / primitive material indices
         let material_idx = material_pool.material_count();
-
         for material in &model.materials {
             material_pool.alloc_material(material, device, queue);
         }
@@ -54,11 +51,13 @@ impl SceneModel {
                 .map(|x| Vec4::from((*x, 0.0)))
                 .collect();
             vertex_pool.write_vertex_data(
-                &vertex_positions,
-                &vertex_normals,
-                &mesh.vertex_tex_coords,
-                &mesh.indices,
-                &mesh.triangle_material_indices,
+                &VertexPoolWriteData {
+                    vertex_positions: &vertex_positions,
+                    vertex_normals: &vertex_normals,
+                    vertex_tex_coords: &mesh.vertex_tex_coords,
+                    indices: &mesh.indices,
+                    triangle_material_indices: &mesh.triangle_material_indices,
+                },
                 vertex_pool_alloc.slice,
                 queue,
             );
@@ -106,8 +105,6 @@ impl SceneModel {
 
         Self {
             root_nodes: model.root_nodes,
-            materials: model.materials,
-            meshes: model.meshes,
             blases,
             vertex_pool_allocs,
             nodes: model.nodes,

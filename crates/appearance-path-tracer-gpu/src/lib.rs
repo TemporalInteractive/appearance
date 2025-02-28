@@ -1,3 +1,5 @@
+#![allow(clippy::needless_range_loop)]
+
 use appearance_camera::Camera;
 use appearance_wgpu::{pipeline_database::PipelineDatabase, wgpu, Context};
 use appearance_world::visible_world_action::VisibleWorldActionType;

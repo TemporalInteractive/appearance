@@ -16,3 +16,4 @@ glam.workspace = true
 image.workspace = true
 log.workspace = true
 uuid.workspace = true
+wgpu.workspace = true

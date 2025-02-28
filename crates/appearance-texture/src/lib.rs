@@ -7,13 +7,35 @@ pub mod asset;
 pub enum TextureFormat {
     Rgba8Unorm,
     Rgb8Unorm,
+    Rg8Unorm,
+    R8Unorm,
 }
 
 impl TextureFormat {
     pub fn num_channels(&self) -> usize {
         match self {
+            Self::R8Unorm => 1,
+            Self::Rg8Unorm => 2,
             Self::Rgb8Unorm => 3,
             Self::Rgba8Unorm => 4,
+        }
+    }
+
+    pub fn to_wgpu(&self) -> wgpu::TextureFormat {
+        match self {
+            Self::R8Unorm => wgpu::TextureFormat::R8Unorm,
+            Self::Rg8Unorm => wgpu::TextureFormat::Rg8Unorm,
+            Self::Rgba8Unorm => wgpu::TextureFormat::Rgba8Unorm,
+            _ => panic!("Failed to convert {:?} to wgpu.", self),
+        }
+    }
+
+    pub fn to_wgpu_compressed(&self) -> wgpu::TextureFormat {
+        match self {
+            Self::R8Unorm => wgpu::TextureFormat::Bc4RUnorm,
+            Self::Rg8Unorm => wgpu::TextureFormat::Bc5RgUnorm,
+            Self::Rgba8Unorm => wgpu::TextureFormat::Bc7RgbaUnorm,
+            _ => panic!("Failed to convert {:?} to wgpu.", self),
         }
     }
 }

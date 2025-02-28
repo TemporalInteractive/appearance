@@ -4,6 +4,14 @@ use glam::{Vec2, Vec4};
 
 pub const MAX_VERTEX_POOL_VERTICES: usize = 1024 * 1024 * 32;
 
+pub struct VertexPoolWriteData<'a> {
+    pub vertex_positions: &'a [Vec4],
+    pub vertex_normals: &'a [Vec4],
+    pub vertex_tex_coords: &'a [Vec2],
+    pub indices: &'a [u32],
+    pub triangle_material_indices: &'a [u32],
+}
+
 pub struct VertexPoolAlloc {
     pub slice: VertexPoolSlice,
     pub index: u32,
@@ -214,40 +222,36 @@ impl VertexPool {
 
     pub fn write_vertex_data(
         &self,
-        vertex_positions: &[Vec4],
-        vertex_normals: &[Vec4],
-        vertex_tex_coords: &[Vec2],
-        indices: &[u32],
-        triangle_material_indices: &[u32],
+        data: &VertexPoolWriteData,
         slice: VertexPoolSlice,
         queue: &wgpu::Queue,
     ) {
         queue.write_buffer(
             &self.vertex_position_buffer,
             (slice.first_vertex as usize * std::mem::size_of::<Vec4>()) as u64,
-            bytemuck::cast_slice(vertex_positions),
+            bytemuck::cast_slice(data.vertex_positions),
         );
         queue.write_buffer(
             &self.vertex_normal_buffer,
             (slice.first_vertex as usize * std::mem::size_of::<Vec4>()) as u64,
-            bytemuck::cast_slice(vertex_normals),
+            bytemuck::cast_slice(data.vertex_normals),
         );
         queue.write_buffer(
             &self.vertex_tex_coord_buffer,
             (slice.first_vertex as usize * std::mem::size_of::<Vec2>()) as u64,
-            bytemuck::cast_slice(vertex_tex_coords),
+            bytemuck::cast_slice(data.vertex_tex_coords),
         );
 
         queue.write_buffer(
             &self.index_buffer,
             (slice.first_index as usize * std::mem::size_of::<u32>()) as u64,
-            bytemuck::cast_slice(indices),
+            bytemuck::cast_slice(data.indices),
         );
 
         queue.write_buffer(
             &self.triangle_material_index_buffer,
             (slice.first_index as usize / 3 * std::mem::size_of::<u32>()) as u64,
-            bytemuck::cast_slice(triangle_material_indices),
+            bytemuck::cast_slice(data.triangle_material_indices),
         );
     }
 
@@ -290,7 +294,7 @@ impl VertexPool {
         }
     }
 
-    pub fn free(_index: u32) {
+    pub fn _free(_index: u32) {
         todo!()
     }
 

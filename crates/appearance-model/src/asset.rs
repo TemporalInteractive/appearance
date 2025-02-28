@@ -5,6 +5,7 @@ use appearance_asset_database::Asset;
 use appearance_texture::{Texture, TextureCreateDesc, TextureFormat};
 use appearance_transform::Transform;
 use glam::{Quat, Vec2, Vec3, Vec4};
+use gltf::material::AlphaMode;
 use image::DynamicImage;
 use uuid::Uuid;
 
@@ -125,6 +126,7 @@ fn process_node(
             let mut mesh_vertex_tangents = vec![];
             let mut mesh_triangle_material_indices = vec![];
             let mut mesh_indices = vec![];
+            let mut opaque = true;
 
             for primitive in mesh.primitives() {
                 if primitive.mode() == gltf::mesh::Mode::Triangles {
@@ -207,6 +209,9 @@ fn process_node(
                             } else {
                                 0.0
                             };
+                        material.alpha_cutoff = prim_material.alpha_cutoff().unwrap_or(0.0);
+                        material.opaque = prim_material.alpha_mode() == AlphaMode::Opaque
+                            || material.alpha_cutoff == 0.0;
 
                         if let Some(color_tex) = pbr.base_color_texture() {
                             material.base_color_texture = Some(process_tex(
@@ -255,6 +260,8 @@ fn process_node(
                             ));
                         }
                     }
+
+                    opaque = opaque && material.opaque;
                 } else {
                     panic!("Only triangles are supported.");
                 }
@@ -267,6 +274,7 @@ fn process_node(
                 mesh_vertex_tex_coords,
                 mesh_triangle_material_indices,
                 mesh_indices,
+                opaque,
             );
             if !mesh.has_normals() {
                 mesh.generate_normals();
@@ -325,7 +333,9 @@ fn process_tex(
                 } else {
                     let format = match data.format {
                         gltf::image::Format::R8G8B8A8 => TextureFormat::Rgba8Unorm,
-                        _ => panic!("Unsupported image type."),
+                        gltf::image::Format::R8G8 => TextureFormat::Rg8Unorm,
+                        gltf::image::Format::R8 => TextureFormat::R8Unorm,
+                        _ => panic!("Unsupported image type: {:?}.", data.format),
                     };
 
                     TextureCreateDesc {

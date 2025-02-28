@@ -7,7 +7,7 @@ use bytemuck::{Pod, Zeroable};
 use glam::{Vec3, Vec4};
 use uuid::Uuid;
 
-pub const MAX_MATERIAL_POOL_MATERIALS: usize = 1024 * 16;
+pub const MAX_MATERIAL_POOL_MATERIALS: usize = 1024 * 8;
 pub const MAX_MATERIAL_POOL_TEXTURES: usize = 1024;
 
 #[derive(Pod, Clone, Copy, Zeroable)]
@@ -24,6 +24,10 @@ pub struct MaterialDescriptor {
     pub transmission_factor: f32,
     pub emissive_factor: Vec3,
     emissive_texture: u32,
+    pub alpha_cutoff: f32,
+    _padding0: u32,
+    _padding1: u32,
+    _padding2: u32,
 }
 
 pub struct MaterialPool {
@@ -141,18 +145,54 @@ impl MaterialPool {
         let (texture, texture_view) = Self::create_texture(device, width, height, format);
 
         let texture_data = match format {
-            // wgpu::TextureFormat::Bc1RgbaUnorm | wgpu::TextureFormat::Bc1RgbaUnormSrgb => {
-            //     let bc_surface = intel_tex_2::RgbaSurface {
-            //         width,
-            //         height,
-            //         stride: width * model_texture.format().num_channels() as u32,
-            //         data: model_texture.data(),
-            //     };
+            wgpu::TextureFormat::Bc4RUnorm => {
+                let surface = intel_tex_2::RSurface {
+                    width,
+                    height,
+                    stride: width * model_texture.format().num_channels() as u32,
+                    data: model_texture.data(),
+                };
 
-            //     intel_tex_2::bc1::compress_blocks(&surface)
-            // }
-            _ => model_texture.data().to_vec(), // TODO: would be nice to avoid this copy
+                intel_tex_2::bc4::compress_blocks(&surface)
+            }
+            wgpu::TextureFormat::Bc5RgUnorm => {
+                let surface = intel_tex_2::RgSurface {
+                    width,
+                    height,
+                    stride: width * model_texture.format().num_channels() as u32,
+                    data: model_texture.data(),
+                };
+
+                intel_tex_2::bc5::compress_blocks(&surface)
+            }
+            wgpu::TextureFormat::Bc7RgbaUnorm => {
+                let surface = intel_tex_2::RgbaSurface {
+                    width,
+                    height,
+                    stride: width * model_texture.format().num_channels() as u32,
+                    data: model_texture.data(),
+                };
+
+                intel_tex_2::bc7::compress_blocks(
+                    &intel_tex_2::bc7::alpha_ultra_fast_settings(),
+                    &surface,
+                )
+            }
+            _ => panic!("Unsupported texture format."),
         };
+
+        let block_size = match format {
+            wgpu::TextureFormat::Bc1RgbaUnorm
+            | wgpu::TextureFormat::Bc4RUnorm
+            | wgpu::TextureFormat::Bc4RSnorm => 8,
+            wgpu::TextureFormat::Bc2RgbaUnorm
+            | wgpu::TextureFormat::Bc3RgbaUnorm
+            | wgpu::TextureFormat::Bc5RgUnorm
+            | wgpu::TextureFormat::Bc5RgSnorm
+            | wgpu::TextureFormat::Bc7RgbaUnorm => 16,
+            _ => panic!("Unsupported texture format."),
+        };
+        let bytes_per_row = ((width + 3) / 4) * block_size;
 
         queue.write_texture(
             wgpu::TexelCopyTextureInfo {
@@ -164,9 +204,7 @@ impl MaterialPool {
             &texture_data,
             wgpu::TexelCopyBufferLayout {
                 offset: 0,
-                bytes_per_row: Some(
-                    model_texture.width() * model_texture.format().num_channels() as u32,
-                ),
+                bytes_per_row: Some(bytes_per_row),
                 rows_per_image: None,
             },
             wgpu::Extent3d {
@@ -200,7 +238,7 @@ impl MaterialPool {
             } else {
                 self.alloc_texture(
                     base_color_texture,
-                    wgpu::TextureFormat::Rgba8UnormSrgb,
+                    base_color_texture.format().to_wgpu_compressed(),
                     device,
                     queue,
                 )
@@ -214,7 +252,7 @@ impl MaterialPool {
             } else {
                 self.alloc_texture(
                     occlusion_texture,
-                    wgpu::TextureFormat::Rgba8Unorm,
+                    occlusion_texture.format().to_wgpu_compressed(),
                     device,
                     queue,
                 )
@@ -231,7 +269,7 @@ impl MaterialPool {
             } else {
                 self.alloc_texture(
                     metallic_roughness_texture,
-                    wgpu::TextureFormat::Rgba8Unorm,
+                    metallic_roughness_texture.format().to_wgpu_compressed(),
                     device,
                     queue,
                 )
@@ -245,7 +283,7 @@ impl MaterialPool {
             } else {
                 self.alloc_texture(
                     emissive_texture,
-                    wgpu::TextureFormat::Rgba8Unorm,
+                    emissive_texture.format().to_wgpu_compressed(),
                     device,
                     queue,
                 )
@@ -266,6 +304,10 @@ impl MaterialPool {
             emissive_texture,
             ior: material.ior,
             transmission_factor: material.transmission_factor,
+            alpha_cutoff: material.alpha_cutoff,
+            _padding0: 0,
+            _padding1: 0,
+            _padding2: 0,
         };
 
         self.material_descriptors.push(material_descriptor);

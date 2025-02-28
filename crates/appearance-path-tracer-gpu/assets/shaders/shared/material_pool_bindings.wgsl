@@ -1,4 +1,5 @@
 @include appearance-path-tracer-gpu::shared/material_pool
+@include ::color
 
 @group(2)
 @binding(0)
@@ -21,7 +22,7 @@ fn MaterialDescriptor::base_color(_self: MaterialDescriptor, tex_coord: vec2<f32
     if (_self.base_color_texture != INVALID_TEXTURE) {
         base_color *= _texture(_self.base_color_texture, tex_coord);
     }
-    return base_color;
+    return srgb_to_linear(base_color);
 }
 
 fn MaterialDescriptor::occlusion(_self: MaterialDescriptor, tex_coord: vec2<f32>) -> f32 {

@@ -40,8 +40,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     if (id >= constants.ray_count) { return; }
 
     let ray: Ray = in_rays[id];
-    let origin: vec3<f32> = ray.origin;
-    let direction: vec3<f32> = PackedNormalizedXyz10::unpack(ray.direction, 0);
+    var origin: vec3<f32> = ray.origin;
+    var direction: vec3<f32> = PackedNormalizedXyz10::unpack(ray.direction, 0);
 
     var payload: Payload = payloads[id];
     if (constants.bounce == 0) {
@@ -55,68 +55,77 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     var throughput: vec3<f32> = PackedRgb9e5::unpack(payload.throughput);
     var rng: u32 = payload.rng;
 
-    var rq: ray_query;
-    rayQueryInitialize(&rq, scene, RayDesc(0u, 0xFFu, 0.01, 1000.0, origin, direction));
-    rayQueryProceed(&rq);
+    for (var step: u32 = 0; step < 64; step += 1) {
+        var rq: ray_query;
+        rayQueryInitialize(&rq, scene, RayDesc(0u, 0xFFu, 0.0, 1000.0, origin, direction));
+        rayQueryProceed(&rq);
 
-    let intersection = rayQueryGetCommittedIntersection(&rq);
-    if (intersection.kind != RAY_QUERY_INTERSECTION_NONE) {
-        let vertex_pool_slice_index: u32 = intersection.instance_custom_index;
-        let vertex_pool_slice: VertexPoolSlice = vertex_pool_slices[vertex_pool_slice_index];
+        let intersection = rayQueryGetCommittedIntersection(&rq);
+        if (intersection.kind == RAY_QUERY_INTERSECTION_TRIANGLE) {
+            let vertex_pool_slice_index: u32 = intersection.instance_custom_data;
+            let vertex_pool_slice: VertexPoolSlice = vertex_pool_slices[vertex_pool_slice_index];
 
-        let barycentrics = vec3<f32>(1.0 - intersection.barycentrics.x - intersection.barycentrics.y, intersection.barycentrics);
+            let barycentrics = vec3<f32>(1.0 - intersection.barycentrics.x - intersection.barycentrics.y, intersection.barycentrics);
 
-        let i0: u32 = vertex_indices[vertex_pool_slice.first_index + intersection.primitive_index * 3 + 0];
-        let i1: u32 = vertex_indices[vertex_pool_slice.first_index + intersection.primitive_index * 3 + 1];
-        let i2: u32 = vertex_indices[vertex_pool_slice.first_index + intersection.primitive_index * 3 + 2];
+            let i0: u32 = vertex_indices[vertex_pool_slice.first_index + intersection.primitive_index * 3 + 0];
+            let i1: u32 = vertex_indices[vertex_pool_slice.first_index + intersection.primitive_index * 3 + 1];
+            let i2: u32 = vertex_indices[vertex_pool_slice.first_index + intersection.primitive_index * 3 + 2];
 
-        let normal0: vec3<f32> = vertex_normals[vertex_pool_slice.first_vertex + i0].xyz;
-        let normal1: vec3<f32> = vertex_normals[vertex_pool_slice.first_vertex + i1].xyz;
-        let normal2: vec3<f32> = vertex_normals[vertex_pool_slice.first_vertex + i2].xyz;
-        var normal: vec3<f32> = normalize(normal0 * barycentrics.x + normal1 * barycentrics.y + normal2 * barycentrics.z);
+            let tex_coord0: vec2<f32> = vertex_tex_coords[vertex_pool_slice.first_vertex + i0];
+            let tex_coord1: vec2<f32> = vertex_tex_coords[vertex_pool_slice.first_vertex + i1];
+            let tex_coord2: vec2<f32> = vertex_tex_coords[vertex_pool_slice.first_vertex + i2];
+            let tex_coord: vec2<f32> = tex_coord0 * barycentrics.x + tex_coord1 * barycentrics.y + tex_coord2 * barycentrics.z;
 
-        let tex_coord0: vec2<f32> = vertex_tex_coords[vertex_pool_slice.first_vertex + i0];
-        let tex_coord1: vec2<f32> = vertex_tex_coords[vertex_pool_slice.first_vertex + i1];
-        let tex_coord2: vec2<f32> = vertex_tex_coords[vertex_pool_slice.first_vertex + i2];
-        let tex_coord: vec2<f32> = tex_coord0 * barycentrics.x + tex_coord1 * barycentrics.y + tex_coord2 * barycentrics.z;
+            let material_idx: u32 = vertex_pool_slice.material_idx + triangle_material_indices[vertex_pool_slice.first_index / 3 + intersection.primitive_index];
+            let material: MaterialDescriptor = material_descriptors[material_idx];
+            let base_color: vec4<f32> = MaterialDescriptor::base_color(material, tex_coord);
 
-        let trans_transform = mat4x4<f32>(
-            vec4<f32>(intersection.world_to_object[0], 0.0),
-            vec4<f32>(intersection.world_to_object[1], 0.0),
-            vec4<f32>(intersection.world_to_object[2], 0.0),
-            vec4<f32>(0.0, 0.0, 0.0, 1.0)
-        );
-        let inv_trans_transform = transpose(trans_transform);
-        normal = normalize((inv_trans_transform * vec4<f32>(normal, 1.0)).xyz);
+            if (base_color.a < material.alpha_cutoff) {
+                origin += direction * (intersection.t + 0.001);
+                continue;
+            }
 
-        let tangent_to_world: mat3x3<f32> = build_orthonormal_basis(normal);
-        let world_to_tangent: mat3x3<f32> = transpose(tangent_to_world);
+            let normal0: vec3<f32> = vertex_normals[vertex_pool_slice.first_vertex + i0].xyz;
+            let normal1: vec3<f32> = vertex_normals[vertex_pool_slice.first_vertex + i1].xyz;
+            let normal2: vec3<f32> = vertex_normals[vertex_pool_slice.first_vertex + i2].xyz;
+            var normal: vec3<f32> = normalize(normal0 * barycentrics.x + normal1 * barycentrics.y + normal2 * barycentrics.z);
 
-        let material_idx: u32 = vertex_pool_slice.material_idx + triangle_material_indices[vertex_pool_slice.first_index / 3 + intersection.primitive_index];
-        let material: MaterialDescriptor = material_descriptors[material_idx];
-        let base_color: vec3<f32> = MaterialDescriptor::base_color(material, tex_coord).rgb;
+            let trans_transform = mat4x4<f32>(
+                vec4<f32>(intersection.world_to_object[0], 0.0),
+                vec4<f32>(intersection.world_to_object[1], 0.0),
+                vec4<f32>(intersection.world_to_object[2], 0.0),
+                vec4<f32>(0.0, 0.0, 0.0, 1.0)
+            );
+            let inv_trans_transform = transpose(trans_transform);
+            normal = normalize((inv_trans_transform * vec4<f32>(normal, 1.0)).xyz);
 
-        let diffuse_lobe = DiffuseLobe::new(base_color);
-        let bsdf_sample: BsdfSample = DiffuseLobe::sample(diffuse_lobe, random_uniform_float2(&rng));
-        var bsdf_eval: BsdfEval = DiffuseLobe::eval(diffuse_lobe);
+            let tangent_to_world: mat3x3<f32> = build_orthonormal_basis(normal);
+            let world_to_tangent: mat3x3<f32> = transpose(tangent_to_world);
 
-        var w_in_worldspace: vec3<f32>;
-        let sample_valid: bool = apply_bsdf(bsdf_sample, bsdf_eval, tangent_to_world, normal, &throughput, &w_in_worldspace);
+            let diffuse_lobe = DiffuseLobe::new(base_color.rgb);
+            let bsdf_sample: BsdfSample = DiffuseLobe::sample(diffuse_lobe, random_uniform_float2(&rng));
+            var bsdf_eval: BsdfEval = DiffuseLobe::eval(diffuse_lobe);
 
-        if (sample_valid) {
-            let point = origin + direction * intersection.t;
-            let out_ray = Ray::new(point + w_in_worldspace * 0.0001, w_in_worldspace);
-            out_rays[id] = out_ray;
+            var w_in_worldspace: vec3<f32>;
+            let sample_valid: bool = apply_bsdf(bsdf_sample, bsdf_eval, tangent_to_world, normal, &throughput, &w_in_worldspace);
+
+            if (sample_valid) {
+                let point = origin + direction * intersection.t;
+                let out_ray = Ray::new(point + w_in_worldspace * 0.0001, w_in_worldspace);
+                out_rays[id] = out_ray;
+            } else {
+                payload.alive = 0;
+            }
         } else {
+            let a: f32 = 0.5 * (direction.y + 1.0);
+            let color = (1.0 - a) * vec3<f32>(1.0, 1.0, 1.0) + a * vec3<f32>(0.5, 0.7, 1.0);
+            accumulated += throughput * color * 4.0;
             payload.alive = 0;
         }
-    } else {
-        let a: f32 = 0.5 * (direction.y + 1.0);
-        let color = (1.0 - a) * vec3<f32>(1.0, 1.0, 1.0) + a * vec3<f32>(0.5, 0.7, 1.0);
-        accumulated += throughput * color * 4.0;
-        payload.alive = 0;
-    }
 
+        break;
+    }
+    
     payload.accumulated = PackedRgb9e5::new(accumulated);
     payload.throughput = PackedRgb9e5::new(throughput);
     payload.rng = rng;

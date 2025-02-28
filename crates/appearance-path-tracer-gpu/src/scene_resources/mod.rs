@@ -14,6 +14,8 @@ mod material_pool;
 mod scene_model;
 mod vertex_pool;
 
+const MAX_TLAS_INSTANCES: usize = 1024 * 8;
+
 pub struct SceneResources {
     model_assets: AssetDatabase<Model>,
     models: HashMap<String, (SceneModel, Vec<Uuid>)>,
@@ -31,7 +33,7 @@ impl SceneResources {
 
         let tlas = device.create_tlas(&wgpu::CreateTlasDescriptor {
             label: Some("appearance-path-tracer-gpu::scene_resources tlas"),
-            max_instances: 1024,
+            max_instances: MAX_TLAS_INSTANCES as u32,
             flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
             update_mode: wgpu::AccelerationStructureUpdateMode::Build,
         });
@@ -203,11 +205,14 @@ impl SceneResources {
         self.blas_idx_to_mesh_mapping = blas_idx_to_mesh_mapping;
 
         let num_blas_instances = blas_instances.len();
-        let tlas_package_instances = self.tlas_package.get_mut_slice(0..1024).unwrap();
+        let tlas_package_instances = self
+            .tlas_package
+            .get_mut_slice(0..MAX_TLAS_INSTANCES)
+            .unwrap();
         for (i, instance) in blas_instances.into_iter().enumerate() {
             tlas_package_instances[i] = Some(instance);
         }
-        for i in num_blas_instances..1024 {
+        for i in num_blas_instances..MAX_TLAS_INSTANCES {
             tlas_package_instances[i] = None;
         }
 

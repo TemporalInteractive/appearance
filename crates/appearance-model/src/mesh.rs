@@ -8,6 +8,7 @@ pub struct Mesh {
     pub vertex_tex_coords: Vec<Vec2>,
     pub triangle_material_indices: Vec<u32>,
     pub indices: Vec<u32>,
+    pub opaque: bool,
 }
 
 impl Mesh {
@@ -18,6 +19,7 @@ impl Mesh {
         vertex_tex_coords: Vec<Vec2>,
         triangle_material_indices: Vec<u32>,
         indices: Vec<u32>,
+        opaque: bool,
     ) -> Self {
         debug_assert_eq!(triangle_material_indices.len(), indices.len() / 3);
 
@@ -28,6 +30,7 @@ impl Mesh {
             vertex_tex_coords,
             triangle_material_indices,
             indices,
+            opaque,
         }
     }
 

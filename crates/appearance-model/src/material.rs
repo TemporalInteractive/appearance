@@ -25,6 +25,9 @@ pub struct Material {
 
     pub ior: f32,
     pub transmission_factor: f32,
+
+    pub opaque: bool,
+    pub alpha_cutoff: f32,
 }
 
 impl Default for Material {
@@ -44,6 +47,8 @@ impl Default for Material {
             emissive_texture: None,
             ior: 1.5,
             transmission_factor: 0.0,
+            opaque: true,
+            alpha_cutoff: 0.0,
         }
     }
 }
