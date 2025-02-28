@@ -68,6 +68,8 @@ impl RenderLoop for HostRenderLoop {
         wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | wgpu::Features::EXPERIMENTAL_RAY_QUERY
             | wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
+            | wgpu::Features::TEXTURE_BINDING_ARRAY
+            | wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
     }
 
     fn required_limits() -> wgpu::Limits {
@@ -76,6 +78,7 @@ impl RenderLoop for HostRenderLoop {
             max_compute_workgroup_size_x: 512,
             max_buffer_size: (1024 << 20),
             max_storage_buffer_binding_size: (1024 << 20),
+            max_sampled_textures_per_shader_stage: 1024 * 32,
             ..wgpu::Limits::default()
         }
     }

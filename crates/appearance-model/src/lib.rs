@@ -1,6 +1,7 @@
 use appearance_transform::Transform;
 use material::Material;
 use mesh::Mesh;
+use uuid::Uuid;
 
 pub mod asset;
 pub mod material;
@@ -22,4 +23,5 @@ pub struct Model {
     pub materials: Vec<Material>,
     pub meshes: Vec<Mesh>,
     pub nodes: Vec<ModelNode>,
+    uuid: Uuid,
 }

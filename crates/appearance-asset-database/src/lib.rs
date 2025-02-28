@@ -1,6 +1,7 @@
 use std::{collections::HashMap, fs, io::Read, sync::Arc};
 
 use anyhow::Result;
+use uuid::Uuid;
 
 pub mod asset_paths;
 
@@ -9,6 +10,7 @@ where
     Self: Sized,
 {
     fn load(file_path: &str, data: &[u8]) -> Result<Self>;
+    fn uuid(&self) -> Uuid;
 }
 
 pub struct AssetDatabase<A: Asset> {

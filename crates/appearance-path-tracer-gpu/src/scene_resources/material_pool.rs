@@ -1,16 +1,14 @@
-use std::{num::NonZeroU32, sync::Arc};
+use std::{collections::HashMap, num::NonZeroU32, sync::Arc};
 
+use appearance_asset_database::Asset;
+use appearance_model::material::Material;
 use appearance_wgpu::wgpu;
 use bytemuck::{Pod, Zeroable};
-use glam::{Vec2, Vec3, Vec4};
+use glam::{Vec3, Vec4};
+use uuid::Uuid;
 
 pub const MAX_MATERIAL_POOL_MATERIALS: usize = 1024 * 16;
 pub const MAX_MATERIAL_POOL_TEXTURES: usize = 1024;
-
-pub struct MaterialPoolAlloc {
-    pub material_descriptor: MaterialDescriptor,
-    pub index: u32,
-}
 
 #[derive(Pod, Clone, Copy, Zeroable)]
 #[repr(C)]
@@ -33,6 +31,7 @@ pub struct MaterialPool {
     sampler: wgpu::Sampler,
     empty_texture_view: wgpu::TextureView,
     texture_views: Vec<wgpu::TextureView>,
+    texture_indices: HashMap<Uuid, usize>,
 
     material_descriptors: Vec<MaterialDescriptor>,
 
@@ -96,6 +95,7 @@ impl MaterialPool {
             sampler,
             empty_texture_view,
             texture_views: Vec::new(),
+            texture_indices: HashMap::new(),
 
             material_descriptors: Vec::new(),
             bind_group_layout,
@@ -140,43 +140,34 @@ impl MaterialPool {
         let height = model_texture.height();
         let (texture, texture_view) = Self::create_texture(device, width, height, format);
 
-        // let encoded_image = match format {
-        //     TextureFormat::Bc7RgbaUnormSrgb => image_dds::dds_from_image(
-        //         &model_texture.image.to_rgba8(),
-        //         ImageFormat::BC7RgbaUnormSrgb,
-        //         image_dds::Quality::Fast,
-        //         Mipmaps::Disabled,
-        //     )
-        //     .unwrap(),
-        //     TextureFormat::Bc7RgbaUnorm => image_dds::dds_from_image(
-        //         &model_texture.image.to_rgba8(),
-        //         ImageFormat::BC7RgbaUnorm,
-        //         image_dds::Quality::Fast,
-        //         Mipmaps::Disabled,
-        //     )
-        //     .unwrap(),
-        //     TextureFormat::Bc6hRgbUfloat => image_dds::dds_from_imagef32(
-        //         &model_texture.image.to_rgba32f(),
-        //         ImageFormat::BC6hRgbUfloat,
-        //         image_dds::Quality::Fast,
-        //         Mipmaps::Disabled,
-        //     )
-        //     .unwrap(),
-        //     _ => panic!("Unsupported texture format"),
-        // };
+        let texture_data = match format {
+            // wgpu::TextureFormat::Bc1RgbaUnorm | wgpu::TextureFormat::Bc1RgbaUnormSrgb => {
+            //     let bc_surface = intel_tex_2::RgbaSurface {
+            //         width,
+            //         height,
+            //         stride: width * model_texture.format().num_channels() as u32,
+            //         data: model_texture.data(),
+            //     };
+
+            //     intel_tex_2::bc1::compress_blocks(&surface)
+            // }
+            _ => model_texture.data().to_vec(), // TODO: would be nice to avoid this copy
+        };
 
         queue.write_texture(
-            wgpu::ImageCopyTexture {
+            wgpu::TexelCopyTextureInfo {
                 texture: &texture,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            model_texture.data(),
-            wgpu::ImageDataLayout {
+            &texture_data,
+            wgpu::TexelCopyBufferLayout {
                 offset: 0,
-                bytes_per_row: Some(model_texture.width() * 4),
-                rows_per_image: Some(model_texture.height()),
+                bytes_per_row: Some(
+                    model_texture.width() * model_texture.format().num_channels() as u32,
+                ),
+                rows_per_image: None,
             },
             wgpu::Extent3d {
                 width,
@@ -188,13 +179,100 @@ impl MaterialPool {
         self.texture_views.push(texture_view);
         let texture_idx = self.texture_views.len() - 1;
 
-        // TODO: texture indices ARE needed, the appearance texture will require a uuid for quick identifying tho
         self.texture_indices
-            .insert(*model_texture.uuid(), texture_idx);
+            .insert(model_texture.uuid(), texture_idx);
         texture_idx as u32
     }
 
-    pub fn write_material_descriptors(&self, queue: &wgpu::Queue) {
+    pub fn material_count(&self) -> usize {
+        self.material_descriptors.len()
+    }
+
+    pub fn alloc_material(
+        &mut self,
+        material: &Material,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+    ) -> u32 {
+        let base_color_texture = if let Some(base_color_texture) = &material.base_color_texture {
+            if let Some(texture_idx) = self.texture_indices.get(&base_color_texture.uuid()) {
+                *texture_idx as u32
+            } else {
+                self.alloc_texture(
+                    base_color_texture,
+                    wgpu::TextureFormat::Rgba8UnormSrgb,
+                    device,
+                    queue,
+                )
+            }
+        } else {
+            u32::MAX
+        };
+        let occlusion_texture = if let Some(occlusion_texture) = &material.occlusion_texture {
+            if let Some(texture_idx) = self.texture_indices.get(&occlusion_texture.uuid()) {
+                *texture_idx as u32
+            } else {
+                self.alloc_texture(
+                    occlusion_texture,
+                    wgpu::TextureFormat::Rgba8Unorm,
+                    device,
+                    queue,
+                )
+            }
+        } else {
+            u32::MAX
+        };
+        let metallic_roughness_texture = if let Some(metallic_roughness_texture) =
+            &material.metallic_roughness_texture
+        {
+            if let Some(texture_idx) = self.texture_indices.get(&metallic_roughness_texture.uuid())
+            {
+                *texture_idx as u32
+            } else {
+                self.alloc_texture(
+                    metallic_roughness_texture,
+                    wgpu::TextureFormat::Rgba8Unorm,
+                    device,
+                    queue,
+                )
+            }
+        } else {
+            u32::MAX
+        };
+        let emissive_texture = if let Some(emissive_texture) = &material.emissive_texture {
+            if let Some(texture_idx) = self.texture_indices.get(&emissive_texture.uuid()) {
+                *texture_idx as u32
+            } else {
+                self.alloc_texture(
+                    emissive_texture,
+                    wgpu::TextureFormat::Rgba8Unorm,
+                    device,
+                    queue,
+                )
+            }
+        } else {
+            u32::MAX
+        };
+
+        let material_descriptor = MaterialDescriptor {
+            base_color_factor: material.base_color_factor,
+            base_color_texture,
+            occlusion_strength: material.occlusion_strength,
+            occlusion_texture,
+            metallic_factor: material.metallic_factor,
+            roughness_factor: material.roughness_factor,
+            metallic_roughness_texture,
+            emissive_factor: material.emissive_factor,
+            emissive_texture,
+            ior: material.ior,
+            transmission_factor: material.transmission_factor,
+        };
+
+        self.material_descriptors.push(material_descriptor);
+        self.material_descriptors.len() as u32 - 1
+    }
+
+    pub fn write_materials(&self, queue: &wgpu::Queue) {
         queue.write_buffer(
             &self.material_descriptor_buffer,
             0,
@@ -202,101 +280,49 @@ impl MaterialPool {
         );
     }
 
-    pub fn alloc(&mut self, num_vertices: u32, num_indices: u32) -> VertexPoolAlloc {
-        let first_vertex = self
-            .first_available_vertex(num_vertices)
-            .expect("Vertex pool ran out of vertices!");
-        let first_index = self
-            .first_available_index(num_indices)
-            .expect("Vertex pool ran out of indices!");
-
-        let slice = VertexPoolSlice {
-            first_vertex,
-            num_vertices,
-            first_index,
-            num_indices,
-            material_idx: 0,
-            _padding0: 0,
-            _padding1: 0,
-            _padding2: 0,
-        };
-        self.slices.push(slice);
-
-        VertexPoolAlloc {
-            slice,
-            index: self.slices.len() as u32 - 1,
-        }
-    }
-
-    pub fn free(_index: u32) {
-        todo!()
-    }
-
-    fn first_available_vertex(&self, num_vertices: u32) -> Option<u32> {
-        if self.slices.is_empty() && MAX_VERTEX_POOL_VERTICES as u32 > num_vertices {
-            return Some(0);
-        }
-
-        for i in 0..self.slices.len() {
-            let prev = if i > 0 {
-                self.slices[i - 1].last_vertex()
-            } else {
-                0
-            };
-
-            let space = self.slices[i].first_vertex - prev;
-            if space >= num_vertices {
-                return Some(prev + num_vertices);
-            }
-        }
-
-        let back = self.slices.last().unwrap().last_vertex();
-        if back + num_vertices <= MAX_VERTEX_POOL_VERTICES as u32 {
-            return Some(back);
-        }
-
-        None
-    }
-
-    fn first_available_index(&self, num_indices: u32) -> Option<u32> {
-        if self.slices.is_empty() && MAX_VERTEX_POOL_VERTICES as u32 * 3 > num_indices {
-            return Some(0);
-        }
-
-        for i in 0..self.slices.len() {
-            let prev = if i > 0 {
-                self.slices[i - 1].last_index()
-            } else {
-                0
-            };
-
-            let space = self.slices[i].first_index - prev;
-            if space >= num_indices {
-                return Some(prev + num_indices);
-            }
-        }
-
-        let back = self.slices.last().unwrap().last_index();
-        if back + num_indices <= MAX_VERTEX_POOL_VERTICES as u32 {
-            return Some(back);
-        }
-
-        None
-    }
-
     pub fn bind_group_layout(&self) -> &wgpu::BindGroupLayout {
         &self.bind_group_layout
     }
 
-    pub fn bind_group(&self) -> &wgpu::BindGroup {
-        &self.bind_group
-    }
+    pub fn bind_group<F>(
+        &self,
+        pipeline: &wgpu::ComputePipeline,
+        device: &wgpu::Device,
+        mut callback: F,
+    ) where
+        F: FnMut(&wgpu::BindGroup),
+    {
+        let mut entries = vec![];
+        entries.push(wgpu::BindGroupEntry {
+            binding: 0,
+            resource: self.material_descriptor_buffer.as_entire_binding(),
+        });
 
-    pub fn vertex_position_buffer(&self) -> &wgpu::Buffer {
-        &self.vertex_position_buffer
-    }
+        let mut texture_views = vec![];
+        for texture in &self.texture_views {
+            texture_views.push(texture);
+        }
+        for _ in 0..(MAX_MATERIAL_POOL_TEXTURES - self.texture_views.len()) {
+            texture_views.push(&self.empty_texture_view);
+        }
 
-    pub fn index_buffer(&self) -> &wgpu::Buffer {
-        &self.index_buffer
+        entries.push(wgpu::BindGroupEntry {
+            binding: 1,
+            resource: wgpu::BindingResource::TextureViewArray(&texture_views),
+        });
+
+        entries.push(wgpu::BindGroupEntry {
+            binding: 2,
+            resource: wgpu::BindingResource::Sampler(&self.sampler),
+        });
+
+        let bind_group_layout = pipeline.get_bind_group_layout(2);
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: None,
+            layout: &bind_group_layout,
+            entries: &entries,
+        });
+
+        callback(&bind_group);
     }
 }

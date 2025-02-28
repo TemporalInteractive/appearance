@@ -45,6 +45,7 @@ pub struct VertexPool {
     vertex_normal_buffer: wgpu::Buffer,
     vertex_tex_coord_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
+    triangle_material_index_buffer: wgpu::Buffer,
     slices_buffer: wgpu::Buffer,
 
     slices: Vec<VertexPoolSlice>,
@@ -85,6 +86,13 @@ impl VertexPool {
             usage: wgpu::BufferUsages::BLAS_INPUT
                 | wgpu::BufferUsages::STORAGE
                 | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let triangle_material_index_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("appearance-path-tracer-gpu::vertex_pool triangle_material_indices"),
+            mapped_at_creation: false,
+            size: (std::mem::size_of::<u32>() * MAX_VERTEX_POOL_VERTICES / 3) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
 
         let slices_buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -147,6 +155,16 @@ impl VertexPool {
                     },
                     count: None,
                 },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 5,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
             ],
         });
 
@@ -172,6 +190,10 @@ impl VertexPool {
                 },
                 wgpu::BindGroupEntry {
                     binding: 4,
+                    resource: triangle_material_index_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 5,
                     resource: slices_buffer.as_entire_binding(),
                 },
             ],
@@ -182,6 +204,7 @@ impl VertexPool {
             vertex_normal_buffer,
             vertex_tex_coord_buffer,
             index_buffer,
+            triangle_material_index_buffer,
             slices_buffer,
             slices: Vec::new(),
             bind_group_layout,
@@ -195,6 +218,7 @@ impl VertexPool {
         vertex_normals: &[Vec4],
         vertex_tex_coords: &[Vec2],
         indices: &[u32],
+        triangle_material_indices: &[u32],
         slice: VertexPoolSlice,
         queue: &wgpu::Queue,
     ) {
@@ -219,6 +243,12 @@ impl VertexPool {
             (slice.first_index as usize * std::mem::size_of::<u32>()) as u64,
             bytemuck::cast_slice(indices),
         );
+
+        queue.write_buffer(
+            &self.triangle_material_index_buffer,
+            (slice.first_index as usize / 3 * std::mem::size_of::<u32>()) as u64,
+            bytemuck::cast_slice(triangle_material_indices),
+        );
     }
 
     pub fn write_slices(&self, queue: &wgpu::Queue) {
@@ -229,7 +259,12 @@ impl VertexPool {
         );
     }
 
-    pub fn alloc(&mut self, num_vertices: u32, num_indices: u32) -> VertexPoolAlloc {
+    pub fn alloc(
+        &mut self,
+        num_vertices: u32,
+        num_indices: u32,
+        material_idx: u32,
+    ) -> VertexPoolAlloc {
         let first_vertex = self
             .first_available_vertex(num_vertices)
             .expect("Vertex pool ran out of vertices!");
@@ -242,7 +277,7 @@ impl VertexPool {
             num_vertices,
             first_index,
             num_indices,
-            material_idx: 0,
+            material_idx,
             _padding0: 0,
             _padding1: 0,
             _padding2: 0,

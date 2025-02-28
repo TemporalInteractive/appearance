@@ -20,5 +20,6 @@ appearance-world.workspace = true
 
 bytemuck.workspace = true
 glam.workspace = true
+intel_tex_2.workspace = true
 log.workspace = true
 uuid.workspace = true

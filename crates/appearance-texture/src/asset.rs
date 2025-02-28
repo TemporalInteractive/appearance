@@ -26,4 +26,8 @@ impl Asset for Texture {
             _ => Err(anyhow!("Format not supported yet!")),
         }
     }
+
+    fn uuid(&self) -> uuid::Uuid {
+        self.uuid
+    }
 }

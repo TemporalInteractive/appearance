@@ -5,6 +5,7 @@ use appearance_model::Model;
 use appearance_wgpu::wgpu::{self, TlasPackage};
 use appearance_world::visible_world_action::VisibleWorldActionType;
 use glam::Mat4;
+use material_pool::MaterialPool;
 use scene_model::SceneModel;
 use uuid::Uuid;
 use vertex_pool::VertexPool;
@@ -18,6 +19,7 @@ pub struct SceneResources {
     models: HashMap<String, (SceneModel, Vec<Uuid>)>,
     model_instances: HashMap<Uuid, Mat4>,
     vertex_pool: VertexPool,
+    material_pool: MaterialPool,
 
     tlas_package: wgpu::TlasPackage,
     blas_idx_to_mesh_mapping: HashMap<u32, (String, u32, Mat4)>,
@@ -35,12 +37,14 @@ impl SceneResources {
         });
 
         let vertex_pool = VertexPool::new(device);
+        let material_pool = MaterialPool::new(device);
 
         Self {
             model_assets,
             models: HashMap::new(),
             model_instances: HashMap::new(),
             vertex_pool,
+            material_pool,
             tlas_package: TlasPackage::new(tlas),
             blas_idx_to_mesh_mapping: HashMap::new(),
         }
@@ -52,6 +56,10 @@ impl SceneResources {
 
     pub fn vertex_pool(&self) -> &VertexPool {
         &self.vertex_pool
+    }
+
+    pub fn material_pool(&self) -> &MaterialPool {
+        &self.material_pool
     }
 
     pub fn handle_visible_world_action(
@@ -73,6 +81,7 @@ impl SceneResources {
                     let scene_model = SceneModel::new(
                         (*model_asset).clone(),
                         &mut self.vertex_pool,
+                        &mut self.material_pool,
                         command_encoder,
                         device,
                         queue,
@@ -203,6 +212,7 @@ impl SceneResources {
         }
 
         self.vertex_pool.write_slices(queue);
+        self.material_pool.write_materials(queue);
 
         command_encoder
             .build_acceleration_structures(iter::empty(), iter::once(&self.tlas_package));

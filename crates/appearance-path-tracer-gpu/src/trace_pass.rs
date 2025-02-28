@@ -99,6 +99,10 @@ pub fn encode(
                         ],
                     }),
                     parameters.scene_resources.vertex_pool().bind_group_layout(),
+                    parameters
+                        .scene_resources
+                        .material_pool()
+                        .bind_group_layout(),
                 ],
                 push_constant_ranges: &[],
             })
@@ -146,19 +150,24 @@ pub fn encode(
         ],
     });
 
-    {
-        let mut cpass = command_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            label: Some("appearance-path-tracer-gpu::trace"),
-            timestamp_writes: None,
-        });
-        cpass.set_pipeline(&pipeline);
-        cpass.set_bind_group(0, &bind_group, &[]);
-        cpass.set_bind_group(
-            1,
-            parameters.scene_resources.vertex_pool().bind_group(),
-            &[],
-        );
-        cpass.insert_debug_marker("appearance-path-tracer-gpu::trace");
-        cpass.dispatch_workgroups(parameters.ray_count.div_ceil(128), 1, 1);
-    }
+    parameters.scene_resources.material_pool().bind_group(
+        &pipeline,
+        device,
+        |material_pool_bind_group| {
+            let mut cpass = command_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("appearance-path-tracer-gpu::trace"),
+                timestamp_writes: None,
+            });
+            cpass.set_pipeline(&pipeline);
+            cpass.set_bind_group(0, &bind_group, &[]);
+            cpass.set_bind_group(
+                1,
+                parameters.scene_resources.vertex_pool().bind_group(),
+                &[],
+            );
+            cpass.set_bind_group(2, material_pool_bind_group, &[]);
+            cpass.insert_debug_marker("appearance-path-tracer-gpu::trace");
+            cpass.dispatch_workgroups(parameters.ray_count.div_ceil(128), 1, 1);
+        },
+    );
 }

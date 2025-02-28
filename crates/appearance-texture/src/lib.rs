@@ -1,4 +1,5 @@
 use glam::{UVec2, Vec2, Vec4, Vec4Swizzles};
+use uuid::Uuid;
 
 pub mod asset;
 
@@ -30,6 +31,7 @@ pub struct Texture {
     height: u32,
     format: TextureFormat,
     data: Box<[u8]>,
+    uuid: Uuid,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -53,6 +55,7 @@ impl Texture {
             height: create_desc.height,
             format: create_desc.format,
             data: create_desc.data,
+            uuid: Uuid::new_v4(),
         }
     }
 

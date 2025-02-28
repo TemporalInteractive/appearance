@@ -15,5 +15,6 @@ anyhow.workspace = true
 bytemuck.workspace = true
 futures.workspace = true
 log.workspace = true
+uuid.workspace = true
 wgpu.workspace = true
 winit.workspace = true

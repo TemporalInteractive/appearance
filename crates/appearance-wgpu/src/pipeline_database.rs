@@ -5,6 +5,7 @@ use std::{
     collections::HashMap,
     sync::{Arc, OnceLock},
 };
+use uuid::Uuid;
 
 use appearance_asset_database::{Asset, AssetDatabase};
 
@@ -12,6 +13,7 @@ pub struct ShaderAsset {
     pub file_path: String,
     pub src: String,
     shader_module: OnceLock<wgpu::ShaderModule>,
+    uuid: Uuid,
 }
 
 impl Asset for ShaderAsset {
@@ -22,7 +24,12 @@ impl Asset for ShaderAsset {
             file_path: file_path.to_owned(),
             src,
             shader_module: OnceLock::new(),
+            uuid: Uuid::new_v4(),
         })
+    }
+
+    fn uuid(&self) -> uuid::Uuid {
+        self.uuid
     }
 }
 

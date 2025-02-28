@@ -4,7 +4,10 @@ use appearance_model::{material::Material, mesh::Mesh, Model, ModelNode};
 use appearance_wgpu::wgpu;
 use glam::Vec4;
 
-use super::vertex_pool::{VertexPool, VertexPoolAlloc};
+use super::{
+    material_pool::MaterialPool,
+    vertex_pool::{VertexPool, VertexPoolAlloc},
+};
 
 pub struct SceneModel {
     pub root_nodes: Vec<u32>,
@@ -19,6 +22,7 @@ impl SceneModel {
     pub fn new(
         model: Model,
         vertex_pool: &mut VertexPool,
+        material_pool: &mut MaterialPool,
         command_encoder: &mut wgpu::CommandEncoder,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
@@ -26,10 +30,18 @@ impl SceneModel {
         let mut blases = vec![];
         let mut vertex_pool_allocs = vec![];
 
+        // TODO: make this into an offset, supply per triangle / primitive material indices
+        let material_idx = material_pool.material_count();
+
+        for material in &model.materials {
+            material_pool.alloc_material(material, device, queue);
+        }
+
         for mesh in &model.meshes {
             let vertex_pool_alloc = vertex_pool.alloc(
                 mesh.vertex_positions.len() as u32,
                 mesh.indices.len() as u32,
+                material_idx as u32,
             );
             let vertex_positions: Vec<Vec4> = mesh
                 .vertex_positions
@@ -46,6 +58,7 @@ impl SceneModel {
                 &vertex_normals,
                 &mesh.vertex_tex_coords,
                 &mesh.indices,
+                &mesh.triangle_material_indices,
                 vertex_pool_alloc.slice,
                 queue,
             );

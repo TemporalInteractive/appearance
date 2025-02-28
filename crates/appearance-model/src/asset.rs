@@ -5,6 +5,8 @@ use appearance_asset_database::Asset;
 use appearance_texture::{Texture, TextureCreateDesc, TextureFormat};
 use appearance_transform::Transform;
 use glam::{Quat, Vec2, Vec3, Vec4};
+use image::DynamicImage;
+use uuid::Uuid;
 
 use crate::{material::Material, mesh::Mesh, Model, ModelNode};
 
@@ -48,7 +50,12 @@ impl Asset for Model {
             materials,
             meshes,
             nodes,
+            uuid: Uuid::new_v4(),
         })
+    }
+
+    fn uuid(&self) -> Uuid {
+        self.uuid
     }
 }
 
@@ -303,17 +310,30 @@ fn process_tex(
             if internal_images[image_idx].is_none() {
                 let data = images[image_idx].clone();
 
-                let format = match data.format {
-                    gltf::image::Format::R8G8B8 => TextureFormat::Rgb8Unorm,
-                    gltf::image::Format::R8G8B8A8 => TextureFormat::Rgba8Unorm,
-                    _ => panic!("Unsupported image type."),
-                };
+                let create_desc = if data.format == gltf::image::Format::R8G8B8 {
+                    let dynamic_image = DynamicImage::ImageRgb8(
+                        image::RgbImage::from_raw(data.width, data.height, data.pixels).unwrap(),
+                    );
+                    let image = dynamic_image.to_rgba8();
 
-                let create_desc = TextureCreateDesc {
-                    width: data.width,
-                    height: data.height,
-                    format,
-                    data: data.pixels.into_boxed_slice(),
+                    TextureCreateDesc {
+                        width: data.width,
+                        height: data.height,
+                        format: TextureFormat::Rgba8Unorm,
+                        data: image.as_raw().clone().into_boxed_slice(),
+                    }
+                } else {
+                    let format = match data.format {
+                        gltf::image::Format::R8G8B8A8 => TextureFormat::Rgba8Unorm,
+                        _ => panic!("Unsupported image type."),
+                    };
+
+                    TextureCreateDesc {
+                        width: data.width,
+                        height: data.height,
+                        format,
+                        data: data.pixels.into_boxed_slice(),
+                    }
                 };
 
                 internal_images[image_idx] = Some(Arc::new(Texture::new(create_desc)));

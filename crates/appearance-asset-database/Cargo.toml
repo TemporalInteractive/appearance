@@ -12,3 +12,4 @@ appearance-profiling.workspace = true
 
 anyhow.workspace = true
 log.workspace = true
+uuid.workspace = true

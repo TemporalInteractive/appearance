@@ -3,6 +3,7 @@
 @include appearance-path-tracer-gpu::shared/diffuse_brdf
 
 @include appearance-path-tracer-gpu::shared/vertex_pool_bindings
+@include appearance-path-tracer-gpu::shared/material_pool_bindings
 
 struct Constants {
     ray_count: u32,
@@ -63,6 +64,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
         let vertex_pool_slice_index: u32 = intersection.instance_custom_index;
         let vertex_pool_slice: VertexPoolSlice = vertex_pool_slices[vertex_pool_slice_index];
 
+        let barycentrics = vec3<f32>(1.0 - intersection.barycentrics.x - intersection.barycentrics.y, intersection.barycentrics);
+
         let i0: u32 = vertex_indices[vertex_pool_slice.first_index + intersection.primitive_index * 3 + 0];
         let i1: u32 = vertex_indices[vertex_pool_slice.first_index + intersection.primitive_index * 3 + 1];
         let i2: u32 = vertex_indices[vertex_pool_slice.first_index + intersection.primitive_index * 3 + 2];
@@ -70,10 +73,12 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
         let normal0: vec3<f32> = vertex_normals[vertex_pool_slice.first_vertex + i0].xyz;
         let normal1: vec3<f32> = vertex_normals[vertex_pool_slice.first_vertex + i1].xyz;
         let normal2: vec3<f32> = vertex_normals[vertex_pool_slice.first_vertex + i2].xyz;
-
-        let barycentrics = vec3<f32>(1.0 - intersection.barycentrics.x - intersection.barycentrics.y, intersection.barycentrics);
-
         var normal: vec3<f32> = normalize(normal0 * barycentrics.x + normal1 * barycentrics.y + normal2 * barycentrics.z);
+
+        let tex_coord0: vec2<f32> = vertex_tex_coords[vertex_pool_slice.first_vertex + i0];
+        let tex_coord1: vec2<f32> = vertex_tex_coords[vertex_pool_slice.first_vertex + i1];
+        let tex_coord2: vec2<f32> = vertex_tex_coords[vertex_pool_slice.first_vertex + i2];
+        let tex_coord: vec2<f32> = tex_coord0 * barycentrics.x + tex_coord1 * barycentrics.y + tex_coord2 * barycentrics.z;
 
         let trans_transform = mat4x4<f32>(
             vec4<f32>(intersection.world_to_object[0], 0.0),
@@ -87,7 +92,11 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
         let tangent_to_world: mat3x3<f32> = build_orthonormal_basis(normal);
         let world_to_tangent: mat3x3<f32> = transpose(tangent_to_world);
 
-        let diffuse_lobe = DiffuseLobe::new(vec3<f32>(1.0, 1.0, 0.9));
+        let material_idx: u32 = vertex_pool_slice.material_idx + triangle_material_indices[vertex_pool_slice.first_index / 3 + intersection.primitive_index];
+        let material: MaterialDescriptor = material_descriptors[material_idx];
+        let base_color: vec3<f32> = MaterialDescriptor::base_color(material, tex_coord).rgb;
+
+        let diffuse_lobe = DiffuseLobe::new(base_color);
         let bsdf_sample: BsdfSample = DiffuseLobe::sample(diffuse_lobe, random_uniform_float2(&rng));
         var bsdf_eval: BsdfEval = DiffuseLobe::eval(diffuse_lobe);
 
@@ -104,7 +113,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     } else {
         let a: f32 = 0.5 * (direction.y + 1.0);
         let color = (1.0 - a) * vec3<f32>(1.0, 1.0, 1.0) + a * vec3<f32>(0.5, 0.7, 1.0);
-        accumulated += throughput * color;
+        accumulated += throughput * color * 4.0;
         payload.alive = 0;
     }
 

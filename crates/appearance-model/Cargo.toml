@@ -16,5 +16,7 @@ appearance-transform.workspace = true
 anyhow.workspace = true
 glam.workspace = true
 gltf.workspace = true
+image.workspace = true
 log.workspace = true
 tinybvh.workspace = true
+uuid.workspace = true
