@@ -19,10 +19,109 @@
 @include appearance-path-tracer-gpu::shared/ggxmdf
 @include appearance-path-tracer-gpu::shared/material_pool
 
+fn world_2_tangent(v: vec3<f32>, n: vec3<f32>, t: vec3<f32>, b: vec3<f32>) -> vec3<f32> {
+    return vec3<f32>(
+        dot(v, t),
+        dot(v, b),
+        dot(v, n)
+    );
+}
+
+fn tangent_2_world(v: vec3<f32>, n: vec3<f32>, t: vec3<f32>, b: vec3<f32>) -> vec3<f32> {
+    return v.x * t + v.y * b + v.z * n;
+}
+
 fn schlick_fresnel(u: f32) -> f32 {
     let m: f32 = clamp(1.0 - u, 0.0, 1.0);
     let m4: f32 = sqr(sqr(m));
     return m4 * m;
+}
+
+fn fresnel_reflectance_dielectric(eta: f32, cos_theta_i: f32, cos_theta_t: f32) -> f32 {
+    if (cos_theta_i == 0.0 && cos_theta_t == 0.0) {
+        return 1.0;
+    }
+
+    let k0: f32 = eta * cos_theta_t;
+    let k1: f32 = eta * cos_theta_i;
+    return 0.5 * (sqr((cos_theta_i - k0) / (cos_theta_i + k0)) + sqr((cos_theta_t - k1) / (cos_theta_t + k1)));
+}
+
+fn fresnel_reflectance(cos_theta_i: f32, eta: f32, cos_theta_t: ptr<function, f32>) -> f32 {
+    let sin_theta_t2: f32 = (1.0 - sqr(cos_theta_i)) * sqr(eta);
+    if (sin_theta_t2 > 1.0) {
+        *cos_theta_t = 0.0;
+        return 1.0;
+    }
+
+    *cos_theta_t = min(sqrt(max(1.0 - sin_theta_t2, 0.0)), 1.0);
+    return fresnel_reflectance_dielectric(eta, abs(cos_theta_i), *cos_theta_t);
+}
+
+fn evaluate_reflection(reflection_color: vec3<f32>, wo: vec3<f32>, wi: vec3<f32>, m: vec3<f32>, ggx_mdf: GgxMdf, f: f32) -> vec3<f32> {
+    let denom: f32 = abs(4.0 * wo.z * wi.z);
+    if (denom == 0.0) {
+        return vec3<f32>(0.0);
+    }
+
+    let d: f32 = GgxMdf::d(ggx_mdf, m);
+    let g: f32 = GgxMdf::g(ggx_mdf, wi, wo, m);
+    return reflection_color * (f * d * g / denom);
+}
+
+fn evaluate_refraction(eta: f32, reflection_color: vec3<f32>, adjoint: bool, wo: vec3<f32>, wi: vec3<f32>, m: vec3<f32>, ggx_mdf: GgxMdf, t: f32) -> vec3<f32> {
+    if (wo.z == 0.0 || wi.z == 0.0) {
+        return vec3<f32>(0.0);
+    }
+
+    let cos_ih: f32 = dot(m, wi);
+    let cos_oh: f32 = dot(m, wo);
+    let dots: f32 = (cos_ih * cos_oh) / (wi.z * wo.z);
+    let sqrt_denom: f32 = cos_oh + eta * cos_ih;
+    if (abs(sqrt_denom) < 1e-6) {
+        return vec3<f32>(0.0);
+    }
+
+    let d: f32 = GgxMdf::d(ggx_mdf, m);
+    let g: f32 = GgxMdf::g(ggx_mdf, wi, wo, m);
+    var multiplier: f32 = abs(dots) * t * d * g / sqr(sqrt_denom);
+    if (!adjoint) {
+        multiplier *= sqr(eta);
+    }
+    return reflection_color * multiplier;
+}
+
+fn reflection_jacobian(cos_oh: f32) -> f32 {
+    if (cos_oh == 0.0) {
+        return 0.0;
+    }
+
+    return 1.0 / (4.0 * abs(cos_oh));
+}
+
+fn refraction_jacobian(wo: vec3<f32>, wi: vec3<f32>, m: vec3<f32>, eta: f32) -> f32 {
+    let cos_ih: f32 = dot(m, wi);
+    let cos_oh: f32 = dot(m, wo);
+    let sqrt_denom: f32 = cos_oh + eta * cos_ih;
+    if (abs(sqrt_denom) < 1e-6) {
+        return 0.0;
+    }
+
+    return abs(cos_ih) * sqr(eta / sqrt_denom);
+}
+
+fn improve_normalization(v: vec3<f32>) -> vec3<f32> {
+    return v * ((3.0 - dot(v, v)) * 0.5);
+}
+
+fn refracted_direction(wo: vec3<f32>, m: vec3<f32>, cos_wom: f32, cos_theta_t: f32, rcp_eta: f32) -> vec3<f32> {
+    var wi: vec3<f32>;
+    if (cos_wom > 0.0) {
+        wi = (rcp_eta * cos_wom - cos_theta_t) * m - rcp_eta * wo;
+    } else {
+        wi = (rcp_eta * cos_wom + cos_theta_t) * m - rcp_eta * wo;
+    }
+    return improve_normalization(wi);
 }
 
 fn mix_spectra(a: vec3<f32>, b: vec3<f32>, t: f32) -> vec3<f32> {
@@ -111,6 +210,9 @@ fn DisneyBsdf::from_material(material: Material) -> DisneyBsdf {
     bsdf.specular = 0.0;
     bsdf.roughness = max(0.001, material.roughness);
     bsdf.spec_tint = 0.0;
+    bsdf.anisotropic = 0.0;
+    bsdf.sheen = 0.0;
+    bsdf.sheen_tint = 0.0;
     bsdf.clearcoat = 0.0;
     bsdf.clearcoat_gloss = 0.0;
     bsdf.transmission = material.transmission;
@@ -252,26 +354,95 @@ fn DisneyBsdf::evaluate_sheen(_self: DisneyBsdf, wow: vec3<f32>, wiw: vec3<f32>,
     return 1.0 / (2.0 * PI);
 }
 
-// fn DisneyBsdf::sample(_self: DisneyBsdf, _i_n: vec3<f32>, n: vec3<f32>, i_t: vec3<f32>,
-//      wow: vec3<f32>, distance: f32, r0: f32, r1: f32, r2: f32,
-//      wiw: ptr<function, vec3<f32>>, pdf: ptr<function, f32>, specular: ptr<function, bool>) -> vec3<f32> {
-//     // TODO: this flip should also not be necessary
-//     var flip: f32;
-//     if (dot(wow, n) < 0.0) {
-//         flip = -1.0;
-//     } else {
-//         flip = 1.0;
-//     }
-//     let i_n: vec3<f32> = _i_n * flip;
+fn DisneyBsdf::sample(_self: DisneyBsdf, _i_n: vec3<f32>, n: vec3<f32>, i_t: vec3<f32>,
+     wow: vec3<f32>, distance: f32, r0: f32, r1: f32, r2: f32,
+     wiw: ptr<function, vec3<f32>>, pdf: ptr<function, f32>, specular: ptr<function, bool>) -> vec3<f32> {
+    // TODO: ??
+    let adjoint: bool = false;
+    
+    // TODO: this flip should also not be necessary
+    var flip: f32;
+    if (dot(wow, n) < 0.0) {
+        flip = -1.0;
+    } else {
+        flip = 1.0;
+    }
+    let i_n: vec3<f32> = _i_n * flip;
 
-//     // TODO: we shouldn't have to recalculate the tangent matrix, already precomputed
-//     let b: vec3<f32> = normalize(cross(i_n, i_t));
-//     let t: vec3<f32> = normalize(cross(i_n, b));
+    // TODO: we shouldn't have to recalculate the tangent matrix, already precomputed
+    let b: vec3<f32> = normalize(cross(i_n, i_t));
+    let t: vec3<f32> = normalize(cross(i_n, b));
 
-//     if (r0 < _self.transmission) {
-//         *specular = true;
+    if (r0 < _self.transmission) {
+        *specular = true;
 
-//         let r3: f32 = r0 / _self.transmission;
-//         let wol: vec3<f32> = 
-//     }
-// }
+        let r3: f32 = r0 / _self.transmission;
+        let wol: vec3<f32> = world_2_tangent(wow, i_n, t, b);
+        var eta: f32;
+        if (flip < 0.0) {
+            eta = 1.0 / _self.eta;
+        } else {
+            eta = _self.eta;
+        }
+        if (eta == 1.0) {
+            return vec3<f32>(0.0);
+        }
+
+        let beer = vec3<f32>(
+            exp(-_self.transmittance.x * distance * 2.0),
+            exp(-_self.transmittance.y * distance * 2.0),
+            exp(-_self.transmittance.z * distance * 2.0)
+        );
+
+        let alpha: vec2<f32> = microfacet_alpha_from_roughness(_self.roughness, _self.anisotropic);
+        let ggx_mdf = GgxMdf::new(alpha.x, alpha.y);
+
+        let m: vec3<f32> = GgxMdf::sample(ggx_mdf, wol, r1, r3);
+        let rcp_eta: f32 = 1.0 / eta;
+        let cos_wom: f32 = clamp(dot(wol, m), -1.0, 1.0);
+
+        var cos_theta_t: f32;
+        let f: f32 = fresnel_reflectance(cos_wom, eta, &cos_theta_t);
+
+        var jacobian: f32;
+        var wil: vec3<f32>;
+        var ret_val: vec3<f32>;
+        if (r2 < f) {
+            wil = reflect(wol * -1.0, m);
+            if (wil.z * wol.z <= 0.0) {
+                return vec3<f32>(0.0);
+            }
+            ret_val = evaluate_reflection(_self.color, wol, wil, m, ggx_mdf, f);
+            *pdf = f;
+            jacobian = reflection_jacobian(cos_wom);
+        } else {
+            wil = refracted_direction(wol, m, cos_wom, cos_theta_t, eta);
+            if (wil.z * wol.z > 0.0) {
+                return vec3<f32>(0.0);
+            }
+            ret_val = evaluate_refraction(rcp_eta, _self.color, adjoint, wol, wil, m, ggx_mdf, 1.0 - f);
+            *pdf = 1.0 - f;
+            jacobian = refraction_jacobian(wol, wil, m, rcp_eta);
+        }
+        *pdf *= jacobian * GgxMdf::pdf(ggx_mdf, wol, m);
+        if (*pdf > 1e-6) {
+            *wiw = tangent_2_world(wil, i_n, t, b);
+        }
+        return ret_val * beer;
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+    // TODO
+    return vec3<f32>(0.0);
+}

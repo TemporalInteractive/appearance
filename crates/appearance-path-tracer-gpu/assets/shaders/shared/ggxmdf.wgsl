@@ -17,6 +17,23 @@
 
 @include ::math
 
+fn microfacet_alpha_from_roughness(roughness: f32, anisotropy: f32) -> vec2<f32> {
+    let square_roughness: f32 = sqr(roughness);
+
+    var aspect_factor: f32;
+    if (anisotropy < 0.0) {
+        aspect_factor = 0.9;
+    } else {
+        aspect_factor = -0.9;
+    }
+    let aspect: f32 = sqrt(1.0 + anisotropy * aspect_factor);
+
+    return vec2<f32>(
+        max(0.001, square_roughness / aspect),
+        max(0.001, square_roughness * aspect)
+    );
+}
+
 struct GgxMdf {
     alpha_x: f32,
     alpha_y: f32,
