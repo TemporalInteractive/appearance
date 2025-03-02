@@ -99,10 +99,15 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
             let inv_trans_transform = transpose(trans_transform);
             normal = normalize((inv_trans_transform * vec4<f32>(normal, 1.0)).xyz);
 
+            let w_out_worldspace: vec3<f32> = -direction;
+
+            let back_face: bool = dot(w_out_worldspace, normal) < 0.0;
+            if (back_face) {
+                normal = -normal;
+            }
+
             let tangent_to_world: mat3x3<f32> = build_orthonormal_basis(normal);
             let world_to_tangent: mat3x3<f32> = transpose(tangent_to_world);
-
-            let w_out_worldspace: vec3<f32> = -direction;
 
             // let diffuse_lobe = DiffuseLobe::new(material.base_color.rgb);
             // let bsdf_sample: BsdfSample = DiffuseLobe::sample(diffuse_lobe, random_uniform_float2(&rng));
@@ -122,7 +127,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
             var specular: bool;
             let reflectance: vec3<f32> = DisneyBsdf::sample(disney_bsdf,
                 i_n, n, i_t,
-                w_out_worldspace, intersection.t,
+                w_out_worldspace, intersection.t, back_face,
                 random_uniform_float(&rng), random_uniform_float(&rng), random_uniform_float(&rng),
                 &w_in_worldspace, &pdf, &specular
             );

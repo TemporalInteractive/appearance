@@ -210,7 +210,7 @@ fn DisneyBsdf::from_material(material: Material) -> DisneyBsdf {
     var bsdf: DisneyBsdf;
     bsdf.color = material.base_color.rgb;
     bsdf.metallic = material.metallic;
-    bsdf.transmittance = vec3<f32>(1.0);
+    bsdf.transmittance = vec3<f32>(0.0);
     bsdf.subsurface = 0.0;
     bsdf.tint = vec3<f32>(material.base_color.rgb);
     bsdf.luminance = material.base_color.a;
@@ -223,7 +223,7 @@ fn DisneyBsdf::from_material(material: Material) -> DisneyBsdf {
     bsdf.clearcoat = 0.0;
     bsdf.clearcoat_gloss = 0.0;
     bsdf.transmission = material.transmission;
-    bsdf.eta = material.ior;
+    bsdf.eta = 1.0 / material.ior;
 
     // bsdf.color = material.base_color.rgb;
     // bsdf.metallic = 0.0;
@@ -378,20 +378,18 @@ fn DisneyBsdf::evaluate_sheen(_self: DisneyBsdf, wow: vec3<f32>, wiw: vec3<f32>,
     return 1.0 / (2.0 * PI);
 }
 
-fn DisneyBsdf::sample(_self: DisneyBsdf, _i_n: vec3<f32>, n: vec3<f32>, i_t: vec3<f32>,
-     wow: vec3<f32>, distance: f32, r0: f32, r1: f32, r2: f32,
+fn DisneyBsdf::sample(_self: DisneyBsdf, i_n: vec3<f32>, n: vec3<f32>, i_t: vec3<f32>,
+     wow: vec3<f32>, distance: f32, back_face: bool, r0: f32, r1: f32, r2: f32,
      wiw: ptr<function, vec3<f32>>, pdf: ptr<function, f32>, specular: ptr<function, bool>) -> vec3<f32> {
     // TODO: ??
     let adjoint: bool = false;
     
-    // TODO: this flip should also not be necessary
     var flip: f32;
-    if (dot(wow, n) < 0.0) {
+    if (back_face) {
         flip = -1.0;
     } else {
         flip = 1.0;
     }
-    let i_n: vec3<f32> = _i_n * flip;
 
     // TODO: we shouldn't have to recalculate the tangent matrix, already precomputed
     let b: vec3<f32> = normalize(cross(i_n, i_t));
