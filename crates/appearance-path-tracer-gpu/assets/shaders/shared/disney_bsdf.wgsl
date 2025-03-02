@@ -124,6 +124,14 @@ fn refracted_direction(wo: vec3<f32>, m: vec3<f32>, cos_wom: f32, cos_theta_t: f
     return improve_normalization(wi);
 }
 
+fn diffuse_reflection_cos_weighted(r0: f32, r1: f32, n: vec3<f32>, t: vec3<f32>, b: vec3<f32>) -> vec3<f32> {
+    let term1: f32 = TWO_PI * r0;
+    let term2: f32 = sqrt(1.0 - r1);
+    let s: f32 = sin(term1);
+    let c: f32 = cos(term1);
+    return vec3<f32>(c * term2, s * term2, sqrt(r1));
+}
+
 fn mix_spectra(a: vec3<f32>, b: vec3<f32>, t: f32) -> vec3<f32> {
     return (1.0 -  t) * a + t * b;
 }
@@ -185,6 +193,7 @@ struct DisneyBsdf {
     transmittance: vec3<f32>,
     subsurface: f32,
     tint: vec3<f32>,
+    luminance: f32,
     specular: f32,
     roughness: f32,
     spec_tint: f32,
@@ -195,9 +204,6 @@ struct DisneyBsdf {
     clearcoat_gloss: f32,
     transmission: f32,
     eta: f32,
-    _padding0: u32,
-    _padding01: u32,
-    _padding2: u32,
 };
 
 fn DisneyBsdf::from_material(material: Material) -> DisneyBsdf {
@@ -207,6 +213,7 @@ fn DisneyBsdf::from_material(material: Material) -> DisneyBsdf {
     bsdf.transmittance = vec3<f32>(1.0);
     bsdf.subsurface = 0.0;
     bsdf.tint = vec3<f32>(0.0);
+    bsdf.luminance = 0.0;
     bsdf.specular = 0.0;
     bsdf.roughness = max(0.001, material.roughness);
     bsdf.spec_tint = 0.0;
@@ -431,18 +438,92 @@ fn DisneyBsdf::sample(_self: DisneyBsdf, _i_n: vec3<f32>, n: vec3<f32>, i_t: vec
         return ret_val * beer;
     }
 
+    let r3: f32 = (r0 - _self.transmission) / (1.0 - _self.transmission);
 
+    var weights = vec4<f32>(
+        mix(_self.luminance, 0.0, _self.metallic),
+        mix(_self.sheen, 0.0, _self.metallic),
+        mix(_self.specular, 1.0, _self.metallic),
+        _self.clearcoat * 0.25
+    );
+    weights *= 1.0 / (weights.x + weights.y + weights.z + weights.w);
+    let cdf = vec4<f32>(
+        weights.x,
+        weights.x + weights.y,
+        weights.x + weights.y + weights.z,
+        0.0
+    );
 
+    var probability: f32;
+    var component_pdf: f32;
+    var value = vec3<f32>(0.0);
+    if (r3 < cdf.y) {
+        let r2: f32 = r3 / cdf.y;
+        *wiw = diffuse_reflection_cos_weighted(r2, r1, i_n, t, b);
+        let m: vec3<f32> = normalize(*wiw + wow);
 
+        if (r3 < cdf.x) {
+            component_pdf = DisneyBsdf::evaluate_diffuse(_self, i_n, wow, *wiw, m, &value);
+            probability = weights.x * component_pdf;
+            weights.x = 0.0;
+        } else {
+            component_pdf = DisneyBsdf::evaluate_sheen(_self, wow, *wiw, m, &value);
+            probability = weights.y * component_pdf;
+            weights.y = 0.0;
+        }
+    } else {
+        let wol: vec3<f32> = world_2_tangent(wow, i_n, t, b);
+        var wil: vec3<f32>;
+        if (r3 < cdf.z) {
+            let r2: f32 = (r3 - cdf.y) / (cdf.z - cdf.y);
+            let alpha: vec2<f32> = microfacet_alpha_from_roughness(_self.roughness, _self.anisotropic);
+            DisneyBsdf::sample_mf(_self, r2, r1, alpha.x, alpha.y, wol, false, &wil, &component_pdf, &value);
+            probability = weights.z * component_pdf;
+            weights.z = 0.0;
+        } else {
+            let r2: f32 = (r3 - cdf.z) / (1.0 - cdf.z);
+            let alpha: f32 = DisneyBsdf::clearcoat_roughness(_self);
+            DisneyBsdf::sample_mf(_self, r2, r1, alpha, alpha, wol, true, &wil, &component_pdf, &value);
+            probability = weights.w * component_pdf;
+            weights.w = 0.0;
+        }
+        value *= 1.0 / abs(4.0 * wol.z * wil.z);
+        *wiw = tangent_2_world(wil, i_n, t, b);
+    }
 
+    var contrib: vec3<f32>;
+    if (weights.x + weights.y > 0.0) {
+        let m: vec3<f32> = normalize(*wiw + wow);
+        if (weights.x > 0.0) {
+            probability += weights.x * DisneyBsdf::evaluate_diffuse(_self, i_n, wow, *wiw, m, &contrib);
+            value += contrib;
+        }
+        if (weights.y > 0.0) {
+            probability += weights.y * DisneyBsdf::evaluate_sheen(_self, wow, *wiw, m, &contrib);
+            value += contrib;
+        }
+    }
 
+    if (weights.z + weights.w > 0.0) {
+        let wol: vec3<f32> = world_2_tangent(wow, i_n, t, b);
+        let wil: vec3<f32> = world_2_tangent(*wiw, i_n, t, b);
+        let m: vec3<f32> = normalize(wol + wil);
+        if (weights.z > 0.0) {
+            let alpha: vec2<f32> = microfacet_alpha_from_roughness(_self.roughness, _self.anisotropic);
+            probability += weights.z * DisneyBsdf::evaluate_mf(_self, alpha.x, alpha.y, wol, wil, m, false, &contrib);
+            value += contrib;
+        }
+        if (weights.w > 0.0) {
+            let alpha: f32 = DisneyBsdf::clearcoat_roughness(_self);
+            probability += weights.w * DisneyBsdf::evaluate_mf(_self, alpha, alpha, wol, wil, m, true, &contrib);
+            value += contrib;
+        }
+    }
 
-
-
-
-
-
-
-    // TODO
-    return vec3<f32>(0.0);
+    if (probability > 1e-6) {
+        *pdf = probability;
+    } else {
+        *pdf = 0.0;
+    }
+    return value;
 }
