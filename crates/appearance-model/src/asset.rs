@@ -4,7 +4,7 @@ use anyhow::Result;
 use appearance_asset_database::Asset;
 use appearance_texture::{Texture, TextureCreateDesc, TextureFormat};
 use appearance_transform::Transform;
-use glam::{Quat, Vec2, Vec3, Vec4};
+use glam::{Quat, Vec2, Vec3, Vec4, Vec4Swizzles};
 use gltf::material::AlphaMode;
 use image::DynamicImage;
 use uuid::Uuid;
@@ -196,25 +196,29 @@ fn process_node(
                     let material = &mut materials[material_idx];
                     if material.index.is_none() {
                         material.index = Some(material_idx);
-                        material.base_color_factor = Vec4::from(pbr.base_color_factor());
-                        material.metallic_factor = pbr.metallic_factor();
-                        material.roughness_factor = pbr.roughness_factor();
-                        material.emissive_factor = Vec3::from(prim_material.emissive_factor());
-                        material.emissive_factor *=
-                            prim_material.emissive_strength().unwrap_or(1.0);
-                        material.ior = prim_material.ior().unwrap_or(1.5);
-                        material.transmission_factor =
+
+                        material.color = Vec4::from(pbr.base_color_factor()).xyz();
+                        material.metallic = pbr.metallic_factor();
+                        material.roughness = pbr.roughness_factor();
+                        material.emission = Vec3::from(prim_material.emissive_factor());
+                        material.emission *= prim_material.emissive_strength().unwrap_or(1.0);
+
+                        if let Some(volume) = prim_material.volume() {}
+
+                        material.transmission =
                             if let Some(transmission) = prim_material.transmission() {
                                 transmission.transmission_factor()
                             } else {
                                 0.0
                             };
+                        material.eta = 1.0 / prim_material.ior().unwrap_or(1.5);
+
                         material.alpha_cutoff = prim_material.alpha_cutoff().unwrap_or(0.0);
-                        material.opaque = prim_material.alpha_mode() == AlphaMode::Opaque
+                        material.is_opaque = prim_material.alpha_mode() == AlphaMode::Opaque
                             || material.alpha_cutoff == 0.0;
 
                         if let Some(color_tex) = pbr.base_color_texture() {
-                            material.base_color_texture = Some(process_tex(
+                            material.color_texture = Some(process_tex(
                                 document,
                                 images,
                                 internal_images,
@@ -241,18 +245,8 @@ fn process_node(
                             ));
                         }
 
-                        if let Some(occlusion_tex) = prim_material.occlusion_texture() {
-                            material.occlusion_texture = Some(process_tex(
-                                document,
-                                images,
-                                internal_images,
-                                &occlusion_tex.texture(),
-                            ));
-                            material.occlusion_strength = occlusion_tex.strength();
-                        }
-
                         if let Some(emissive_tex) = prim_material.emissive_texture() {
-                            material.emissive_texture = Some(process_tex(
+                            material.emission_texture = Some(process_tex(
                                 document,
                                 images,
                                 internal_images,
@@ -261,7 +255,7 @@ fn process_node(
                         }
                     }
 
-                    opaque = opaque && material.opaque;
+                    opaque = opaque && material.is_opaque;
                 } else {
                     panic!("Only triangles are supported.");
                 }

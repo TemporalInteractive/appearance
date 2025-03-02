@@ -208,22 +208,22 @@ struct DisneyBsdf {
 
 fn DisneyBsdf::from_material(material: Material) -> DisneyBsdf {
     var bsdf: DisneyBsdf;
-    bsdf.color = material.base_color.rgb;
-    bsdf.metallic = material.metallic;
-    bsdf.transmittance = vec3<f32>(0.0);
-    bsdf.subsurface = 0.0;
-    bsdf.tint = vec3<f32>(material.base_color.rgb);
-    bsdf.luminance = material.base_color.a;
-    bsdf.specular = 0.0;
-    bsdf.roughness = max(0.001, material.roughness);
-    bsdf.spec_tint = 0.0;
-    bsdf.anisotropic = 0.0;
-    bsdf.sheen = 0.0;
-    bsdf.sheen_tint = 0.0;
-    bsdf.clearcoat = 0.0;
-    bsdf.clearcoat_gloss = 0.0;
-    bsdf.transmission = material.transmission;
-    bsdf.eta = 1.0 / material.ior;
+    // bsdf.color = material.base_color.rgb;
+    // bsdf.metallic = material.metallic;
+    // bsdf.transmittance = vec3<f32>(0.0);
+    // bsdf.subsurface = 0.0;
+    // bsdf.tint = vec3<f32>(material.base_color.rgb);
+    // bsdf.luminance = material.base_color.a;
+    // bsdf.specular = 0.0;
+    // bsdf.roughness = max(0.001, material.roughness);
+    // bsdf.spec_tint = 0.0;
+    // bsdf.anisotropic = 0.0;
+    // bsdf.sheen = 0.0;
+    // bsdf.sheen_tint = 0.0;
+    // bsdf.clearcoat = 0.0;
+    // bsdf.clearcoat_gloss = 0.0;
+    // bsdf.transmission = material.transmission;
+    // bsdf.eta = 1.0 / material.ior;
 
     // bsdf.color = material.base_color.rgb;
     // bsdf.metallic = 0.0;
@@ -241,6 +241,23 @@ fn DisneyBsdf::from_material(material: Material) -> DisneyBsdf {
     // bsdf.clearcoat_gloss = 0.0;
     // bsdf.transmission = 0.0;
     // bsdf.eta = 1.45;
+
+    bsdf.color = material.color;
+    bsdf.metallic = material.metallic;
+    bsdf.transmittance = material.absorption;
+    bsdf.subsurface = material.subsurface;
+    bsdf.tint = vec3<f32>(material.color); // TODO: specular and sheen may want their own explicit tint
+    bsdf.luminance = material.luminance;
+    bsdf.specular = material.specular;
+    bsdf.roughness = material.roughness;
+    bsdf.spec_tint = material.specular_tint;
+    bsdf.anisotropic = material.anisotropic;
+    bsdf.sheen = material.sheen;
+    bsdf.sheen_tint = material.sheen_tint;
+    bsdf.clearcoat = material.clearcoat;
+    bsdf.clearcoat_gloss = material.clearcoat_gloss;
+    bsdf.transmission = material.transmission;
+    bsdf.eta = material.eta;
     return bsdf;
 }
 

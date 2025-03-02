@@ -4,35 +4,46 @@ const INVALID_TEXTURE: u32 = U32_MAX;
 const MAX_MATERIAL_POOL_TEXTURES: u32 = 1024u;
 
 struct MaterialDescriptor {
-    base_color_factor: vec4<f32>,
-    base_color_texture: u32,
-
-    occlusion_strength: f32,
-    occlusion_texture: u32,
-
-    metallic_factor: f32,
-    roughness_factor: f32,
+    color: vec3<f32>,
+    color_texture: u32,
+    metallic: f32,
+    roughness: f32,
     metallic_roughness_texture: u32,
-
-    ior: f32,
-    transmission_factor: f32,
-
-    emissive_factor: vec3<f32>,
-    emissive_texture: u32,
-
+    normal_scale: f32,
+    emission: vec3<f32>,
+    normal_texture: u32,
+    emission_texture: u32,
+    transmission: f32,
+    eta: f32,
+    subsurface: f32,
+    absorption: vec3<f32>,
+    specular: f32,
+    specular_tint: f32,
+    anisotropic: f32,
+    sheen: f32,
+    sheen_tint: f32,
+    clearcoat: f32,
+    clearcoat_gloss: f32,
     alpha_cutoff: f32,
     _padding0: u32,
-    _padding1: u32,
-    _padding2: u32,
 }
 
 struct Material {
-    base_color: vec4<f32>,
-    occlusion: f32,
+    color: vec3<f32>,
+    luminance: f32,
     metallic: f32,
     roughness: f32,
-    ior: f32,
-    transmission: f32,
     emission: vec3<f32>,
+    transmission: f32,
+    eta: f32,
+    subsurface: f32,
+    absorption: vec3<f32>,
+    specular: f32,
+    specular_tint: f32,
+    anisotropic: f32,
+    sheen: f32,
+    sheen_tint: f32,
+    clearcoat: f32,
+    clearcoat_gloss: f32,
     alpha_cutoff: f32,
 }

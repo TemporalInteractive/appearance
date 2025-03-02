@@ -80,7 +80,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
             let material_idx: u32 = vertex_pool_slice.material_idx + triangle_material_indices[vertex_pool_slice.first_index / 3 + intersection.primitive_index];
             let material: Material = Material::from_material_descriptor(material_descriptors[material_idx], tex_coord);
 
-            if (material.base_color.a < material.alpha_cutoff) {
+            if (material.luminance < material.alpha_cutoff) {
+                // TODO: non-opaque geometry would be a better choice, not properly supported by wgpu yet
                 origin += direction * (intersection.t + 0.001);
                 continue;
             }

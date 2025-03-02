@@ -4,7 +4,7 @@ use appearance_asset_database::Asset;
 use appearance_model::material::Material;
 use appearance_wgpu::wgpu;
 use bytemuck::{Pod, Zeroable};
-use glam::{Vec3, Vec4};
+use glam::Vec3;
 use uuid::Uuid;
 
 pub const MAX_MATERIAL_POOL_MATERIALS: usize = 1024 * 8;
@@ -13,21 +13,28 @@ pub const MAX_MATERIAL_POOL_TEXTURES: usize = 1024;
 #[derive(Pod, Clone, Copy, Zeroable)]
 #[repr(C)]
 pub struct MaterialDescriptor {
-    pub base_color_factor: Vec4,
-    base_color_texture: u32,
-    pub occlusion_strength: f32,
-    occlusion_texture: u32,
-    pub metallic_factor: f32,
-    pub roughness_factor: f32,
-    metallic_roughness_texture: u32,
-    pub ior: f32,
-    pub transmission_factor: f32,
-    pub emissive_factor: Vec3,
-    emissive_texture: u32,
+    pub color: Vec3,
+    pub color_texture: u32,
+    pub metallic: f32,
+    pub roughness: f32,
+    pub metallic_roughness_texture: u32,
+    pub normal_scale: f32,
+    pub emission: Vec3,
+    pub normal_texture: u32,
+    pub emission_texture: u32,
+    pub transmission: f32,
+    pub eta: f32,
+    pub subsurface: f32,
+    pub absorption: Vec3,
+    pub specular: f32,
+    pub specular_tint: f32,
+    pub anisotropic: f32,
+    pub sheen: f32,
+    pub sheen_tint: f32,
+    pub clearcoat: f32,
+    pub clearcoat_gloss: f32,
     pub alpha_cutoff: f32,
     _padding0: u32,
-    _padding1: u32,
-    _padding2: u32,
 }
 
 pub struct MaterialPool {
@@ -232,13 +239,13 @@ impl MaterialPool {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) -> u32 {
-        let base_color_texture = if let Some(base_color_texture) = &material.base_color_texture {
-            if let Some(texture_idx) = self.texture_indices.get(&base_color_texture.uuid()) {
+        let color_texture = if let Some(texture) = &material.color_texture {
+            if let Some(texture_idx) = self.texture_indices.get(&texture.uuid()) {
                 *texture_idx as u32
             } else {
                 self.alloc_texture(
-                    base_color_texture,
-                    base_color_texture.format().to_wgpu_compressed(),
+                    texture,
+                    texture.format().to_wgpu_compressed(),
                     device,
                     queue,
                 )
@@ -246,30 +253,14 @@ impl MaterialPool {
         } else {
             u32::MAX
         };
-        let occlusion_texture = if let Some(occlusion_texture) = &material.occlusion_texture {
-            if let Some(texture_idx) = self.texture_indices.get(&occlusion_texture.uuid()) {
-                *texture_idx as u32
-            } else {
-                self.alloc_texture(
-                    occlusion_texture,
-                    occlusion_texture.format().to_wgpu_compressed(),
-                    device,
-                    queue,
-                )
-            }
-        } else {
-            u32::MAX
-        };
-        let metallic_roughness_texture = if let Some(metallic_roughness_texture) =
-            &material.metallic_roughness_texture
+        let metallic_roughness_texture = if let Some(texture) = &material.metallic_roughness_texture
         {
-            if let Some(texture_idx) = self.texture_indices.get(&metallic_roughness_texture.uuid())
-            {
+            if let Some(texture_idx) = self.texture_indices.get(&texture.uuid()) {
                 *texture_idx as u32
             } else {
                 self.alloc_texture(
-                    metallic_roughness_texture,
-                    metallic_roughness_texture.format().to_wgpu_compressed(),
+                    texture,
+                    texture.format().to_wgpu_compressed(),
                     device,
                     queue,
                 )
@@ -277,13 +268,27 @@ impl MaterialPool {
         } else {
             u32::MAX
         };
-        let emissive_texture = if let Some(emissive_texture) = &material.emissive_texture {
-            if let Some(texture_idx) = self.texture_indices.get(&emissive_texture.uuid()) {
+        let emission_texture = if let Some(texture) = &material.emission_texture {
+            if let Some(texture_idx) = self.texture_indices.get(&texture.uuid()) {
                 *texture_idx as u32
             } else {
                 self.alloc_texture(
-                    emissive_texture,
-                    emissive_texture.format().to_wgpu_compressed(),
+                    texture,
+                    texture.format().to_wgpu_compressed(),
+                    device,
+                    queue,
+                )
+            }
+        } else {
+            u32::MAX
+        };
+        let normal_texture = if let Some(texture) = &material.normal_texture {
+            if let Some(texture_idx) = self.texture_indices.get(&texture.uuid()) {
+                *texture_idx as u32
+            } else {
+                self.alloc_texture(
+                    texture,
+                    texture.format().to_wgpu_compressed(),
                     device,
                     queue,
                 )
@@ -293,21 +298,28 @@ impl MaterialPool {
         };
 
         let material_descriptor = MaterialDescriptor {
-            base_color_factor: material.base_color_factor,
-            base_color_texture,
-            occlusion_strength: material.occlusion_strength,
-            occlusion_texture,
-            metallic_factor: material.metallic_factor,
-            roughness_factor: material.roughness_factor,
+            color: material.color,
+            color_texture,
+            metallic: material.metallic,
+            roughness: material.roughness,
             metallic_roughness_texture,
-            emissive_factor: material.emissive_factor,
-            emissive_texture,
-            ior: material.ior,
-            transmission_factor: material.transmission_factor,
+            normal_scale: material.normal_scale,
+            emission: material.emission,
+            normal_texture,
+            emission_texture,
+            transmission: material.transmission,
+            eta: material.eta,
+            subsurface: material.subsurface,
+            absorption: material.absorption,
+            specular: material.specular,
+            specular_tint: material.specular_tint,
+            anisotropic: material.anisotropic,
+            sheen: material.sheen,
+            sheen_tint: material.sheen_tint,
+            clearcoat: material.clearcoat,
+            clearcoat_gloss: material.clearcoat_gloss,
             alpha_cutoff: material.alpha_cutoff,
             _padding0: 0,
-            _padding1: 0,
-            _padding2: 0,
         };
 
         self.material_descriptors.push(material_descriptor);
