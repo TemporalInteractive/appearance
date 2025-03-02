@@ -71,7 +71,7 @@ pub struct PathTracerGpuConfig {
 
 impl Default for PathTracerGpuConfig {
     fn default() -> Self {
-        Self { max_bounces: 4 }
+        Self { max_bounces: 5 }
     }
 }
 
