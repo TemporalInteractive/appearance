@@ -119,22 +119,17 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
 
             let disney_bsdf = DisneyBsdf::from_material(material);
 
-            let i_n: vec3<f32> = normal;
-            let n: vec3<f32> = normal;
-            let i_t: vec3<f32> = tangent_to_world[0];
-
             var w_in_worldspace: vec3<f32>;
             var pdf: f32;
             var specular: bool;
             let reflectance: vec3<f32> = DisneyBsdf::sample(disney_bsdf,
-                i_n, n, i_t,
+                normal, normal, tangent_to_world[0],
                 w_out_worldspace, intersection.t, back_face,
                 random_uniform_float(&rng), random_uniform_float(&rng), random_uniform_float(&rng),
                 &w_in_worldspace, &pdf, &specular
             );
 
-            var sample_valid: bool = pdf > 1e-6;
-            
+            let sample_valid: bool = pdf > 1e-6;
             if (sample_valid) {
                 let cos_in: f32 = abs(dot(normal, w_in_worldspace));
                 let contribution: vec3<f32> = (1.0 / pdf) * reflectance * cos_in;

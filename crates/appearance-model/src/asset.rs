@@ -203,7 +203,12 @@ fn process_node(
                         material.emission = Vec3::from(prim_material.emissive_factor());
                         material.emission *= prim_material.emissive_strength().unwrap_or(1.0);
 
-                        if let Some(volume) = prim_material.volume() {}
+                        if let Some(volume) = prim_material.volume() {
+                            // TODO: not 100 percent sure this is correct
+                            material.absorption = (Vec3::ONE
+                                - Vec3::from(volume.attenuation_color()))
+                                / volume.attenuation_distance();
+                        }
 
                         material.transmission =
                             if let Some(transmission) = prim_material.transmission() {

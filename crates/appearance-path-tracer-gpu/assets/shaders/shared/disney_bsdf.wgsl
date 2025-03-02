@@ -208,40 +208,6 @@ struct DisneyBsdf {
 
 fn DisneyBsdf::from_material(material: Material) -> DisneyBsdf {
     var bsdf: DisneyBsdf;
-    // bsdf.color = material.base_color.rgb;
-    // bsdf.metallic = material.metallic;
-    // bsdf.transmittance = vec3<f32>(0.0);
-    // bsdf.subsurface = 0.0;
-    // bsdf.tint = vec3<f32>(material.base_color.rgb);
-    // bsdf.luminance = material.base_color.a;
-    // bsdf.specular = 0.0;
-    // bsdf.roughness = max(0.001, material.roughness);
-    // bsdf.spec_tint = 0.0;
-    // bsdf.anisotropic = 0.0;
-    // bsdf.sheen = 0.0;
-    // bsdf.sheen_tint = 0.0;
-    // bsdf.clearcoat = 0.0;
-    // bsdf.clearcoat_gloss = 0.0;
-    // bsdf.transmission = material.transmission;
-    // bsdf.eta = 1.0 / material.ior;
-
-    // bsdf.color = material.base_color.rgb;
-    // bsdf.metallic = 0.0;
-    // bsdf.transmittance = vec3<f32>(1.0);
-    // bsdf.subsurface = 0.0;
-    // bsdf.tint = vec3<f32>(material.base_color.rgb);
-    // bsdf.luminance = 1.0;
-    // bsdf.specular = 0.0;
-    // bsdf.roughness = 1.0;
-    // bsdf.spec_tint = 0.0;
-    // bsdf.anisotropic = 0.0;
-    // bsdf.sheen = 0.0;
-    // bsdf.sheen_tint = 0.0;
-    // bsdf.clearcoat = 0.0;
-    // bsdf.clearcoat_gloss = 0.0;
-    // bsdf.transmission = 0.0;
-    // bsdf.eta = 1.45;
-
     bsdf.color = material.color;
     bsdf.metallic = material.metallic;
     bsdf.transmittance = material.absorption;
@@ -427,12 +393,6 @@ fn DisneyBsdf::sample(_self: DisneyBsdf, i_n: vec3<f32>, n: vec3<f32>, i_t: vec3
             return vec3<f32>(0.0);
         }
 
-        let beer = vec3<f32>(
-            exp(-_self.transmittance.x * distance * 2.0),
-            exp(-_self.transmittance.y * distance * 2.0),
-            exp(-_self.transmittance.z * distance * 2.0)
-        );
-
         let alpha: vec2<f32> = microfacet_alpha_from_roughness(_self.roughness, _self.anisotropic);
         let ggx_mdf = GgxMdf::new(alpha.x, alpha.y);
 
@@ -467,7 +427,18 @@ fn DisneyBsdf::sample(_self: DisneyBsdf, i_n: vec3<f32>, n: vec3<f32>, i_t: vec3
         if (*pdf > 1e-6) {
             *wiw = tangent_2_world(wil, i_n, t, b);
         }
-        return ret_val * beer;
+
+        if (back_face) {
+            let beer = vec3<f32>(
+                exp(-_self.transmittance.x * distance * 2.0),
+                exp(-_self.transmittance.y * distance * 2.0),
+                exp(-_self.transmittance.z * distance * 2.0)
+            );
+
+            ret_val *= beer;
+        }
+
+        return ret_val;
     }
 
     let r3: f32 = (r0 - _self.transmission) / (1.0 - _self.transmission);
