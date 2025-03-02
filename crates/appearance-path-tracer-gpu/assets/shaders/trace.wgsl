@@ -1,6 +1,7 @@
 @include ::random
 @include appearance-path-tracer-gpu::shared/ray
 @include appearance-path-tracer-gpu::shared/diffuse_brdf
+@include appearance-path-tracer-gpu::shared/disney_bsdf
 
 @include appearance-path-tracer-gpu::shared/vertex_pool_bindings
 @include appearance-path-tracer-gpu::shared/material_pool_bindings
@@ -77,10 +78,9 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
             let tex_coord: vec2<f32> = tex_coord0 * barycentrics.x + tex_coord1 * barycentrics.y + tex_coord2 * barycentrics.z;
 
             let material_idx: u32 = vertex_pool_slice.material_idx + triangle_material_indices[vertex_pool_slice.first_index / 3 + intersection.primitive_index];
-            let material: MaterialDescriptor = material_descriptors[material_idx];
-            let base_color: vec4<f32> = MaterialDescriptor::base_color(material, tex_coord);
+            let material: Material = Material::from_material_descriptor(material_descriptors[material_idx], tex_coord);
 
-            if (base_color.a < material.alpha_cutoff) {
+            if (material.base_color.a < material.alpha_cutoff) {
                 origin += direction * (intersection.t + 0.001);
                 continue;
             }
@@ -102,7 +102,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
             let tangent_to_world: mat3x3<f32> = build_orthonormal_basis(normal);
             let world_to_tangent: mat3x3<f32> = transpose(tangent_to_world);
 
-            let diffuse_lobe = DiffuseLobe::new(base_color.rgb);
+            let diffuse_lobe = DiffuseLobe::new(material.base_color.rgb);
             let bsdf_sample: BsdfSample = DiffuseLobe::sample(diffuse_lobe, random_uniform_float2(&rng));
             var bsdf_eval: BsdfEval = DiffuseLobe::eval(diffuse_lobe);
 

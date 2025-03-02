@@ -25,3 +25,14 @@ struct MaterialDescriptor {
     _padding1: u32,
     _padding2: u32,
 }
+
+struct Material {
+    base_color: vec4<f32>,
+    occlusion: f32,
+    metallic: f32,
+    roughness: f32,
+    ior: f32,
+    transmission: f32,
+    emission: vec3<f32>,
+    alpha_cutoff: f32,
+}

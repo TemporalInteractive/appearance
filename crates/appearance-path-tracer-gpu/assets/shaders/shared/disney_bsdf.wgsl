@@ -17,6 +17,7 @@
 
 @include appearance-path-tracer-gpu::shared/bsdf
 @include appearance-path-tracer-gpu::shared/ggxmdf
+@include appearance-path-tracer-gpu::shared/material_pool
 
 fn schlick_fresnel(u: f32) -> f32 {
     let m: f32 = clamp(1.0 - u, 0.0, 1.0);
@@ -92,7 +93,7 @@ struct DisneyBsdf {
     sheen: f32,
     sheen_tint: f32,
     clearcoat: f32,
-    cleatcoat_gloss: f32,
+    clearcoat_gloss: f32,
     transmission: f32,
     eta: f32,
     _padding0: u32,
@@ -100,10 +101,25 @@ struct DisneyBsdf {
     _padding2: u32,
 };
 
-// TODO: clamp roughness in constructor
+fn DisneyBsdf::from_material(material: Material) -> DisneyBsdf {
+    var bsdf: DisneyBsdf;
+    bsdf.color = material.base_color.rgb;
+    bsdf.metallic = material.metallic;
+    bsdf.transmittance = vec3<f32>(1.0);
+    bsdf.subsurface = 0.0;
+    bsdf.tint = vec3<f32>(0.0);
+    bsdf.specular = 0.0;
+    bsdf.roughness = max(0.001, material.roughness);
+    bsdf.spec_tint = 0.0;
+    bsdf.clearcoat = 0.0;
+    bsdf.clearcoat_gloss = 0.0;
+    bsdf.transmission = material.transmission;
+    bsdf.eta = material.ior;
+    return bsdf;
+}
 
 fn DisneyBsdf::clearcoat_roughness(_self: DisneyBsdf) -> f32 {
-    return mix(0.1, 0.001, _self.cleatcoat_gloss);
+    return mix(0.1, 0.001, _self.clearcoat_gloss);
 }
 
 fn DisneyBsdf::specular_fresnel(_self: DisneyBsdf, o: vec3<f32>, h: vec3<f32>) -> vec3<f32> {
@@ -236,26 +252,26 @@ fn DisneyBsdf::evaluate_sheen(_self: DisneyBsdf, wow: vec3<f32>, wiw: vec3<f32>,
     return 1.0 / (2.0 * PI);
 }
 
-fn DisneyBsdf::sample(_self: DisneyBsdf, _i_n: vec3<f32>, n: vec3<f32>, i_t: vec3<f32>,
-     wow: vec3<f32>, distance: f32, r0: f32, r1: f32, r2: f32,
-     wiw: ptr<function, vec3<f32>>, pdf: ptr<function, f32>, specular: ptr<function, bool>) -> vec3<f32> {
-    // TODO: this flip should also not be necessary
-    var flip: f32;
-    if (dot(wow, n) < 0.0) {
-        flip = -1.0;
-    } else {
-        flip = 1.0;
-    }
-    let i_n: vec3<f32> = _i_n * flip;
+// fn DisneyBsdf::sample(_self: DisneyBsdf, _i_n: vec3<f32>, n: vec3<f32>, i_t: vec3<f32>,
+//      wow: vec3<f32>, distance: f32, r0: f32, r1: f32, r2: f32,
+//      wiw: ptr<function, vec3<f32>>, pdf: ptr<function, f32>, specular: ptr<function, bool>) -> vec3<f32> {
+//     // TODO: this flip should also not be necessary
+//     var flip: f32;
+//     if (dot(wow, n) < 0.0) {
+//         flip = -1.0;
+//     } else {
+//         flip = 1.0;
+//     }
+//     let i_n: vec3<f32> = _i_n * flip;
 
-    // TODO: we shouldn't have to recalculate the tangent matrix, already precomputed
-    let b: vec3<f32> = normalize(cross(i_n, i_t));
-    let t: vec3<f32> = normalize(cross(i_n, b));
+//     // TODO: we shouldn't have to recalculate the tangent matrix, already precomputed
+//     let b: vec3<f32> = normalize(cross(i_n, i_t));
+//     let t: vec3<f32> = normalize(cross(i_n, b));
 
-    if (r0 < _self.transmission) {
-        *specular = true;
+//     if (r0 < _self.transmission) {
+//         *specular = true;
 
-        let r3: f32 = r0 / _self.transmission;
-        let wol: vec3<f32> = 
-    }
-}
+//         let r3: f32 = r0 / _self.transmission;
+//         let wol: vec3<f32> = 
+//     }
+// }

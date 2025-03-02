@@ -51,3 +51,17 @@ fn MaterialDescriptor::metallic_roughness(_self: MaterialDescriptor, tex_coord: 
     }
     return vec2<f32>(metallic, roughness);
 }
+
+fn Material::from_material_descriptor(material_descriptor: MaterialDescriptor, tex_coord: vec2<f32>) -> Material {
+    var material: Material;
+    material.base_color = MaterialDescriptor::base_color(material_descriptor, tex_coord);
+    material.occlusion = MaterialDescriptor::occlusion(material_descriptor, tex_coord);
+    let metallic_roughness = MaterialDescriptor::metallic_roughness(material_descriptor, tex_coord);
+    material.metallic = metallic_roughness.x;
+    material.roughness = metallic_roughness.y;
+    material.ior = material_descriptor.ior;
+    material.transmission = material_descriptor.transmission_factor;
+    material.emission = MaterialDescriptor::emission(material_descriptor, tex_coord);
+    material.alpha_cutoff = material_descriptor.alpha_cutoff;
+    return material;
+}
