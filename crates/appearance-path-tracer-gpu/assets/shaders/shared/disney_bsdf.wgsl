@@ -129,7 +129,7 @@ fn diffuse_reflection_cos_weighted(r0: f32, r1: f32, n: vec3<f32>, t: vec3<f32>,
     let term2: f32 = sqrt(1.0 - r1);
     let s: f32 = sin(term1);
     let c: f32 = cos(term1);
-    return vec3<f32>(c * term2, s * term2, sqrt(r1));
+    return (c * term2 * t) + (s * term2) * b + sqrt(r1) * n;
 }
 
 fn mix_spectra(a: vec3<f32>, b: vec3<f32>, t: f32) -> vec3<f32> {
@@ -212,8 +212,8 @@ fn DisneyBsdf::from_material(material: Material) -> DisneyBsdf {
     bsdf.metallic = material.metallic;
     bsdf.transmittance = vec3<f32>(1.0);
     bsdf.subsurface = 0.0;
-    bsdf.tint = vec3<f32>(0.0);
-    bsdf.luminance = 0.0;
+    bsdf.tint = vec3<f32>(material.base_color.rgb);
+    bsdf.luminance = material.base_color.a;
     bsdf.specular = 0.0;
     bsdf.roughness = max(0.001, material.roughness);
     bsdf.spec_tint = 0.0;
@@ -224,6 +224,23 @@ fn DisneyBsdf::from_material(material: Material) -> DisneyBsdf {
     bsdf.clearcoat_gloss = 0.0;
     bsdf.transmission = material.transmission;
     bsdf.eta = material.ior;
+
+    // bsdf.color = material.base_color.rgb;
+    // bsdf.metallic = 0.0;
+    // bsdf.transmittance = vec3<f32>(1.0);
+    // bsdf.subsurface = 0.0;
+    // bsdf.tint = vec3<f32>(material.base_color.rgb);
+    // bsdf.luminance = 1.0;
+    // bsdf.specular = 0.0;
+    // bsdf.roughness = 1.0;
+    // bsdf.spec_tint = 0.0;
+    // bsdf.anisotropic = 0.0;
+    // bsdf.sheen = 0.0;
+    // bsdf.sheen_tint = 0.0;
+    // bsdf.clearcoat = 0.0;
+    // bsdf.clearcoat_gloss = 0.0;
+    // bsdf.transmission = 0.0;
+    // bsdf.eta = 1.45;
     return bsdf;
 }
 

@@ -7,6 +7,7 @@ pub const MAX_VERTEX_POOL_VERTICES: usize = 1024 * 1024 * 32;
 pub struct VertexPoolWriteData<'a> {
     pub vertex_positions: &'a [Vec4],
     pub vertex_normals: &'a [Vec4],
+    pub vertex_tangents: &'a [Vec4],
     pub vertex_tex_coords: &'a [Vec2],
     pub indices: &'a [u32],
     pub triangle_material_indices: &'a [u32],
@@ -51,6 +52,7 @@ impl VertexPoolSlice {
 pub struct VertexPool {
     vertex_position_buffer: wgpu::Buffer,
     vertex_normal_buffer: wgpu::Buffer,
+    vertex_tangent_buffer: wgpu::Buffer,
     vertex_tex_coord_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
     triangle_material_index_buffer: wgpu::Buffer,
@@ -75,6 +77,13 @@ impl VertexPool {
 
         let vertex_normal_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("appearance-path-tracer-gpu::vertex_pool vertex_normals"),
+            mapped_at_creation: false,
+            size: (std::mem::size_of::<Vec4>() * MAX_VERTEX_POOL_VERTICES) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let vertex_tangent_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("appearance-path-tracer-gpu::vertex_pool vertex_tangents"),
             mapped_at_creation: false,
             size: (std::mem::size_of::<Vec4>() * MAX_VERTEX_POOL_VERTICES) as u64,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
@@ -173,6 +182,16 @@ impl VertexPool {
                     },
                     count: None,
                 },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 6,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
             ],
         });
 
@@ -190,18 +209,22 @@ impl VertexPool {
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
-                    resource: vertex_tex_coord_buffer.as_entire_binding(),
+                    resource: vertex_tangent_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 3,
-                    resource: index_buffer.as_entire_binding(),
+                    resource: vertex_tex_coord_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 4,
-                    resource: triangle_material_index_buffer.as_entire_binding(),
+                    resource: index_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 5,
+                    resource: triangle_material_index_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 6,
                     resource: slices_buffer.as_entire_binding(),
                 },
             ],
@@ -210,6 +233,7 @@ impl VertexPool {
         Self {
             vertex_position_buffer,
             vertex_normal_buffer,
+            vertex_tangent_buffer,
             vertex_tex_coord_buffer,
             index_buffer,
             triangle_material_index_buffer,
@@ -235,6 +259,11 @@ impl VertexPool {
             &self.vertex_normal_buffer,
             (slice.first_vertex as usize * std::mem::size_of::<Vec4>()) as u64,
             bytemuck::cast_slice(data.vertex_normals),
+        );
+        queue.write_buffer(
+            &self.vertex_tangent_buffer,
+            (slice.first_vertex as usize * std::mem::size_of::<Vec4>()) as u64,
+            bytemuck::cast_slice(data.vertex_tangents),
         );
         queue.write_buffer(
             &self.vertex_tex_coord_buffer,

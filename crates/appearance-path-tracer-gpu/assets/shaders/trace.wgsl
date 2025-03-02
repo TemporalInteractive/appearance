@@ -102,14 +102,38 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
             let tangent_to_world: mat3x3<f32> = build_orthonormal_basis(normal);
             let world_to_tangent: mat3x3<f32> = transpose(tangent_to_world);
 
-            let diffuse_lobe = DiffuseLobe::new(material.base_color.rgb);
-            let bsdf_sample: BsdfSample = DiffuseLobe::sample(diffuse_lobe, random_uniform_float2(&rng));
-            var bsdf_eval: BsdfEval = DiffuseLobe::eval(diffuse_lobe);
+            let w_out_worldspace: vec3<f32> = -direction;
+
+            // let diffuse_lobe = DiffuseLobe::new(material.base_color.rgb);
+            // let bsdf_sample: BsdfSample = DiffuseLobe::sample(diffuse_lobe, random_uniform_float2(&rng));
+            // var bsdf_eval: BsdfEval = DiffuseLobe::eval(diffuse_lobe);
+
+            // var w_in_worldspace: vec3<f32>;
+            // let sample_valid: bool = apply_bsdf(bsdf_sample, bsdf_eval, tangent_to_world, normal, &throughput, &w_in_worldspace);
+
+            let disney_bsdf = DisneyBsdf::from_material(material);
+
+            let i_n: vec3<f32> = normal;
+            let n: vec3<f32> = normal;
+            let i_t: vec3<f32> = tangent_to_world[0];
 
             var w_in_worldspace: vec3<f32>;
-            let sample_valid: bool = apply_bsdf(bsdf_sample, bsdf_eval, tangent_to_world, normal, &throughput, &w_in_worldspace);
+            var pdf: f32;
+            var specular: bool;
+            let reflectance: vec3<f32> = DisneyBsdf::sample(disney_bsdf,
+                i_n, n, i_t,
+                w_out_worldspace, intersection.t,
+                random_uniform_float(&rng), random_uniform_float(&rng), random_uniform_float(&rng),
+                &w_in_worldspace, &pdf, &specular
+            );
 
+            var sample_valid: bool = pdf > 1e-6;
+            
             if (sample_valid) {
+                let cos_in: f32 = abs(dot(normal, w_in_worldspace));
+                let contribution: vec3<f32> = (1.0 / pdf) * reflectance * cos_in;
+                throughput *= contribution;
+            
                 let point = origin + direction * intersection.t;
                 let out_ray = Ray::new(point + w_in_worldspace * 0.0001, w_in_worldspace);
                 out_rays[id] = out_ray;

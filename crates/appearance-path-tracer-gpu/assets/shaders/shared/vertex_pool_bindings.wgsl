@@ -10,16 +10,20 @@ var<storage, read> vertex_normals: array<vec4<f32>>;
 
 @group(1)
 @binding(2)
-var<storage, read> vertex_tex_coords: array<vec2<f32>>;
+var<storage, read> vertex_tangents: array<vec4<f32>>;
 
 @group(1)
 @binding(3)
-var<storage, read> vertex_indices: array<u32>;
+var<storage, read> vertex_tex_coords: array<vec2<f32>>;
 
 @group(1)
 @binding(4)
-var<storage, read> triangle_material_indices: array<u32>;
+var<storage, read> vertex_indices: array<u32>;
 
 @group(1)
 @binding(5)
+var<storage, read> triangle_material_indices: array<u32>;
+
+@group(1)
+@binding(6)
 var<storage, read> vertex_pool_slices: array<VertexPoolSlice>;

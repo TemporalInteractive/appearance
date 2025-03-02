@@ -54,6 +54,7 @@ impl SceneModel {
                 &VertexPoolWriteData {
                     vertex_positions: &vertex_positions,
                     vertex_normals: &vertex_normals,
+                    vertex_tangents: &mesh.vertex_tangents,
                     vertex_tex_coords: &mesh.vertex_tex_coords,
                     indices: &mesh.indices,
                     triangle_material_indices: &mesh.triangle_material_indices,
