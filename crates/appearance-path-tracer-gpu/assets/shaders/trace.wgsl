@@ -86,6 +86,10 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
                 continue;
             }
 
+            if (constants.bounce == 0) {
+                accumulated += throughput * material.emission;
+            }
+
             let normal0: vec3<f32> = vertex_normals[vertex_pool_slice.first_vertex + i0].xyz;
             let normal1: vec3<f32> = vertex_normals[vertex_pool_slice.first_vertex + i1].xyz;
             let normal2: vec3<f32> = vertex_normals[vertex_pool_slice.first_vertex + i2].xyz;

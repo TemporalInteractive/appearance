@@ -209,7 +209,6 @@ fn process_node(
                                 - Vec3::from(volume.attenuation_color()))
                                 / volume.attenuation_distance();
                         }
-
                         material.transmission =
                             if let Some(transmission) = prim_material.transmission() {
                                 transmission.transmission_factor()
@@ -217,6 +216,20 @@ fn process_node(
                                 0.0
                             };
                         material.eta = 1.0 / prim_material.ior().unwrap_or(1.5);
+
+                        material.subsurface = 0.0; // TODO
+                        if let Some(specular) = prim_material.specular() {
+                            material.specular = specular.specular_factor();
+                            material.specular_tint = 1.0; // TODO
+                        }
+                        if let Some(clearcoat) = prim_material.clearcoat() {
+                            material.clearcoat = clearcoat.clearcoat_factor();
+                            material.clearcoat_gloss = 1.0 - clearcoat.clearcoat_roughness_factor();
+                        }
+                        if let Some(sheen) = prim_material.sheen() {
+                            material.sheen = sheen.sheen_roughness_factor();
+                            material.sheen_tint = 1.0; // TODO
+                        }
 
                         material.alpha_cutoff = prim_material.alpha_cutoff().unwrap_or(0.0);
                         material.is_opaque = prim_material.alpha_mode() == AlphaMode::Opaque

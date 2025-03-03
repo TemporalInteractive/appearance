@@ -59,7 +59,7 @@ pub struct HostRenderLoop {
     camera_controller: CameraController,
     world: World,
 
-    duck_entity: Option<specs::Entity>,
+    //duck_entity: Option<specs::Entity>,
     toy_car_entity: specs::Entity,
 }
 
@@ -132,6 +132,11 @@ impl RenderLoop for HostRenderLoop {
             |builder| builder.with(ModelComponent::new("::ToyCar.glb")),
         );
         let _ = world.create_entity(
+            "Chess",
+            Transform::new(Vec3::new(-2.0, 0.5, 0.0), Quat::IDENTITY, Vec3::splat(3.0)),
+            |builder| builder.with(ModelComponent::new("::ABeautifulGame.glb")),
+        );
+        let _ = world.create_entity(
             "Glass",
             Transform::new(
                 Vec3::new(0.0, 1.0, 0.0),
@@ -150,6 +155,16 @@ impl RenderLoop for HostRenderLoop {
             |builder| builder.with(ModelComponent::new("::DragonAttenuation.glb")),
         );
 
+        let _ = world.create_entity(
+            "ClearCoatTest",
+            Transform::new(
+                Vec3::new(0.0, 0.0, 20.0),
+                Quat::from_axis_angle(UP, 90.0f32.to_radians()),
+                Vec3::splat(1.0),
+            ),
+            |builder| builder.with(ModelComponent::new("::ClearCoatTest.glb")),
+        );
+
         Self {
             pipeline_database: PipelineDatabase::new(),
             rendering_strategy,
@@ -162,7 +177,7 @@ impl RenderLoop for HostRenderLoop {
             camera_controller: CameraController::new(),
             world,
 
-            duck_entity: Some(duck_entity),
+            //duck_entity: Some(duck_entity),
             toy_car_entity,
         }
     }
@@ -220,12 +235,12 @@ impl RenderLoop for HostRenderLoop {
             fps_avg / self.fps_history.len() as f32
         );
 
-        if let Some(duck_entity) = self.duck_entity {
-            let mut transforms_mut = self.world.entities_mut::<TransformComponent>();
+        // if let Some(duck_entity) = self.duck_entity {
+        //     let mut transforms_mut = self.world.entities_mut::<TransformComponent>();
 
-            let duck_transform = transforms_mut.get_mut(duck_entity).unwrap();
-            duck_transform.transform.translate(RIGHT * delta_time * 0.5);
-        }
+        //     let duck_transform = transforms_mut.get_mut(duck_entity).unwrap();
+        //     duck_transform.transform.translate(RIGHT * delta_time * 0.5);
+        // }
 
         {
             let mut transforms_mut = self.world.entities_mut::<TransformComponent>();
@@ -235,11 +250,11 @@ impl RenderLoop for HostRenderLoop {
                 .rotate(Quat::from_axis_angle(UP, delta_time * 0.3));
         }
 
-        if self.input_handler.key(KeyCode::KeyX) {
-            if let Some(duck_entity) = self.duck_entity.take() {
-                self.world.destroy_entity(duck_entity);
-            }
-        }
+        // if self.input_handler.key(KeyCode::KeyX) {
+        //     if let Some(duck_entity) = self.duck_entity.take() {
+        //         self.world.destroy_entity(duck_entity);
+        //     }
+        // }
 
         if self.input_handler.key(KeyCode::Escape) {
             return true;
