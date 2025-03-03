@@ -31,10 +31,16 @@ pub struct MaterialDescriptor {
     pub anisotropic: f32,
     pub sheen: f32,
     pub sheen_tint: f32,
+
     pub clearcoat: f32,
-    pub clearcoat_gloss: f32,
+    pub clearcoat_texture: u32,
+    pub clearcoat_roughness: f32,
+    pub clearcoat_roughness_texture: u32,
+
     pub alpha_cutoff: f32,
     _padding0: u32,
+    _padding1: u32,
+    _padding2: u32,
 }
 
 pub struct MaterialPool {
@@ -67,7 +73,7 @@ impl MaterialPool {
         });
 
         let (_, empty_texture_view) =
-            Self::create_texture(device, 1, 1, wgpu::TextureFormat::Rgba8UnormSrgb);
+            Self::create_texture("Empty", device, 1, 1, wgpu::TextureFormat::Rgba8UnormSrgb);
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: None,
@@ -114,6 +120,7 @@ impl MaterialPool {
     }
 
     fn create_texture(
+        name: &str,
         device: &wgpu::Device,
         width: u32,
         height: u32,
@@ -130,7 +137,7 @@ impl MaterialPool {
             dimension: wgpu::TextureDimension::D2,
             format,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            label: None,
+            label: Some(name),
             view_formats: &[],
         });
         let texture_view = texture.create_view(&wgpu::TextureViewDescriptor {
@@ -149,7 +156,8 @@ impl MaterialPool {
     ) -> u32 {
         let width = model_texture.width();
         let height = model_texture.height();
-        let (texture, texture_view) = Self::create_texture(device, width, height, format);
+        let (texture, texture_view) =
+            Self::create_texture(model_texture.name(), device, width, height, format);
 
         let texture_data = match format {
             wgpu::TextureFormat::Bc4RUnorm => {
@@ -296,6 +304,35 @@ impl MaterialPool {
         } else {
             u32::MAX
         };
+        let clearcoat_texture = if let Some(texture) = &material.clearcoat_texture {
+            if let Some(texture_idx) = self.texture_indices.get(&texture.uuid()) {
+                *texture_idx as u32
+            } else {
+                self.alloc_texture(
+                    texture,
+                    texture.format().to_wgpu_compressed(),
+                    device,
+                    queue,
+                )
+            }
+        } else {
+            u32::MAX
+        };
+        let clearcoat_roughness_texture =
+            if let Some(texture) = &material.clearcoat_roughness_texture {
+                if let Some(texture_idx) = self.texture_indices.get(&texture.uuid()) {
+                    *texture_idx as u32
+                } else {
+                    self.alloc_texture(
+                        texture,
+                        texture.format().to_wgpu_compressed(),
+                        device,
+                        queue,
+                    )
+                }
+            } else {
+                u32::MAX
+            };
 
         let material_descriptor = MaterialDescriptor {
             color: material.color,
@@ -317,9 +354,13 @@ impl MaterialPool {
             sheen: material.sheen,
             sheen_tint: material.sheen_tint,
             clearcoat: material.clearcoat,
-            clearcoat_gloss: material.clearcoat_gloss,
+            clearcoat_texture,
+            clearcoat_roughness: material.clearcoat_roughness,
+            clearcoat_roughness_texture,
             alpha_cutoff: material.alpha_cutoff,
             _padding0: 0,
+            _padding1: 0,
+            _padding2: 0,
         };
 
         self.material_descriptors.push(material_descriptor);

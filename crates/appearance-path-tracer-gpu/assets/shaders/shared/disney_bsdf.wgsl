@@ -221,7 +221,7 @@ fn DisneyBsdf::from_material(material: Material) -> DisneyBsdf {
     bsdf.sheen = material.sheen;
     bsdf.sheen_tint = material.sheen_tint;
     bsdf.clearcoat = material.clearcoat;
-    bsdf.clearcoat_gloss = material.clearcoat_gloss;
+    bsdf.clearcoat_gloss = 1.0 - material.clearcoat_roughness;
     bsdf.transmission = material.transmission;
     bsdf.eta = material.eta;
     return bsdf;

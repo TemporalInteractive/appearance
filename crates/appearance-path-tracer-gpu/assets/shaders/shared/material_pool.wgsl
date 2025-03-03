@@ -23,9 +23,14 @@ struct MaterialDescriptor {
     sheen: f32,
     sheen_tint: f32,
     clearcoat: f32,
-    clearcoat_gloss: f32,
+    clearcoat_texture: u32,
+    clearcoat_roughness: f32,
+    clearcoat_roughness_texture: u32,
+
     alpha_cutoff: f32,
     _padding0: u32,
+    _padding1: u32,
+    _padding2: u32,
 }
 
 struct Material {
@@ -44,6 +49,6 @@ struct Material {
     sheen: f32,
     sheen_tint: f32,
     clearcoat: f32,
-    clearcoat_gloss: f32,
+    clearcoat_roughness: f32,
     alpha_cutoff: f32,
 }

@@ -224,7 +224,25 @@ fn process_node(
                         }
                         if let Some(clearcoat) = prim_material.clearcoat() {
                             material.clearcoat = clearcoat.clearcoat_factor();
-                            material.clearcoat_gloss = 1.0 - clearcoat.clearcoat_roughness_factor();
+                            if let Some(tex) = clearcoat.clearcoat_texture() {
+                                material.clearcoat_texture = Some(process_tex(
+                                    document,
+                                    images,
+                                    internal_images,
+                                    &tex.texture(),
+                                    tex.texture().name().unwrap_or("Clearcoat"),
+                                ));
+                            }
+                            material.clearcoat_roughness = clearcoat.clearcoat_roughness_factor();
+                            if let Some(tex) = clearcoat.clearcoat_roughness_texture() {
+                                material.clearcoat_roughness_texture = Some(process_tex(
+                                    document,
+                                    images,
+                                    internal_images,
+                                    &tex.texture(),
+                                    tex.texture().name().unwrap_or("Clearcoat Roughness"),
+                                ));
+                            }
                         }
                         if let Some(sheen) = prim_material.sheen() {
                             material.sheen = sheen.sheen_roughness_factor();
@@ -235,40 +253,44 @@ fn process_node(
                         material.is_opaque = prim_material.alpha_mode() == AlphaMode::Opaque
                             || material.alpha_cutoff == 0.0;
 
-                        if let Some(color_tex) = pbr.base_color_texture() {
+                        if let Some(tex) = pbr.base_color_texture() {
                             material.color_texture = Some(process_tex(
                                 document,
                                 images,
                                 internal_images,
-                                &color_tex.texture(),
+                                &tex.texture(),
+                                tex.texture().name().unwrap_or("Color"),
                             ));
                         }
 
-                        if let Some(normal_tex) = prim_material.normal_texture() {
+                        if let Some(tex) = prim_material.normal_texture() {
                             material.normal_texture = Some(process_tex(
                                 document,
                                 images,
                                 internal_images,
-                                &normal_tex.texture(),
+                                &tex.texture(),
+                                tex.texture().name().unwrap_or("Normal"),
                             ));
-                            material.normal_scale = normal_tex.scale();
+                            material.normal_scale = tex.scale();
                         }
 
-                        if let Some(mr_tex) = pbr.metallic_roughness_texture() {
+                        if let Some(tex) = pbr.metallic_roughness_texture() {
                             material.metallic_roughness_texture = Some(process_tex(
                                 document,
                                 images,
                                 internal_images,
-                                &mr_tex.texture(),
+                                &tex.texture(),
+                                tex.texture().name().unwrap_or("Metallic Roughness"),
                             ));
                         }
 
-                        if let Some(emissive_tex) = prim_material.emissive_texture() {
+                        if let Some(tex) = prim_material.emissive_texture() {
                             material.emission_texture = Some(process_tex(
                                 document,
                                 images,
                                 internal_images,
-                                &emissive_tex.texture(),
+                                &tex.texture(),
+                                tex.texture().name().unwrap_or("Emission"),
                             ));
                         }
                     }
@@ -314,6 +336,7 @@ fn process_tex(
     images: &[gltf::image::Data],
     internal_images: &mut [Option<Arc<Texture>>],
     texture: &gltf::Texture,
+    name: &str,
 ) -> Arc<Texture> {
     appearance_profiling::profile_function!();
 
@@ -337,6 +360,7 @@ fn process_tex(
                     let image = dynamic_image.to_rgba8();
 
                     TextureCreateDesc {
+                        name: Some(name.to_owned()),
                         width: data.width,
                         height: data.height,
                         format: TextureFormat::Rgba8Unorm,
@@ -351,6 +375,7 @@ fn process_tex(
                     };
 
                     TextureCreateDesc {
+                        name: Some(name.to_owned()),
                         width: data.width,
                         height: data.height,
                         format,

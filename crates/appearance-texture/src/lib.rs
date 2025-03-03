@@ -41,6 +41,7 @@ impl TextureFormat {
 }
 
 pub struct TextureCreateDesc {
+    pub name: Option<String>,
     pub width: u32,
     pub height: u32,
     pub format: TextureFormat,
@@ -49,6 +50,7 @@ pub struct TextureCreateDesc {
 
 #[derive(Debug)]
 pub struct Texture {
+    name: String,
     width: u32,
     height: u32,
     format: TextureFormat,
@@ -73,12 +75,17 @@ pub enum TextureSampleInterpolation {
 impl Texture {
     pub fn new(create_desc: TextureCreateDesc) -> Self {
         Self {
+            name: create_desc.name.unwrap_or("Unnamed".to_owned()),
             width: create_desc.width,
             height: create_desc.height,
             format: create_desc.format,
             data: create_desc.data,
             uuid: Uuid::new_v4(),
         }
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
     }
 
     pub fn width(&self) -> u32 {

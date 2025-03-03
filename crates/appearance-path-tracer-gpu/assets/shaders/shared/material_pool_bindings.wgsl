@@ -44,6 +44,22 @@ fn MaterialDescriptor::metallic_roughness(_self: MaterialDescriptor, tex_coord: 
     return vec2<f32>(metallic, roughness);
 }
 
+fn MaterialDescriptor::clearcoat(_self: MaterialDescriptor, tex_coord: vec2<f32>) -> f32 {
+    var clearcoat: f32 = _self.clearcoat;
+    if (_self.clearcoat_texture != INVALID_TEXTURE) {
+        clearcoat *= _texture(_self.clearcoat_texture, tex_coord).r;
+    }
+    return clearcoat;
+}
+
+fn MaterialDescriptor::clearcoat_roughness(_self: MaterialDescriptor, tex_coord: vec2<f32>) -> f32 {
+    var clearcoat_roughness: f32 = _self.clearcoat_roughness;
+    if (_self.clearcoat_roughness_texture != INVALID_TEXTURE) {
+        clearcoat_roughness *= _texture(_self.clearcoat_roughness_texture, tex_coord).g;
+    }
+    return clearcoat_roughness;
+}
+
 fn Material::from_material_descriptor(material_descriptor: MaterialDescriptor, tex_coord: vec2<f32>) -> Material {
     var material: Material;
     let color: vec4<f32> = MaterialDescriptor::color(material_descriptor, tex_coord);
@@ -62,8 +78,8 @@ fn Material::from_material_descriptor(material_descriptor: MaterialDescriptor, t
     material.anisotropic = material_descriptor.anisotropic;
     material.sheen = material_descriptor.sheen;
     material.sheen_tint = material_descriptor.sheen_tint;
-    material.clearcoat = material_descriptor.clearcoat;
-    material.clearcoat_gloss = material_descriptor.clearcoat_gloss;
+    material.clearcoat = MaterialDescriptor::clearcoat(material_descriptor, tex_coord);
+    material.clearcoat_roughness = MaterialDescriptor::clearcoat_roughness(material_descriptor, tex_coord);
     material.alpha_cutoff = material_descriptor.alpha_cutoff;
     return material;
 }
