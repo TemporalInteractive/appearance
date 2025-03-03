@@ -158,11 +158,21 @@ impl RenderLoop for HostRenderLoop {
         let _ = world.create_entity(
             "ClearCoatTest",
             Transform::new(
-                Vec3::new(0.0, 0.0, 20.0),
+                Vec3::new(0.0, 0.0, 15.0),
                 Quat::from_axis_angle(UP, 90.0f32.to_radians()),
                 Vec3::splat(1.0),
             ),
-            |builder| builder.with(ModelComponent::new("::ClearCoatTest.glb")),
+            |builder| builder.with(ModelComponent::new("::test_models/ClearCoatTest.glb")),
+        );
+
+        let _ = world.create_entity(
+            "AttenuationTest",
+            Transform::new(
+                Vec3::new(0.0, 0.0, 35.0),
+                Quat::from_axis_angle(UP, 90.0f32.to_radians()),
+                Vec3::splat(1.0),
+            ),
+            |builder| builder.with(ModelComponent::new("::test_models/AttenuationTest.glb")),
         );
 
         Self {
