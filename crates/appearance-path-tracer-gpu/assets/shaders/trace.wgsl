@@ -142,7 +142,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
             var pdf: f32;
             var specular: bool;
             let reflectance: vec3<f32> = DisneyBsdf::sample(disney_bsdf,
-                front_facing_normal_ws, front_facing_normal_ws, tangent_to_world[0],
+                hit_normal_ws, front_facing_normal_ws, hit_tangent_ws, hit_bitangent_ws,
                 w_out_worldspace, intersection.t, back_face,
                 random_uniform_float(&rng), random_uniform_float(&rng), random_uniform_float(&rng),
                 &w_in_worldspace, &pdf, &specular

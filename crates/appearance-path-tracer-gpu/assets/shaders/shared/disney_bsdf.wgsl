@@ -361,7 +361,7 @@ fn DisneyBsdf::evaluate_sheen(_self: DisneyBsdf, wow: vec3<f32>, wiw: vec3<f32>,
     return 1.0 / (2.0 * PI);
 }
 
-fn DisneyBsdf::sample(_self: DisneyBsdf, i_n: vec3<f32>, n: vec3<f32>, i_t: vec3<f32>,
+fn DisneyBsdf::sample(_self: DisneyBsdf, i_n: vec3<f32>, n: vec3<f32>, t: vec3<f32>, b: vec3<f32>,
      wow: vec3<f32>, distance: f32, back_face: bool, r0: f32, r1: f32, r2: f32,
      wiw: ptr<function, vec3<f32>>, pdf: ptr<function, f32>, specular: ptr<function, bool>) -> vec3<f32> {
     // TODO: ??
@@ -373,10 +373,6 @@ fn DisneyBsdf::sample(_self: DisneyBsdf, i_n: vec3<f32>, n: vec3<f32>, i_t: vec3
     } else {
         flip = 1.0;
     }
-
-    // TODO: we shouldn't have to recalculate the tangent matrix, already precomputed
-    let b: vec3<f32> = normalize(cross(i_n, i_t));
-    let t: vec3<f32> = normalize(cross(i_n, b));
 
     if (r0 < _self.transmission) {
         *specular = true;
