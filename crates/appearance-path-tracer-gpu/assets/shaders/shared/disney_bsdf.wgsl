@@ -199,7 +199,7 @@ struct DisneyBsdf {
     spec_tint: f32,
     anisotropic: f32,
     sheen: f32,
-    sheen_tint: f32,
+    sheen_tint: vec3<f32>,
     clearcoat: f32,
     clearcoat_gloss: f32,
     transmission: f32,
@@ -356,7 +356,7 @@ fn DisneyBsdf::evaluate_sheen(_self: DisneyBsdf, wow: vec3<f32>, wiw: vec3<f32>,
     let h: vec3<f32> = normalize(wow + wiw);
     let cos_ih: f32 = dot(wiw, m);
     let fh: f32 = schlick_fresnel(cos_ih);
-    *value = mix_one_with_spectra(_self.tint, _self.sheen_tint);
+    *value = _self.sheen_tint;//mix_one_with_spectra(_self.tint, _self.sheen_tint);
     *value *= fh * _self.sheen * (1.0 - _self.metallic);
     return 1.0 / (2.0 * PI);
 }

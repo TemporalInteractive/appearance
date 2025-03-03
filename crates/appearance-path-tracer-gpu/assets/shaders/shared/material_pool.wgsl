@@ -18,19 +18,18 @@ struct MaterialDescriptor {
     subsurface: f32,
     absorption: vec3<f32>,
     specular: f32,
+
     specular_tint: f32,
     anisotropic: f32,
     sheen: f32,
-    sheen_tint: f32,
+    _padding0: u32,
+    sheen_tint: vec3<f32>,
+
     clearcoat: f32,
     clearcoat_texture: u32,
     clearcoat_roughness: f32,
     clearcoat_roughness_texture: u32,
-
     alpha_cutoff: f32,
-    _padding0: u32,
-    _padding1: u32,
-    _padding2: u32,
 }
 
 struct Material {
@@ -47,7 +46,7 @@ struct Material {
     specular_tint: f32,
     anisotropic: f32,
     sheen: f32,
-    sheen_tint: f32,
+    sheen_tint: vec3<f32>,
     clearcoat: f32,
     clearcoat_roughness: f32,
     alpha_cutoff: f32,

@@ -246,7 +246,7 @@ fn process_node(
                         }
                         if let Some(sheen) = prim_material.sheen() {
                             material.sheen = sheen.sheen_roughness_factor();
-                            material.sheen_tint = 1.0; // TODO
+                            material.sheen_tint = Vec3::from(sheen.sheen_color_factor());
                         }
 
                         material.alpha_cutoff = prim_material.alpha_cutoff().unwrap_or(0.0);

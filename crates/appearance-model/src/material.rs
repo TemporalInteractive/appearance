@@ -26,7 +26,7 @@ pub struct Material {
     pub specular_tint: f32,
     pub anisotropic: f32,
     pub sheen: f32,
-    pub sheen_tint: f32,
+    pub sheen_tint: Vec3,
 
     pub clearcoat: f32,
     pub clearcoat_texture: Option<Arc<Texture>>,
@@ -60,7 +60,7 @@ impl Default for Material {
             specular_tint: 0.0,
             anisotropic: 0.0,
             sheen: 0.0,
-            sheen_tint: 0.0,
+            sheen_tint: Vec3::ZERO,
 
             clearcoat: 0.0,
             clearcoat_texture: None,

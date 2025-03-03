@@ -30,7 +30,8 @@ pub struct MaterialDescriptor {
     pub specular_tint: f32,
     pub anisotropic: f32,
     pub sheen: f32,
-    pub sheen_tint: f32,
+    _padding0: u32,
+    pub sheen_tint: Vec3,
 
     pub clearcoat: f32,
     pub clearcoat_texture: u32,
@@ -38,9 +39,6 @@ pub struct MaterialDescriptor {
     pub clearcoat_roughness_texture: u32,
 
     pub alpha_cutoff: f32,
-    _padding0: u32,
-    _padding1: u32,
-    _padding2: u32,
 }
 
 pub struct MaterialPool {
@@ -352,15 +350,13 @@ impl MaterialPool {
             specular_tint: material.specular_tint,
             anisotropic: material.anisotropic,
             sheen: material.sheen,
+            _padding0: 0,
             sheen_tint: material.sheen_tint,
             clearcoat: material.clearcoat,
             clearcoat_texture,
             clearcoat_roughness: material.clearcoat_roughness,
             clearcoat_roughness_texture,
             alpha_cutoff: material.alpha_cutoff,
-            _padding0: 0,
-            _padding1: 0,
-            _padding2: 0,
         };
 
         self.material_descriptors.push(material_descriptor);
