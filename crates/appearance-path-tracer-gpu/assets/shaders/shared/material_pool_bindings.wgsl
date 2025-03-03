@@ -60,6 +60,26 @@ fn MaterialDescriptor::clearcoat_roughness(_self: MaterialDescriptor, tex_coord:
     return clearcoat_roughness;
 }
 
+fn MaterialDescriptor::normal_ts(_self: MaterialDescriptor, tex_coord: vec2<f32>) -> vec4<f32> {
+    if (_self.normal_texture == INVALID_TEXTURE) {
+        return vec4<f32>(0.0);
+    } else {
+        let normal: vec3<f32> = _texture(_self.normal_texture, tex_coord).rgb;
+        return vec4<f32>(normal, _self.normal_scale);
+    }
+}
+
+fn MaterialDescriptor::apply_normal_mapping(_self: MaterialDescriptor, tex_coord: vec2<f32>, normal_ws: vec3<f32>, tangent_to_world: mat3x3<f32>) -> vec3<f32> {
+    let normal_ts: vec4<f32> = MaterialDescriptor::normal_ts(_self, tex_coord);
+
+    if (normal_ts.w == 0.0) {
+        return normal_ws;
+    }
+
+    let normal: vec3<f32> = normalize(tangent_to_world * normal_ts.xyz);
+    return normal;
+}
+
 fn Material::from_material_descriptor(material_descriptor: MaterialDescriptor, tex_coord: vec2<f32>) -> Material {
     var material: Material;
     let color: vec4<f32> = MaterialDescriptor::color(material_descriptor, tex_coord);
