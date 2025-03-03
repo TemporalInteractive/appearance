@@ -58,8 +58,7 @@ pub struct HostRenderLoop {
     input_handler: InputHandler,
     camera_controller: CameraController,
     world: World,
-
-    //duck_entity: Option<specs::Entity>,
+    duck_entity: Option<specs::Entity>,
     toy_car_entity: specs::Entity,
 }
 
@@ -186,8 +185,7 @@ impl RenderLoop for HostRenderLoop {
             input_handler: InputHandler::new(),
             camera_controller: CameraController::new(),
             world,
-
-            //duck_entity: Some(duck_entity),
+            duck_entity: Some(duck_entity),
             toy_car_entity,
         }
     }
@@ -245,12 +243,12 @@ impl RenderLoop for HostRenderLoop {
             fps_avg / self.fps_history.len() as f32
         );
 
-        // if let Some(duck_entity) = self.duck_entity {
-        //     let mut transforms_mut = self.world.entities_mut::<TransformComponent>();
+        if let Some(duck_entity) = self.duck_entity {
+            let mut transforms_mut = self.world.entities_mut::<TransformComponent>();
 
-        //     let duck_transform = transforms_mut.get_mut(duck_entity).unwrap();
-        //     duck_transform.transform.translate(RIGHT * delta_time * 0.5);
-        // }
+            let duck_transform = transforms_mut.get_mut(duck_entity).unwrap();
+            duck_transform.transform.translate(RIGHT * delta_time * 0.5);
+        }
 
         {
             let mut transforms_mut = self.world.entities_mut::<TransformComponent>();
@@ -260,11 +258,11 @@ impl RenderLoop for HostRenderLoop {
                 .rotate(Quat::from_axis_angle(UP, delta_time * 0.3));
         }
 
-        // if self.input_handler.key(KeyCode::KeyX) {
-        //     if let Some(duck_entity) = self.duck_entity.take() {
-        //         self.world.destroy_entity(duck_entity);
-        //     }
-        // }
+        if self.input_handler.key(KeyCode::KeyX) {
+            if let Some(duck_entity) = self.duck_entity.take() {
+                self.world.destroy_entity(duck_entity);
+            }
+        }
 
         if self.input_handler.key(KeyCode::Escape) {
             return true;
