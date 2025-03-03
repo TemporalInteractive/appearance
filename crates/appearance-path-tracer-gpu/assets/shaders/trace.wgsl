@@ -91,6 +91,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
                 accumulated += throughput * material.emission;
             }
 
+            // Load tangent, bitangent and normal in local space
             let tbn: mat3x3<f32> = VertexPoolBindings::load_tbn(
                 vertex_pool_slice.first_vertex + i0,
                 vertex_pool_slice.first_vertex + i1,
@@ -98,6 +99,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
                 barycentrics
             );
 
+            // Calculate local to world matrix, inversed and transposed
             let local_to_world_inv = mat4x4<f32>(
                 vec4<f32>(intersection.world_to_object[0], 0.0),
                 vec4<f32>(intersection.world_to_object[1], 0.0),
@@ -106,28 +108,35 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
             );
             let local_to_world_inv_trans: mat4x4<f32> = transpose(local_to_world_inv);
 
+            // World space tangent, bitangent and normal. Note that these are not front facing yet
             let hit_tangent_ws: vec3<f32> = normalize((local_to_world_inv_trans * vec4<f32>(tbn[0], 1.0)).xyz);
             let hit_bitangent_ws: vec3<f32> = normalize((local_to_world_inv_trans * vec4<f32>(tbn[1], 1.0)).xyz);
             var hit_normal_ws: vec3<f32> = normalize((local_to_world_inv_trans * vec4<f32>(tbn[2], 1.0)).xyz);
 
-            var tangent_to_world = mat3x3<f32>(
+            let hit_tangent_to_world = mat3x3<f32>(
                 hit_tangent_ws,
                 hit_bitangent_ws,
                 hit_normal_ws
             );
+            let hit_world_to_tangent: mat3x3<f32> = transpose(hit_tangent_to_world);
 
-            var front_facing_normal_ws: vec3<f32> = MaterialDescriptor::apply_normal_mapping(material_descriptor, tex_coord, hit_normal_ws, tangent_to_world);
+            // Apply normal mapping when available, unlike the name suggest, still not front facing
+            var front_facing_normal_ws: vec3<f32> = MaterialDescriptor::apply_normal_mapping(material_descriptor, tex_coord, hit_normal_ws, hit_tangent_to_world);
 
             let w_out_worldspace: vec3<f32> = -direction;
 
+            // Make sure the hit normal and normal mapped normal are front facing
             let back_face: bool = dot(w_out_worldspace, hit_normal_ws) < 0.0;
             if (back_face) {
                 hit_normal_ws *= -1.0;
                 front_facing_normal_ws *= -1.0;
             }
 
-            tangent_to_world = build_orthonormal_basis(front_facing_normal_ws);
+            // Construct tangent <-> world matrices, both normal mapped and non-normal mapped
+            let tangent_to_world: mat3x3<f32> = build_orthonormal_basis(hit_normal_ws);
             let world_to_tangent: mat3x3<f32> = transpose(tangent_to_world);
+            let shading_tangent_to_world: mat3x3<f32> = build_orthonormal_basis(front_facing_normal_ws);
+            let shading_world_to_tangent: mat3x3<f32> = transpose(tangent_to_world);
 
             // let diffuse_lobe = DiffuseLobe::new(material.base_color.rgb);
             // let bsdf_sample: BsdfSample = DiffuseLobe::sample(diffuse_lobe, random_uniform_float2(&rng));
@@ -142,7 +151,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
             var pdf: f32;
             var specular: bool;
             let reflectance: vec3<f32> = DisneyBsdf::sample(disney_bsdf,
-                hit_normal_ws, front_facing_normal_ws, hit_tangent_ws, hit_bitangent_ws,
+                hit_normal_ws, tangent_to_world, world_to_tangent,
                 w_out_worldspace, intersection.t, back_face,
                 random_uniform_float(&rng), random_uniform_float(&rng), random_uniform_float(&rng),
                 &w_in_worldspace, &pdf, &specular

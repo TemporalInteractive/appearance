@@ -124,12 +124,12 @@ fn refracted_direction(wo: vec3<f32>, m: vec3<f32>, cos_wom: f32, cos_theta_t: f
     return improve_normalization(wi);
 }
 
-fn diffuse_reflection_cos_weighted(r0: f32, r1: f32, n: vec3<f32>, t: vec3<f32>, b: vec3<f32>) -> vec3<f32> {
+fn diffuse_reflection_cos_weighted(r0: f32, r1: f32) -> vec3<f32> {
     let term1: f32 = TWO_PI * r0;
     let term2: f32 = sqrt(1.0 - r1);
     let s: f32 = sin(term1);
     let c: f32 = cos(term1);
-    return (c * term2 * t) + (s * term2) * b + sqrt(r1) * n;
+    return vec3<f32>(c * term2, s * term2, sqrt(r1));
 }
 
 fn mix_spectra(a: vec3<f32>, b: vec3<f32>, t: f32) -> vec3<f32> {
@@ -361,7 +361,7 @@ fn DisneyBsdf::evaluate_sheen(_self: DisneyBsdf, wow: vec3<f32>, wiw: vec3<f32>,
     return 1.0 / (2.0 * PI);
 }
 
-fn DisneyBsdf::sample(_self: DisneyBsdf, i_n: vec3<f32>, n: vec3<f32>, t: vec3<f32>, b: vec3<f32>,
+fn DisneyBsdf::sample(_self: DisneyBsdf, i_n: vec3<f32>, tangent_to_world: mat3x3<f32>, world_to_tangent: mat3x3<f32>,
      wow: vec3<f32>, distance: f32, back_face: bool, r0: f32, r1: f32, r2: f32,
      wiw: ptr<function, vec3<f32>>, pdf: ptr<function, f32>, specular: ptr<function, bool>) -> vec3<f32> {
     // TODO: ??
@@ -378,7 +378,7 @@ fn DisneyBsdf::sample(_self: DisneyBsdf, i_n: vec3<f32>, n: vec3<f32>, t: vec3<f
         *specular = true;
 
         let r3: f32 = r0 / _self.transmission;
-        let wol: vec3<f32> = world_2_tangent(wow, i_n, t, b);
+        let wol: vec3<f32> = world_to_tangent * wow;
         var eta: f32;
         if (flip < 0.0) {
             eta = 1.0 / _self.eta;
@@ -421,7 +421,7 @@ fn DisneyBsdf::sample(_self: DisneyBsdf, i_n: vec3<f32>, n: vec3<f32>, t: vec3<f
         }
         *pdf *= jacobian * GgxMdf::pdf(ggx_mdf, wol, m);
         if (*pdf > 1e-6) {
-            *wiw = tangent_2_world(wil, i_n, t, b);
+            *wiw = tangent_to_world * wil;
         }
 
         if (back_face) {
@@ -458,7 +458,7 @@ fn DisneyBsdf::sample(_self: DisneyBsdf, i_n: vec3<f32>, n: vec3<f32>, t: vec3<f
     var value = vec3<f32>(0.0);
     if (r3 < cdf.y) {
         let r2: f32 = r3 / cdf.y;
-        *wiw = diffuse_reflection_cos_weighted(r2, r1, i_n, t, b);
+        *wiw = tangent_to_world * diffuse_reflection_cos_weighted(r2, r1);
         let m: vec3<f32> = normalize(*wiw + wow);
 
         if (r3 < cdf.x) {
@@ -471,7 +471,7 @@ fn DisneyBsdf::sample(_self: DisneyBsdf, i_n: vec3<f32>, n: vec3<f32>, t: vec3<f
             weights.y = 0.0;
         }
     } else {
-        let wol: vec3<f32> = world_2_tangent(wow, i_n, t, b);
+        let wol: vec3<f32> = world_to_tangent * wow;
         var wil: vec3<f32>;
         if (r3 < cdf.z) {
             let r2: f32 = (r3 - cdf.y) / (cdf.z - cdf.y);
@@ -487,7 +487,7 @@ fn DisneyBsdf::sample(_self: DisneyBsdf, i_n: vec3<f32>, n: vec3<f32>, t: vec3<f
             weights.w = 0.0;
         }
         value *= 1.0 / abs(4.0 * wol.z * wil.z);
-        *wiw = tangent_2_world(wil, i_n, t, b);
+        *wiw = tangent_to_world * wil;
     }
 
     var contrib: vec3<f32>;
@@ -504,8 +504,8 @@ fn DisneyBsdf::sample(_self: DisneyBsdf, i_n: vec3<f32>, n: vec3<f32>, t: vec3<f
     }
 
     if (weights.z + weights.w > 0.0) {
-        let wol: vec3<f32> = world_2_tangent(wow, i_n, t, b);
-        let wil: vec3<f32> = world_2_tangent(*wiw, i_n, t, b);
+        let wol: vec3<f32> = world_to_tangent * wow;
+        let wil: vec3<f32> = world_to_tangent * (*wiw);
         let m: vec3<f32> = normalize(wol + wil);
         if (weights.z > 0.0) {
             let alpha: vec2<f32> = microfacet_alpha_from_roughness(_self.roughness, _self.anisotropic);
