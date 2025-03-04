@@ -113,15 +113,14 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
             let hit_bitangent_ws: vec3<f32> = normalize((local_to_world_inv_trans * vec4<f32>(tbn[1], 1.0)).xyz);
             var hit_normal_ws: vec3<f32> = normalize((local_to_world_inv_trans * vec4<f32>(tbn[2], 1.0)).xyz);
 
-            let hit_tangent_to_world = mat3x3<f32>(
+            var tangent_to_world = mat3x3<f32>(
                 hit_tangent_ws,
                 hit_bitangent_ws,
                 hit_normal_ws
             );
-            //let hit_world_to_tangent: mat3x3<f32> = transpose(hit_tangent_to_world);
 
             // Apply normal mapping when available, unlike the name suggest, still not front facing
-            var front_facing_normal_ws: vec3<f32> = MaterialDescriptor::apply_normal_mapping(material_descriptor, tex_coord, hit_normal_ws, hit_tangent_to_world);
+            var front_facing_normal_ws: vec3<f32> = MaterialDescriptor::apply_normal_mapping(material_descriptor, tex_coord, hit_normal_ws, tangent_to_world);
 
             let w_out_worldspace: vec3<f32> = -direction;
 
@@ -133,10 +132,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
             }
 
             // Construct tangent <-> world matrices
-            let tangent_to_world: mat3x3<f32> = build_orthonormal_basis(front_facing_normal_ws);
+            tangent_to_world = build_orthonormal_basis(front_facing_normal_ws);
             let world_to_tangent: mat3x3<f32> = transpose(tangent_to_world);
-            // let shading_tangent_to_world: mat3x3<f32> = build_orthonormal_basis(front_facing_normal_ws);
-            // let shading_world_to_tangent: mat3x3<f32> = transpose(tangent_to_world);
 
             // let diffuse_lobe = DiffuseLobe::new(material.base_color.rgb);
             // let bsdf_sample: BsdfSample = DiffuseLobe::sample(diffuse_lobe, random_uniform_float2(&rng));
