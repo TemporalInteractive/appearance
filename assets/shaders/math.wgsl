@@ -80,3 +80,10 @@ fn get_perpendicular_vector(u: vec3<f32>) -> vec3<f32> {
 
     return cross(u, vec3<f32>(f32(xm), f32(ym), f32(zm)));
 }
+
+fn unit_vector_to_panorama_coords(direction: vec3<f32>) -> vec2<f32> {
+    let phi: f32 = atan2(direction.z, direction.x) + PI;
+    let theta: f32 = acos(direction.y);
+
+    return vec2<f32>(phi / (2.0 * PI), theta * INV_PI);
+}

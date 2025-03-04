@@ -2,7 +2,7 @@ use std::{collections::HashMap, num::NonZeroU32, sync::Arc};
 
 use appearance_asset_database::Asset;
 use appearance_model::material::Material;
-use appearance_wgpu::wgpu;
+use appearance_wgpu::{empty_texture_view, wgpu};
 use bytemuck::{Pod, Zeroable};
 use glam::Vec3;
 use uuid::Uuid;
@@ -44,7 +44,6 @@ pub struct MaterialDescriptor {
 pub struct MaterialPool {
     material_descriptor_buffer: wgpu::Buffer,
     sampler: wgpu::Sampler,
-    empty_texture_view: wgpu::TextureView,
     texture_views: Vec<wgpu::TextureView>,
     texture_indices: HashMap<Uuid, usize>,
 
@@ -69,9 +68,6 @@ impl MaterialPool {
             mag_filter: wgpu::FilterMode::Linear,
             ..Default::default()
         });
-
-        let (_, empty_texture_view) =
-            Self::create_texture("Empty", device, 1, 1, wgpu::TextureFormat::Rgba8UnormSrgb);
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: None,
@@ -108,7 +104,6 @@ impl MaterialPool {
         Self {
             material_descriptor_buffer,
             sampler,
-            empty_texture_view,
             texture_views: Vec::new(),
             texture_indices: HashMap::new(),
 
@@ -117,114 +112,17 @@ impl MaterialPool {
         }
     }
 
-    fn create_texture(
-        name: &str,
-        device: &wgpu::Device,
-        width: u32,
-        height: u32,
-        format: wgpu::TextureFormat,
-    ) -> (wgpu::Texture, wgpu::TextureView) {
-        let texture = device.create_texture(&wgpu::TextureDescriptor {
-            size: wgpu::Extent3d {
-                width,
-                height,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            label: Some(name),
-            view_formats: &[],
-        });
-        let texture_view = texture.create_view(&wgpu::TextureViewDescriptor {
-            dimension: Some(wgpu::TextureViewDimension::D2),
-            ..Default::default()
-        });
-        (texture, texture_view)
-    }
-
     fn alloc_texture(
         &mut self,
         model_texture: &Arc<appearance_texture::Texture>,
-        format: wgpu::TextureFormat,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) -> u32 {
-        let width = model_texture.width();
-        let height = model_texture.height();
-        let (texture, texture_view) =
-            Self::create_texture(model_texture.name(), device, width, height, format);
-
-        let texture_data = match format {
-            wgpu::TextureFormat::Bc4RUnorm => {
-                let surface = intel_tex_2::RSurface {
-                    width,
-                    height,
-                    stride: width * model_texture.format().num_channels() as u32,
-                    data: model_texture.data(),
-                };
-
-                intel_tex_2::bc4::compress_blocks(&surface)
-            }
-            wgpu::TextureFormat::Bc5RgUnorm => {
-                let surface = intel_tex_2::RgSurface {
-                    width,
-                    height,
-                    stride: width * model_texture.format().num_channels() as u32,
-                    data: model_texture.data(),
-                };
-
-                intel_tex_2::bc5::compress_blocks(&surface)
-            }
-            wgpu::TextureFormat::Bc7RgbaUnorm => {
-                let surface = intel_tex_2::RgbaSurface {
-                    width,
-                    height,
-                    stride: width * model_texture.format().num_channels() as u32,
-                    data: model_texture.data(),
-                };
-
-                intel_tex_2::bc7::compress_blocks(
-                    &intel_tex_2::bc7::alpha_ultra_fast_settings(),
-                    &surface,
-                )
-            }
-            _ => panic!("Unsupported texture format."),
-        };
-
-        let block_size = match format {
-            wgpu::TextureFormat::Bc1RgbaUnorm
-            | wgpu::TextureFormat::Bc4RUnorm
-            | wgpu::TextureFormat::Bc4RSnorm => 8,
-            wgpu::TextureFormat::Bc2RgbaUnorm
-            | wgpu::TextureFormat::Bc3RgbaUnorm
-            | wgpu::TextureFormat::Bc5RgUnorm
-            | wgpu::TextureFormat::Bc5RgSnorm
-            | wgpu::TextureFormat::Bc7RgbaUnorm => 16,
-            _ => panic!("Unsupported texture format."),
-        };
-        let bytes_per_row = ((width + 3) / 4) * block_size;
-
-        queue.write_texture(
-            wgpu::TexelCopyTextureInfo {
-                texture: &texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
-            &texture_data,
-            wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(bytes_per_row),
-                rows_per_image: None,
-            },
-            wgpu::Extent3d {
-                width,
-                height,
-                depth_or_array_layers: 1,
-            },
+        let (_texture, texture_view) = model_texture.create_wgpu_texture(
+            true,
+            wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            device,
+            queue,
         );
 
         self.texture_views.push(texture_view);
@@ -249,12 +147,7 @@ impl MaterialPool {
             if let Some(texture_idx) = self.texture_indices.get(&texture.uuid()) {
                 *texture_idx as u32
             } else {
-                self.alloc_texture(
-                    texture,
-                    texture.format().to_wgpu_compressed(),
-                    device,
-                    queue,
-                )
+                self.alloc_texture(texture, device, queue)
             }
         } else {
             u32::MAX
@@ -264,12 +157,7 @@ impl MaterialPool {
             if let Some(texture_idx) = self.texture_indices.get(&texture.uuid()) {
                 *texture_idx as u32
             } else {
-                self.alloc_texture(
-                    texture,
-                    texture.format().to_wgpu_compressed(),
-                    device,
-                    queue,
-                )
+                self.alloc_texture(texture, device, queue)
             }
         } else {
             u32::MAX
@@ -278,12 +166,7 @@ impl MaterialPool {
             if let Some(texture_idx) = self.texture_indices.get(&texture.uuid()) {
                 *texture_idx as u32
             } else {
-                self.alloc_texture(
-                    texture,
-                    texture.format().to_wgpu_compressed(),
-                    device,
-                    queue,
-                )
+                self.alloc_texture(texture, device, queue)
             }
         } else {
             u32::MAX
@@ -292,12 +175,7 @@ impl MaterialPool {
             if let Some(texture_idx) = self.texture_indices.get(&texture.uuid()) {
                 *texture_idx as u32
             } else {
-                self.alloc_texture(
-                    texture,
-                    texture.format().to_wgpu_compressed(),
-                    device,
-                    queue,
-                )
+                self.alloc_texture(texture, device, queue)
             }
         } else {
             u32::MAX
@@ -306,12 +184,7 @@ impl MaterialPool {
             if let Some(texture_idx) = self.texture_indices.get(&texture.uuid()) {
                 *texture_idx as u32
             } else {
-                self.alloc_texture(
-                    texture,
-                    texture.format().to_wgpu_compressed(),
-                    device,
-                    queue,
-                )
+                self.alloc_texture(texture, device, queue)
             }
         } else {
             u32::MAX
@@ -321,12 +194,7 @@ impl MaterialPool {
                 if let Some(texture_idx) = self.texture_indices.get(&texture.uuid()) {
                     *texture_idx as u32
                 } else {
-                    self.alloc_texture(
-                        texture,
-                        texture.format().to_wgpu_compressed(),
-                        device,
-                        queue,
-                    )
+                    self.alloc_texture(texture, device, queue)
                 }
             } else {
                 u32::MAX
@@ -335,12 +203,7 @@ impl MaterialPool {
             if let Some(texture_idx) = self.texture_indices.get(&texture.uuid()) {
                 *texture_idx as u32
             } else {
-                self.alloc_texture(
-                    texture,
-                    texture.format().to_wgpu_compressed(),
-                    device,
-                    queue,
-                )
+                self.alloc_texture(texture, device, queue)
             }
         } else {
             u32::MAX
@@ -349,12 +212,7 @@ impl MaterialPool {
             if let Some(texture_idx) = self.texture_indices.get(&texture.uuid()) {
                 *texture_idx as u32
             } else {
-                self.alloc_texture(
-                    texture,
-                    texture.format().to_wgpu_compressed(),
-                    device,
-                    queue,
-                )
+                self.alloc_texture(texture, device, queue)
             }
         } else {
             u32::MAX
@@ -363,12 +221,7 @@ impl MaterialPool {
             if let Some(texture_idx) = self.texture_indices.get(&texture.uuid()) {
                 *texture_idx as u32
             } else {
-                self.alloc_texture(
-                    texture,
-                    texture.format().to_wgpu_compressed(),
-                    device,
-                    queue,
-                )
+                self.alloc_texture(texture, device, queue)
             }
         } else {
             u32::MAX
@@ -438,7 +291,7 @@ impl MaterialPool {
             texture_views.push(texture);
         }
         for _ in 0..(MAX_MATERIAL_POOL_TEXTURES - self.texture_views.len()) {
-            texture_views.push(&self.empty_texture_view);
+            texture_views.push(empty_texture_view(device));
         }
 
         entries.push(wgpu::BindGroupEntry {

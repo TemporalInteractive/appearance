@@ -41,3 +41,21 @@ fn get_uniform_sphere_sample(uv: vec2<f32>) -> vec3<f32> {
         cos_theta
     );
 }
+
+// from https://stackoverflow.com/a/2660181
+fn perturb_direction_vector(uv: vec2<f32>, direction: vec3<f32>, angle: f32) -> vec3<f32> {
+    let h: f32 = cos(angle);
+
+    let phi: f32 = 2.0 * PI * uv.x;
+
+    let z: f32 = h + (1.0 - h) * uv.y;
+    let sin_t: f32 = sqrt(1.0 - z * z);
+
+    let x: f32 = cos(phi) * sin_t;
+    let y: f32 = sin(phi) * sin_t;
+
+    let bitangent: vec3<f32> = get_perpendicular_vector(direction);
+    let tangent: vec3<f32> = cross(bitangent, direction);
+
+    return bitangent * x + tangent * y + direction * z;
+}

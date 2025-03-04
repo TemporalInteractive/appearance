@@ -305,3 +305,28 @@ pub async fn readback_buffer_async<T: Pod>(
 pub fn readback_buffer<T: Pod>(staging_buffer: &wgpu::Buffer, device: &wgpu::Device) -> Vec<T> {
     block_on(readback_buffer_async(staging_buffer, device))
 }
+
+static EMPTY_TEXTURE_VIEW: std::sync::OnceLock<wgpu::TextureView> = std::sync::OnceLock::new();
+
+pub fn empty_texture_view(device: &wgpu::Device) -> &wgpu::TextureView {
+    EMPTY_TEXTURE_VIEW.get_or_init(|| {
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            size: wgpu::Extent3d {
+                width: 1,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING,
+            label: Some("Empty"),
+            view_formats: &[],
+        });
+        texture.create_view(&wgpu::TextureViewDescriptor {
+            dimension: Some(wgpu::TextureViewDimension::D2),
+            ..Default::default()
+        })
+    })
+}

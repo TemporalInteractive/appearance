@@ -7,11 +7,13 @@ use appearance_world::visible_world_action::VisibleWorldActionType;
 use glam::Mat4;
 use material_pool::MaterialPool;
 use scene_model::SceneModel;
+use sky::Sky;
 use uuid::Uuid;
 use vertex_pool::VertexPool;
 
 mod material_pool;
 mod scene_model;
+mod sky;
 mod vertex_pool;
 
 const MAX_TLAS_INSTANCES: usize = 1024 * 8;
@@ -22,6 +24,7 @@ pub struct SceneResources {
     model_instances: HashMap<Uuid, Mat4>,
     vertex_pool: VertexPool,
     material_pool: MaterialPool,
+    sky: Sky,
 
     tlas_package: wgpu::TlasPackage,
     blas_idx_to_mesh_mapping: HashMap<u32, (String, u32, Mat4)>,
@@ -40,6 +43,7 @@ impl SceneResources {
 
         let vertex_pool = VertexPool::new(device);
         let material_pool = MaterialPool::new(device);
+        let sky = Sky::new(device);
 
         Self {
             model_assets,
@@ -47,6 +51,7 @@ impl SceneResources {
             model_instances: HashMap::new(),
             vertex_pool,
             material_pool,
+            sky,
             tlas_package: TlasPackage::new(tlas),
             blas_idx_to_mesh_mapping: HashMap::new(),
         }
@@ -62,6 +67,10 @@ impl SceneResources {
 
     pub fn material_pool(&self) -> &MaterialPool {
         &self.material_pool
+    }
+
+    pub fn sky(&self) -> &Sky {
+        &self.sky
     }
 
     pub fn handle_visible_world_action(

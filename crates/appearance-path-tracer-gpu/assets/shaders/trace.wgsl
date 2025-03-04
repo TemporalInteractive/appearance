@@ -5,6 +5,7 @@
 
 @include appearance-path-tracer-gpu::shared/vertex_pool_bindings
 @include appearance-path-tracer-gpu::shared/material_pool_bindings
+@include appearance-path-tracer-gpu::shared/sky_bindings
 
 struct Constants {
     ray_count: u32,

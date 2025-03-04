@@ -103,6 +103,7 @@ pub fn encode(
                         .scene_resources
                         .material_pool()
                         .bind_group_layout(),
+                    parameters.scene_resources.sky().bind_group_layout(),
                 ],
                 push_constant_ranges: &[],
             })
@@ -166,6 +167,7 @@ pub fn encode(
                 &[],
             );
             cpass.set_bind_group(2, material_pool_bind_group, &[]);
+            cpass.set_bind_group(3, &parameters.scene_resources.sky().bind_group(device), &[]);
             cpass.insert_debug_marker("appearance-path-tracer-gpu::trace");
             cpass.dispatch_workgroups(parameters.ray_count.div_ceil(128), 1, 1);
         },
