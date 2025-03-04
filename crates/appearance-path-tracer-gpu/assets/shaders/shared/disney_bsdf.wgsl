@@ -214,7 +214,7 @@ fn DisneyBsdf::from_material(material: Material) -> DisneyBsdf {
     bsdf.subsurface = material.subsurface;
     bsdf.tint = vec3<f32>(material.color); // TODO: specular and sheen may want their own explicit tint
     bsdf.luminance = material.luminance;
-    bsdf.specular = material.specular;
+    bsdf.specular = max(material.specular, 1.0 - material.roughness);//material.specular;
     bsdf.roughness = material.roughness;
     bsdf.spec_tint = material.specular_tint;
     bsdf.anisotropic = material.anisotropic;

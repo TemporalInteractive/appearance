@@ -20,9 +20,9 @@ fn _texture(id: u32, tex_coord: vec2<f32>) -> vec4<f32> {
 fn MaterialDescriptor::color(_self: MaterialDescriptor, tex_coord: vec2<f32>) -> vec4<f32> {
     var color = vec4<f32>(_self.color, 1.0);
     if (_self.color_texture != INVALID_TEXTURE) {
-        color *= _texture(_self.color_texture, tex_coord);
+        color *= srgb_to_linear(_texture(_self.color_texture, tex_coord));
     }
-    return srgb_to_linear(color);
+    return color;
 }
 
 fn MaterialDescriptor::emission(_self: MaterialDescriptor, tex_coord: vec2<f32>) -> vec3<f32> {
