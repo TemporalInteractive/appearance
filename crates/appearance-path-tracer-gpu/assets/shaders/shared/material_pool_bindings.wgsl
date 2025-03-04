@@ -84,24 +84,26 @@ fn MaterialDescriptor::sheen_tint(_self: MaterialDescriptor, tex_coord: vec2<f32
     return sheen_tint;
 }
 
-fn MaterialDescriptor::normal_ts(_self: MaterialDescriptor, tex_coord: vec2<f32>) -> vec4<f32> {
+fn MaterialDescriptor::normal_ts(_self: MaterialDescriptor, tex_coord: vec2<f32>) -> vec3<f32> {
     if (_self.normal_texture == INVALID_TEXTURE) {
-        return vec4<f32>(0.0);
+        return vec3<f32>(0.0);
     } else {
-        let normal: vec3<f32> = _texture(_self.normal_texture, tex_coord).rgb;
-        return vec4<f32>(normal, _self.normal_scale);
+        let normal_ts: vec3<f32> = _texture(_self.normal_texture, tex_coord).rgb * 2.0 - 1.0;
+        return normal_ts;
     }
 }
 
 fn MaterialDescriptor::apply_normal_mapping(_self: MaterialDescriptor, tex_coord: vec2<f32>, normal_ws: vec3<f32>, tangent_to_world: mat3x3<f32>) -> vec3<f32> {
-    let normal_ts: vec4<f32> = MaterialDescriptor::normal_ts(_self, tex_coord);
-
-    if (normal_ts.w == 0.0) {
-        return normal_ws;
+    if (_self.normal_texture != INVALID_TEXTURE && _self.normal_scale > 0.0) {
+        let normal_ts: vec3<f32> = MaterialDescriptor::normal_ts(_self, tex_coord);
+        var normal: vec3<f32> = normalize(tangent_to_world * normal_ts);
+        if (_self.normal_scale < 1.0) {
+            normal = normalize(mix(normal_ws, normal, _self.normal_scale));
+        }
+        return normal;
     }
 
-    let normal: vec3<f32> = normalize(tangent_to_world * normal_ts.xyz);
-    return normal;
+    return normal_ws;
 }
 
 fn Material::from_material_descriptor(material_descriptor: MaterialDescriptor, tex_coord: vec2<f32>) -> Material {
