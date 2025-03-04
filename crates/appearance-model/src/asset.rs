@@ -252,7 +252,25 @@ fn process_node(
                         }
                         if let Some(sheen) = prim_material.sheen() {
                             material.sheen = sheen.sheen_roughness_factor();
+                            if let Some(tex) = sheen.sheen_roughness_texture() {
+                                material.sheen_texture = Some(process_tex(
+                                    document,
+                                    images,
+                                    internal_images,
+                                    &tex.texture(),
+                                    tex.texture().name().unwrap_or("Sheen Roughness"),
+                                ));
+                            }
                             material.sheen_tint = Vec3::from(sheen.sheen_color_factor());
+                            if let Some(tex) = sheen.sheen_color_texture() {
+                                material.sheen_tint_texture = Some(process_tex(
+                                    document,
+                                    images,
+                                    internal_images,
+                                    &tex.texture(),
+                                    tex.texture().name().unwrap_or("Sheen Tint"),
+                                ));
+                            }
                         }
 
                         material.alpha_cutoff = prim_material.alpha_cutoff().unwrap_or(0.0);

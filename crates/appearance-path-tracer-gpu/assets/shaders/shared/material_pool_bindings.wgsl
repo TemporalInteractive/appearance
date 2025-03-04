@@ -68,6 +68,22 @@ fn MaterialDescriptor::transmission(_self: MaterialDescriptor, tex_coord: vec2<f
     return transmission;
 }
 
+fn MaterialDescriptor::sheen(_self: MaterialDescriptor, tex_coord: vec2<f32>) -> f32 {
+    var sheen: f32 = _self.sheen;
+    if (_self.sheen_texture != INVALID_TEXTURE) {
+        sheen *= _texture(_self.sheen_texture, tex_coord).r;
+    }
+    return sheen;
+}
+
+fn MaterialDescriptor::sheen_tint(_self: MaterialDescriptor, tex_coord: vec2<f32>) -> vec3<f32> {
+    var sheen_tint: vec3<f32> = _self.sheen_tint;
+    if (_self.sheen_tint_texture != INVALID_TEXTURE) {
+        sheen_tint *= srgb_to_linear(_texture(_self.sheen_tint_texture, tex_coord)).rgb;
+    }
+    return sheen_tint;
+}
+
 fn MaterialDescriptor::normal_ts(_self: MaterialDescriptor, tex_coord: vec2<f32>) -> vec4<f32> {
     if (_self.normal_texture == INVALID_TEXTURE) {
         return vec4<f32>(0.0);
@@ -104,8 +120,8 @@ fn Material::from_material_descriptor(material_descriptor: MaterialDescriptor, t
     material.specular = material_descriptor.specular;
     material.specular_tint = material_descriptor.specular_tint;
     material.anisotropic = material_descriptor.anisotropic;
-    material.sheen = material_descriptor.sheen;
-    material.sheen_tint = material_descriptor.sheen_tint;
+    material.sheen = MaterialDescriptor::sheen(material_descriptor, tex_coord);
+    material.sheen_tint = MaterialDescriptor::sheen_tint(material_descriptor, tex_coord);
     material.clearcoat = MaterialDescriptor::clearcoat(material_descriptor, tex_coord);
     material.clearcoat_roughness = MaterialDescriptor::clearcoat_roughness(material_descriptor, tex_coord);
     material.alpha_cutoff = material_descriptor.alpha_cutoff;

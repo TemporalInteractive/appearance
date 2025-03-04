@@ -23,14 +23,14 @@ struct MaterialDescriptor {
     anisotropic: f32,
 
     sheen: f32,
-    _padding0: u32,
+    sheen_texture: u32,
     clearcoat: f32,
     clearcoat_texture: u32,
 
     clearcoat_roughness: f32,
     clearcoat_roughness_texture: u32,
     alpha_cutoff: f32,
-    _padding1: u32,
+    sheen_tint_texture: u32,
 
     sheen_tint: vec3<f32>,
     transmission_texture: u32,

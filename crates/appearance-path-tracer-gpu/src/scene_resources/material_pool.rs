@@ -30,13 +30,13 @@ pub struct MaterialDescriptor {
     pub specular_tint: Vec3,
     pub anisotropic: f32,
     pub sheen: f32,
-    _padding0: u32,
+    pub sheen_texture: u32,
     pub clearcoat: f32,
     pub clearcoat_texture: u32,
     pub clearcoat_roughness: f32,
     pub clearcoat_roughness_texture: u32,
     pub alpha_cutoff: f32,
-    _padding1: u32,
+    pub sheen_tint_texture: u32,
     pub sheen_tint: Vec3,
     pub transmission_texture: u32,
 }
@@ -345,6 +345,34 @@ impl MaterialPool {
         } else {
             u32::MAX
         };
+        let sheen_texture = if let Some(texture) = &material.sheen_texture {
+            if let Some(texture_idx) = self.texture_indices.get(&texture.uuid()) {
+                *texture_idx as u32
+            } else {
+                self.alloc_texture(
+                    texture,
+                    texture.format().to_wgpu_compressed(),
+                    device,
+                    queue,
+                )
+            }
+        } else {
+            u32::MAX
+        };
+        let sheen_tint_texture = if let Some(texture) = &material.sheen_tint_texture {
+            if let Some(texture_idx) = self.texture_indices.get(&texture.uuid()) {
+                *texture_idx as u32
+            } else {
+                self.alloc_texture(
+                    texture,
+                    texture.format().to_wgpu_compressed(),
+                    device,
+                    queue,
+                )
+            }
+        } else {
+            u32::MAX
+        };
 
         let material_descriptor = MaterialDescriptor {
             color: material.color,
@@ -371,8 +399,8 @@ impl MaterialPool {
             clearcoat_roughness: material.clearcoat_roughness,
             clearcoat_roughness_texture,
             alpha_cutoff: material.alpha_cutoff,
-            _padding0: 0,
-            _padding1: 0,
+            sheen_texture,
+            sheen_tint_texture,
         };
 
         self.material_descriptors.push(material_descriptor);
