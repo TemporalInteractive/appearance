@@ -220,7 +220,7 @@ fn process_node(
                         material.subsurface = 0.0; // TODO
                         if let Some(specular) = prim_material.specular() {
                             material.specular = specular.specular_factor();
-                            material.specular_tint = 1.0; // TODO
+                            material.specular_tint = Vec3::from(specular.specular_color_factor());
                         }
                         if let Some(clearcoat) = prim_material.clearcoat() {
                             material.clearcoat = clearcoat.clearcoat_factor();

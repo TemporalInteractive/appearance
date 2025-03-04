@@ -23,7 +23,7 @@ pub struct Material {
 
     pub subsurface: f32,
     pub specular: f32,
-    pub specular_tint: f32,
+    pub specular_tint: Vec3,
     pub anisotropic: f32,
     pub sheen: f32,
     pub sheen_tint: Vec3,
@@ -41,7 +41,7 @@ impl Default for Material {
     fn default() -> Self {
         Material {
             index: None,
-            color: Vec3::new(1.0, 1.0, 1.0),
+            color: Vec3::ONE,
             color_texture: None,
             metallic: 0.0,
             roughness: 0.5,
@@ -53,11 +53,11 @@ impl Default for Material {
 
             absorption: Vec3::ZERO,
             transmission: 0.0,
-            eta: 1.0 / 1.45,
+            eta: 1.0 / 1.5,
 
             subsurface: 0.0,
             specular: 0.0,
-            specular_tint: 0.0,
+            specular_tint: Vec3::ONE,
             anisotropic: 0.0,
             sheen: 0.0,
             sheen_tint: Vec3::ZERO,

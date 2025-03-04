@@ -196,7 +196,7 @@ struct DisneyBsdf {
     luminance: f32,
     specular: f32,
     roughness: f32,
-    spec_tint: f32,
+    spec_tint: vec3<f32>,
     anisotropic: f32,
     sheen: f32,
     sheen_tint: vec3<f32>,
@@ -232,7 +232,7 @@ fn DisneyBsdf::clearcoat_roughness(_self: DisneyBsdf) -> f32 {
 }
 
 fn DisneyBsdf::specular_fresnel(_self: DisneyBsdf, o: vec3<f32>, h: vec3<f32>) -> vec3<f32> {
-    var value: vec3<f32> = mix_one_with_spectra(_self.tint, _self.spec_tint);
+    var value: vec3<f32> = _self.spec_tint;//mix_one_with_spectra(_self.tint, _self.spec_tint);
     value *= _self.specular * 0.08;
     value = mix_spectra(value, _self.color, _self.metallic);
     let cos_oh: f32 = abs(dot(o, h));
