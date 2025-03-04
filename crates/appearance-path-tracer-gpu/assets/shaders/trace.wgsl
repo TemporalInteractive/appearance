@@ -132,11 +132,11 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
                 front_facing_normal_ws *= -1.0;
             }
 
-            // Construct tangent <-> world matrices, both normal mapped and non-normal mapped
-            let tangent_to_world: mat3x3<f32> = build_orthonormal_basis(hit_normal_ws);
+            // Construct tangent <-> world matrices
+            let tangent_to_world: mat3x3<f32> = build_orthonormal_basis(front_facing_normal_ws);
             let world_to_tangent: mat3x3<f32> = transpose(tangent_to_world);
-            //let shading_tangent_to_world: mat3x3<f32> = build_orthonormal_basis(front_facing_normal_ws);
-            //let shading_world_to_tangent: mat3x3<f32> = transpose(tangent_to_world);
+            // let shading_tangent_to_world: mat3x3<f32> = build_orthonormal_basis(front_facing_normal_ws);
+            // let shading_world_to_tangent: mat3x3<f32> = transpose(tangent_to_world);
 
             // let diffuse_lobe = DiffuseLobe::new(material.base_color.rgb);
             // let bsdf_sample: BsdfSample = DiffuseLobe::sample(diffuse_lobe, random_uniform_float2(&rng));
@@ -151,7 +151,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
             var pdf: f32;
             var specular: bool;
             let reflectance: vec3<f32> = DisneyBsdf::sample(disney_bsdf,
-                hit_normal_ws, tangent_to_world, world_to_tangent,
+                front_facing_normal_ws, tangent_to_world, world_to_tangent,
                 w_out_worldspace, intersection.t, back_face,
                 random_uniform_float(&rng), random_uniform_float(&rng), random_uniform_float(&rng),
                 &w_in_worldspace, &pdf, &specular
@@ -172,7 +172,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
         } else {
             let a: f32 = 0.5 * (direction.y + 1.0);
             let color = (1.0 - a) * vec3<f32>(1.0, 1.0, 1.0) + a * vec3<f32>(0.5, 0.7, 1.0);
-            accumulated += throughput * color;
+            accumulated += throughput * color * 2.0;
             payload.alive = 0;
         }
 
