@@ -192,7 +192,6 @@ struct DisneyBsdf {
     metallic: f32,
     transmittance: vec3<f32>,
     subsurface: f32,
-    tint: vec3<f32>,
     luminance: f32,
     specular: f32,
     roughness: f32,
@@ -212,9 +211,8 @@ fn DisneyBsdf::from_material(material: Material) -> DisneyBsdf {
     bsdf.metallic = material.metallic;
     bsdf.transmittance = material.absorption;
     bsdf.subsurface = material.subsurface;
-    bsdf.tint = vec3<f32>(material.color); // TODO: specular and sheen may want their own explicit tint
     bsdf.luminance = material.luminance;
-    bsdf.specular = max(material.specular, 1.0 - material.roughness);//material.specular;
+    bsdf.specular = max(material.specular, 1.0 - material.roughness);
     bsdf.roughness = material.roughness;
     bsdf.spec_tint = material.specular_tint;
     bsdf.anisotropic = material.anisotropic;
@@ -232,7 +230,7 @@ fn DisneyBsdf::clearcoat_roughness(_self: DisneyBsdf) -> f32 {
 }
 
 fn DisneyBsdf::specular_fresnel(_self: DisneyBsdf, o: vec3<f32>, h: vec3<f32>) -> vec3<f32> {
-    var value: vec3<f32> = _self.spec_tint;//mix_one_with_spectra(_self.tint, _self.spec_tint);
+    var value: vec3<f32> = _self.spec_tint;
     value *= _self.specular * 0.08;
     value = mix_spectra(value, _self.color, _self.metallic);
     let cos_oh: f32 = abs(dot(o, h));
@@ -356,7 +354,7 @@ fn DisneyBsdf::evaluate_sheen(_self: DisneyBsdf, wow: vec3<f32>, wiw: vec3<f32>,
     let h: vec3<f32> = normalize(wow + wiw);
     let cos_ih: f32 = dot(wiw, m);
     let fh: f32 = schlick_fresnel(cos_ih);
-    *value = _self.sheen_tint;//mix_one_with_spectra(_self.tint, _self.sheen_tint);
+    *value = _self.sheen_tint;
     *value *= fh * _self.sheen * (1.0 - _self.metallic);
     return 1.0 / (2.0 * PI);
 }

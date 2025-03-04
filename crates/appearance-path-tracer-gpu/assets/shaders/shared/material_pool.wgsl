@@ -33,7 +33,7 @@ struct MaterialDescriptor {
     _padding1: u32,
 
     sheen_tint: vec3<f32>,
-    _padding2: u32,
+    transmission_texture: u32,
 }
 
 struct Material {

@@ -38,7 +38,7 @@ pub struct MaterialDescriptor {
     pub alpha_cutoff: f32,
     _padding1: u32,
     pub sheen_tint: Vec3,
-    _padding2: u32,
+    pub transmission_texture: u32,
 }
 
 pub struct MaterialPool {
@@ -331,6 +331,20 @@ impl MaterialPool {
             } else {
                 u32::MAX
             };
+        let transmission_texture = if let Some(texture) = &material.transmission_texture {
+            if let Some(texture_idx) = self.texture_indices.get(&texture.uuid()) {
+                *texture_idx as u32
+            } else {
+                self.alloc_texture(
+                    texture,
+                    texture.format().to_wgpu_compressed(),
+                    device,
+                    queue,
+                )
+            }
+        } else {
+            u32::MAX
+        };
 
         let material_descriptor = MaterialDescriptor {
             color: material.color,
@@ -343,6 +357,7 @@ impl MaterialPool {
             normal_texture,
             emission_texture,
             transmission: material.transmission,
+            transmission_texture,
             eta: material.eta,
             subsurface: material.subsurface,
             absorption: material.absorption,
@@ -358,7 +373,6 @@ impl MaterialPool {
             alpha_cutoff: material.alpha_cutoff,
             _padding0: 0,
             _padding1: 0,
-            _padding2: 0,
         };
 
         self.material_descriptors.push(material_descriptor);

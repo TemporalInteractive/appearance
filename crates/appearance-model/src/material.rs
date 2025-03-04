@@ -19,6 +19,7 @@ pub struct Material {
 
     pub absorption: Vec3,
     pub transmission: f32,
+    pub transmission_texture: Option<Arc<Texture>>,
     pub eta: f32,
 
     pub subsurface: f32,
@@ -53,6 +54,7 @@ impl Default for Material {
 
             absorption: Vec3::ZERO,
             transmission: 0.0,
+            transmission_texture: None,
             eta: 1.0 / 1.5,
 
             subsurface: 0.0,

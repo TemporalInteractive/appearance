@@ -209,12 +209,18 @@ fn process_node(
                                 - Vec3::from(volume.attenuation_color()))
                                 / volume.attenuation_distance();
                         }
-                        material.transmission =
-                            if let Some(transmission) = prim_material.transmission() {
-                                transmission.transmission_factor()
-                            } else {
-                                0.0
-                            };
+                        if let Some(transmission) = prim_material.transmission() {
+                            material.transmission = transmission.transmission_factor();
+                            if let Some(tex) = transmission.transmission_texture() {
+                                material.transmission_texture = Some(process_tex(
+                                    document,
+                                    images,
+                                    internal_images,
+                                    &tex.texture(),
+                                    tex.texture().name().unwrap_or("Transmission"),
+                                ));
+                            }
+                        }
                         material.eta = 1.0 / prim_material.ior().unwrap_or(1.5);
 
                         material.subsurface = 0.0; // TODO

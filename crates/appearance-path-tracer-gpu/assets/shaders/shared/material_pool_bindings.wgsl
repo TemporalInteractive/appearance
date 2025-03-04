@@ -60,6 +60,14 @@ fn MaterialDescriptor::clearcoat_roughness(_self: MaterialDescriptor, tex_coord:
     return clearcoat_roughness;
 }
 
+fn MaterialDescriptor::transmission(_self: MaterialDescriptor, tex_coord: vec2<f32>) -> f32 {
+    var transmission: f32 = _self.transmission;
+    if (_self.transmission_texture != INVALID_TEXTURE) {
+        transmission *= _texture(_self.transmission_texture, tex_coord).r;
+    }
+    return transmission;
+}
+
 fn MaterialDescriptor::normal_ts(_self: MaterialDescriptor, tex_coord: vec2<f32>) -> vec4<f32> {
     if (_self.normal_texture == INVALID_TEXTURE) {
         return vec4<f32>(0.0);
@@ -89,7 +97,7 @@ fn Material::from_material_descriptor(material_descriptor: MaterialDescriptor, t
     material.metallic = metallic_roughness.x;
     material.roughness = metallic_roughness.y;
     material.emission = MaterialDescriptor::emission(material_descriptor, tex_coord);
-    material.transmission = material_descriptor.transmission;
+    material.transmission = MaterialDescriptor::transmission(material_descriptor, tex_coord);
     material.eta = material_descriptor.eta;
     material.subsurface = material_descriptor.subsurface;
     material.absorption = material_descriptor.absorption;
