@@ -2,6 +2,7 @@ use std::{collections::HashMap, iter};
 
 use appearance_asset_database::{asset_paths::resolve_asset_path, AssetDatabase};
 use appearance_model::Model;
+use appearance_texture::Texture;
 use appearance_wgpu::wgpu::{self, TlasPackage};
 use appearance_world::visible_world_action::VisibleWorldActionType;
 use glam::Mat4;
@@ -31,8 +32,9 @@ pub struct SceneResources {
 }
 
 impl SceneResources {
-    pub fn new(device: &wgpu::Device) -> Self {
+    pub fn new(device: &wgpu::Device, queue: &wgpu::Queue) -> Self {
         let model_assets = AssetDatabase::<Model>::new();
+        let mut texture_assets = AssetDatabase::<Texture>::new();
 
         let tlas = device.create_tlas(&wgpu::CreateTlasDescriptor {
             label: Some("appearance-path-tracer-gpu::scene_resources tlas"),
@@ -43,7 +45,15 @@ impl SceneResources {
 
         let vertex_pool = VertexPool::new(device);
         let material_pool = MaterialPool::new(device);
-        let sky = Sky::new(device);
+        let mut sky = Sky::new(device);
+
+        sky.set_sky_texture(
+            &texture_assets
+                .get(&resolve_asset_path("::evening_road_01_puresky_4k.hdr", ""))
+                .unwrap(),
+            device,
+            queue,
+        );
 
         Self {
             model_assets,

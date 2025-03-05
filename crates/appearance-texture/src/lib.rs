@@ -1,4 +1,5 @@
 use glam::{UVec2, Vec2, Vec4, Vec4Swizzles};
+use half::f16;
 use uuid::Uuid;
 
 pub mod asset;
@@ -26,8 +27,8 @@ impl TextureFormat {
 
     pub fn bytes_per_channel(&self) -> usize {
         match self {
-            Self::R8Unorm | Self::Rg8Unorm | Self::Rgb8Unorm | Self::Rgba8Unorm => 1,
-            Self::Rgba32Float => 4,
+            Self::R8Unorm | Self::Rg8Unorm | Self::Rgb8Unorm | Self::Rgba8Unorm => size_of::<u8>(),
+            Self::Rgba32Float => size_of::<f16>(),
         }
     }
 
@@ -226,7 +227,7 @@ impl Texture {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format,
-            usage,
+            usage: usage | wgpu::TextureUsages::COPY_DST,
             label: Some(&self.name),
             view_formats: &[],
         });
@@ -260,12 +261,15 @@ impl Texture {
                     intel_tex_2::bc5::compress_blocks(&surface)
                 }
                 wgpu::TextureFormat::Bc6hRgbUfloat => {
+                    let f32_data = bytemuck::cast_slice(&self.data);
+                    let f16_data: Vec<f16> = f32_data.iter().copied().map(f16::from_f32).collect();
+
                     let surface = intel_tex_2::RgbaSurface {
                         width: self.width,
                         height: self.height,
                         stride: self.width
                             * (self.format.num_channels() * self.format.bytes_per_channel()) as u32,
-                        data: &self.data,
+                        data: bytemuck::cast_slice(&f16_data),
                     };
 
                     intel_tex_2::bc6h::compress_blocks(

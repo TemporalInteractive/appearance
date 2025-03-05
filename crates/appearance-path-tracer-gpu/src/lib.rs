@@ -92,7 +92,7 @@ impl PathTracerGpu {
         let resolution = UVec2::new(1920, 1080);
         let sized_resources = SizedResources::new(resolution, &ctx.device);
 
-        let scene_resources = SceneResources::new(&ctx.device);
+        let scene_resources = SceneResources::new(&ctx.device, &ctx.queue);
 
         let upload_command_encoder = Some(
             ctx.device

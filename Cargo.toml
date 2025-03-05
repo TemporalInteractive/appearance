@@ -41,7 +41,8 @@ glam = { version = "0.29.2", default-features = false, features = ["std", "bytem
 gltf = { git = "https://github.com/TemporalInteractive/gltf.git", rev = "531bb07", default-features = true, features = ["KHR_materials_emissive_strength", "KHR_materials_ior", "KHR_materials_transmission", "KHR_materials_specular", "KHR_materials_volume", "KHR_materials_specular", "KHR_materials_sheen", "KHR_materials_clearcoat"] }
 #gltf = { path = "../gltf", default-features = true, features = ["KHR_materials_emissive_strength", "KHR_materials_ior", "KHR_materials_transmission", "KHR_materials_specular", "KHR_materials_volume", "KHR_materials_specular", "KHR_materials_sheen", "KHR_materials_clearcoat"] }
 #gltf = { version = "1.0.0", default-features = true, features = ["KHR_materials_emissive_strength", "KHR_materials_ior", "KHR_materials_transmission", "KHR_materials_specular", "KHR_materials_volume", "KHR_materials_specular"] }
-image = { version = "0.25.5", default-features = false, features = ["png", "jpeg", "bmp"] }
+half = { version = "2.4.1", default-features = false, features = ["std", "bytemuck"] }
+image = { version = "0.25.5", default-features = false, features = ["png", "jpeg", "bmp", "hdr"] }
 intel_tex_2 = { version = "0.4.0", default-features = false }
 log = { version = "0.4.20", default-features = false }
 mikktspace = { version = "0.3.0", default-features = true }

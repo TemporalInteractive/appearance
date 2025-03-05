@@ -12,7 +12,9 @@ appearance-asset-database.workspace = true
 appearance-profiling.workspace = true
 
 anyhow.workspace = true
+bytemuck.workspace = true
 glam.workspace = true
+half.workspace = true
 image.workspace = true
 intel_tex_2.workspace = true
 log.workspace = true
