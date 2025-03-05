@@ -151,11 +151,11 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
             let n_dot_l: f32 = dot(shadow_direction, front_facing_normal_ws);
             if (n_dot_l > 0.0) {
                 var shadow_rq: ray_query;
-                rayQueryInitialize(&shadow_rq, scene, RayDesc(0u, 0xFFu, 0.0, 1000.0, shadow_origin, shadow_direction));
+                rayQueryInitialize(&shadow_rq, scene, RayDesc(0x4, 0xFFu, 0.0, 1000.0, shadow_origin, shadow_direction));
                 rayQueryProceed(&shadow_rq);
                 let intersection = rayQueryGetCommittedIntersection(&shadow_rq);
                 if (intersection.kind != RAY_QUERY_INTERSECTION_TRIANGLE) {
-                    let w_in_worldspace: vec3<f32> = -shadow_direction;
+                    let w_in_worldspace: vec3<f32> = shadow_direction;
 
                     var shading_pdf: f32;
                     let reflectance: vec3<f32> = DisneyBsdf::evaluate(disney_bsdf, front_facing_normal_ws, tangent_to_world, world_to_tangent,
