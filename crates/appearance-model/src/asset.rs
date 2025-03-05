@@ -273,7 +273,7 @@ fn process_node(
                             }
                         }
 
-                        material.alpha_cutoff = prim_material.alpha_cutoff().unwrap_or(0.0);
+                        material.alpha_cutoff = prim_material.alpha_cutoff().unwrap_or(0.5);
                         material.is_opaque = prim_material.alpha_mode() == AlphaMode::Opaque
                             || material.alpha_cutoff == 0.0;
 

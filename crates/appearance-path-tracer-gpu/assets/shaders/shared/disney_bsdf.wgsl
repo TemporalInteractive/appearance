@@ -216,6 +216,8 @@ fn refract_l(wi: vec3<f32>, n: vec3<f32>, eta: f32, wt: ptr<function, vec3<f32>>
     return true;
 }
 
+// TODO: clearcoat seems broken after making the specular based on roughness hack (maybe specular and clearcoat are not tolerated together? check the specs)
+// TODO: test subsurface (maybe pretty material probe scene?)
 struct DisneyBsdf {
     color: vec3<f32>,
     metallic: f32,
