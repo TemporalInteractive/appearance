@@ -113,6 +113,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
             let hit_tangent_ws: vec3<f32> = normalize((local_to_world_inv_trans * vec4<f32>(tbn[0], 1.0)).xyz);
             let hit_bitangent_ws: vec3<f32> = normalize((local_to_world_inv_trans * vec4<f32>(tbn[1], 1.0)).xyz);
             var hit_normal_ws: vec3<f32> = normalize((local_to_world_inv_trans * vec4<f32>(tbn[2], 1.0)).xyz);
+            let hit_point_ws = origin + direction * intersection.t;
 
             var tangent_to_world = mat3x3<f32>(
                 hit_tangent_ws,
@@ -145,6 +146,28 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
 
             let disney_bsdf = DisneyBsdf::from_material(material);
 
+            let shadow_direction: vec3<f32> = Sky::direction_to_sun(vec2<f32>(random_uniform_float(&rng), random_uniform_float(&rng)));
+            let shadow_origin: vec3<f32> = hit_point_ws + shadow_direction * 0.0001;
+            let n_dot_l: f32 = dot(shadow_direction, front_facing_normal_ws);
+            if (n_dot_l > 0.0) {
+                var shadow_rq: ray_query;
+                rayQueryInitialize(&shadow_rq, scene, RayDesc(0u, 0xFFu, 0.0, 1000.0, shadow_origin, shadow_direction));
+                rayQueryProceed(&shadow_rq);
+                let intersection = rayQueryGetCommittedIntersection(&shadow_rq);
+                if (intersection.kind != RAY_QUERY_INTERSECTION_TRIANGLE) {
+                    let w_in_worldspace: vec3<f32> = -shadow_direction;
+
+                    var shading_pdf: f32;
+                    let reflectance: vec3<f32> = DisneyBsdf::evaluate(disney_bsdf, front_facing_normal_ws, tangent_to_world, world_to_tangent,
+                        w_out_worldspace, w_in_worldspace, &shading_pdf);
+
+                    let sun_intensity: f32 = Sky::sun_intensity(shadow_direction.y);
+
+                    let sun_contribution: vec3<f32> = throughput * reflectance * sun_intensity * n_dot_l;
+                    accumulated += sun_contribution;
+                };
+            }
+
             var w_in_worldspace: vec3<f32>;
             var pdf: f32;
             var specular: bool;
@@ -161,8 +184,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
                 let contribution: vec3<f32> = (1.0 / pdf) * reflectance * cos_in;
                 throughput *= contribution;
             
-                let point = origin + direction * intersection.t;
-                let out_ray = Ray::new(point + w_in_worldspace * 0.0001, w_in_worldspace);
+                let out_ray = Ray::new(hit_point_ws + w_in_worldspace * 0.0001, w_in_worldspace);
                 out_rays[id] = out_ray;
             } else {
                 payload.alive = 0;

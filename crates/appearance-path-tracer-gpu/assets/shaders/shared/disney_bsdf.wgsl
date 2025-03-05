@@ -124,6 +124,35 @@ fn refracted_direction(wo: vec3<f32>, m: vec3<f32>, cos_wom: f32, cos_theta_t: f
     return improve_normalization(wi);
 }
 
+fn half_reflection_vector(wo: vec3<f32>, wi: vec3<f32>) -> vec3<f32> {
+    let h: vec3<f32> = normalize(wo + wi);
+    if (h.z < 0.0) {
+        return -h;
+    } else {
+        return h;
+    }
+}
+
+fn half_refraction_vector(wo: vec3<f32>, wi: vec3<f32>, eta: f32) -> vec3<f32> {
+    let h: vec3<f32> = normalize(wo + eta * wi);
+    if (h.z < 0.0) {
+        return -h;
+    } else {
+        return h;
+    }
+}
+
+fn choose_reflection_probability(reflection_weight: f32, refraction_weight: f32, f: f32) -> f32 {
+    let r_probability: f32 = f * reflection_weight;
+	let t_probability: f32 = (1 - f) * refraction_weight;
+	let sum_probabilities: f32 = r_probability + t_probability;
+    if (sum_probabilities == 0.0) {
+        return 1.0;
+    } else {
+        return r_probability / sum_probabilities;
+    }
+}
+
 fn diffuse_reflection_cos_weighted(r0: f32, r1: f32) -> vec3<f32> {
     let term1: f32 = TWO_PI * r0;
     let term2: f32 = sqrt(1.0 - r1);
@@ -522,5 +551,105 @@ fn DisneyBsdf::sample(_self: DisneyBsdf, i_n: vec3<f32>, tangent_to_world: mat3x
     } else {
         *pdf = 0.0;
     }
+    return value;
+}
+
+fn DisneyBsdf::evaluate(_self: DisneyBsdf, i_n: vec3<f32>, tangent_to_world: mat3x3<f32>, world_to_tangent: mat3x3<f32>,
+     wow: vec3<f32>, wiw: vec3<f32>, pdf: ptr<function, f32>) -> vec3<f32> {
+    if (_self.transmission > 0.5) {
+        let wol: vec3<f32> = world_to_tangent * wow;
+        let wil: vec3<f32> = world_to_tangent * wiw;
+
+        var eta: f32;
+        if (wol.z > 0.0) {
+            eta = _self.eta;
+        } else {
+            eta = 1.0 / _self.eta;
+        }
+        if (eta == 1.0) {
+            *pdf = 0.0;
+            return vec3<f32>(0.0);
+        }
+
+        let alpha: vec2<f32> = microfacet_alpha_from_roughness(_self.roughness, _self.anisotropic);
+        let ggx_mdf = GgxMdf::new(alpha.x, alpha.y);
+
+        var jacobian: f32;
+        var ret_val: vec3<f32>;
+        var m: vec3<f32>;
+        if (wil.z * wol.z >= 0.0) {
+            m = half_reflection_vector(wol, wil);
+            let cos_wom: f32 = dot(wol, m);
+            var cos_theta_t: f32;
+            let f: f32 = fresnel_reflectance(cos_wom, 1.0 / eta, &cos_theta_t);
+            ret_val = evaluate_reflection(_self.color, wol, wil, m, ggx_mdf, f);
+            let r_probability: f32 = choose_reflection_probability(1.0, 1.0, f);
+            *pdf = r_probability;
+            jacobian = reflection_jacobian(cos_wom);
+        } else {
+            m = half_refraction_vector(wol, wil, eta);
+            let cos_wom: f32 = dot(wol, m);
+            var cos_theta_t: f32;
+            let f: f32 = fresnel_reflectance(cos_wom, 1.0 / eta, &cos_theta_t);
+            ret_val = evaluate_refraction(eta, _self.color, false, wol, wil, m, ggx_mdf, 1.0 - f);
+            let r_probability: f32 = choose_reflection_probability(1.0, 1.0, f);
+            *pdf = 1.0 - r_probability;
+            jacobian = refraction_jacobian(wol, wil, m, eta);
+        }
+        *pdf *= jacobian * GgxMdf::pdf(ggx_mdf, wol, m);
+        return ret_val;
+    }
+
+    if (_self.roughness <= 0.001) {
+        *pdf = 0.0;
+        return vec3<f32>(0.0);
+    }
+
+    var weights = vec4<f32>(
+        mix(_self.luminance, 0.0, _self.metallic),
+        mix(_self.sheen, 0.0, _self.metallic),
+        mix(_self.specular, 1.0, _self.metallic),
+        _self.clearcoat * 0.25
+    );
+    weights *= 1.0 / (weights.x + weights.y + weights.z + weights.w);
+
+    *pdf = 0.0;
+    var value = vec3<f32>(0.0);
+    if (weights.x + weights.y > 0.0) {
+        let m: vec3<f32> = normalize(wiw + wow);
+        if (weights.x > 0.0) {
+            *pdf += weights.x * DisneyBsdf::evaluate_diffuse(_self, i_n, wow, wiw, m, &value); // TODO: is overwriting value correct?
+        }
+        if (weights.y > 0.0) {
+            *pdf += weights.y * DisneyBsdf::evaluate_sheen(_self, wow, wiw, m, &value);
+        }
+    }
+
+    if (weights.z + weights.w > 0.0) {
+        let wol: vec3<f32> = world_to_tangent * wow;
+        let wil: vec3<f32> = world_to_tangent * wiw;
+        let m: vec3<f32> = normalize(wol + wil);
+        if (weights.z > 0.0) {
+            let alpha: vec2<f32> = microfacet_alpha_from_roughness(_self.roughness, _self.anisotropic);
+            var contrib: vec3<f32>;
+            let spec_pdf: f32 = weights.z * DisneyBsdf::evaluate_mf(_self, alpha.x, alpha.y, wol, wil, m, false, &contrib);
+            
+            if (spec_pdf > 0.0) {
+                *pdf += weights.z * spec_pdf;
+                value += contrib; 
+            }
+        }
+        if (weights.w > 0.0) {
+            let alpha: f32 = DisneyBsdf::clearcoat_roughness(_self);
+            var contrib: vec3<f32>;
+            let clearcoat_pdf: f32 = weights.w * DisneyBsdf::evaluate_mf(_self, alpha, alpha, wol, wil, m, true, &contrib);
+            
+            if (clearcoat_pdf > 0.0) {
+                *pdf += weights.w * clearcoat_pdf;
+                value += contrib; 
+            }
+        }
+    }
+
     return value;
 }

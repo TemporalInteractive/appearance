@@ -32,7 +32,7 @@ pub struct Sky {
 impl Default for SunInfo {
     fn default() -> Self {
         Self {
-            direction: Vec3::new(0.0, -0.32, 0.94).normalize(),
+            direction: Vec3::new(-0.2, -1.0, 0.1).normalize(),
             color: Vec3::new(1.0, 1.0, 1.0),
             size: 0.5,
             intensity: 50.0,
