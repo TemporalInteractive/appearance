@@ -130,49 +130,49 @@ impl RenderLoop for HostRenderLoop {
             Transform::new(Vec3::new(3.0, 0.5, 0.0), Quat::IDENTITY, Vec3::splat(45.0)),
             |builder| builder.with(ModelComponent::new("::ToyCar.glb")),
         );
-        let _ = world.create_entity(
-            "Chess",
-            Transform::new(Vec3::new(-2.0, 0.5, 0.0), Quat::IDENTITY, Vec3::splat(3.0)),
-            |builder| builder.with(ModelComponent::new("::ABeautifulGame.glb")),
-        );
-        let _ = world.create_entity(
-            "Glass",
-            Transform::new(
-                Vec3::new(0.0, 1.0, 0.0),
-                Quat::from_axis_angle(UP, 90.0f32.to_radians()),
-                Vec3::splat(1.0),
-            ),
-            |builder| builder.with(ModelComponent::new("::GlassPanel.glb")),
-        );
-        let _ = world.create_entity(
-            "Dragon",
-            Transform::new(
-                Vec3::new(-4.0, 0.5, 0.0),
-                Quat::from_axis_angle(UP, 90.0f32.to_radians()),
-                Vec3::splat(0.5),
-            ),
-            |builder| builder.with(ModelComponent::new("::DragonAttenuation.glb")),
-        );
+        // let _ = world.create_entity(
+        //     "Chess",
+        //     Transform::new(Vec3::new(-2.0, 0.5, 0.0), Quat::IDENTITY, Vec3::splat(3.0)),
+        //     |builder| builder.with(ModelComponent::new("::ABeautifulGame.glb")),
+        // );
+        // let _ = world.create_entity(
+        //     "Glass",
+        //     Transform::new(
+        //         Vec3::new(0.0, 1.0, 0.0),
+        //         Quat::from_axis_angle(UP, 90.0f32.to_radians()),
+        //         Vec3::splat(1.0),
+        //     ),
+        //     |builder| builder.with(ModelComponent::new("::GlassPanel.glb")),
+        // );
+        // let _ = world.create_entity(
+        //     "Dragon",
+        //     Transform::new(
+        //         Vec3::new(-4.0, 0.5, 0.0),
+        //         Quat::from_axis_angle(UP, 90.0f32.to_radians()),
+        //         Vec3::splat(0.5),
+        //     ),
+        //     |builder| builder.with(ModelComponent::new("::DragonAttenuation.glb")),
+        // );
 
-        let _ = world.create_entity(
-            "ClearCoatTest",
-            Transform::new(
-                Vec3::new(0.0, 0.0, 15.0),
-                Quat::from_axis_angle(UP, 90.0f32.to_radians()),
-                Vec3::splat(1.0),
-            ),
-            |builder| builder.with(ModelComponent::new("::test_models/ClearCoatTest.glb")),
-        );
+        // let _ = world.create_entity(
+        //     "ClearCoatTest",
+        //     Transform::new(
+        //         Vec3::new(0.0, 0.0, 15.0),
+        //         Quat::from_axis_angle(UP, 90.0f32.to_radians()),
+        //         Vec3::splat(1.0),
+        //     ),
+        //     |builder| builder.with(ModelComponent::new("::test_models/ClearCoatTest.glb")),
+        // );
 
-        let _ = world.create_entity(
-            "AttenuationTest",
-            Transform::new(
-                Vec3::new(0.0, 0.0, 35.0),
-                Quat::from_axis_angle(UP, 90.0f32.to_radians()),
-                Vec3::splat(1.0),
-            ),
-            |builder| builder.with(ModelComponent::new("::test_models/AttenuationTest.glb")),
-        );
+        // let _ = world.create_entity(
+        //     "AttenuationTest",
+        //     Transform::new(
+        //         Vec3::new(0.0, 0.0, 35.0),
+        //         Quat::from_axis_angle(UP, 90.0f32.to_radians()),
+        //         Vec3::splat(1.0),
+        //     ),
+        //     |builder| builder.with(ModelComponent::new("::test_models/AttenuationTest.glb")),
+        // );
 
         Self {
             pipeline_database: PipelineDatabase::new(),
