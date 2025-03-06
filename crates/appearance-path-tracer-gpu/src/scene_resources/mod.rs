@@ -132,6 +132,7 @@ impl SceneResources {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn rebuild_tlas_rec(
         model_asset_path: String,
         model: &SceneModel,
@@ -140,6 +141,7 @@ impl SceneResources {
         mut blas_idx: u32,
         blas_instances: &mut Vec<wgpu::TlasInstance>,
         blas_idx_to_mesh_mapping: &mut HashMap<u32, (String, u32, Mat4)>,
+        vertex_pool: &mut VertexPool,
     ) -> u32 {
         let transform = parent_transform * model.nodes[node as usize].transform.get_matrix();
 
@@ -151,7 +153,7 @@ impl SceneResources {
                 (model_asset_path.clone(), node, inv_trans_transform),
             );
 
-            let transform = transform.transpose().to_cols_array()[..12]
+            let transform4x3 = transform.transpose().to_cols_array()[..12]
                 .try_into()
                 .unwrap();
 
@@ -160,10 +162,14 @@ impl SceneResources {
 
             blas_instances.push(wgpu::TlasInstance::new(
                 blas,
-                transform,
+                transform4x3,
                 vertex_slice_index,
                 0xff,
             ));
+
+            if model.is_emissive[*mesh_idx as usize] {
+                vertex_pool.submit_emissive_slice_instance(vertex_slice_index, transform);
+            }
 
             blas_idx += 1;
         }
@@ -177,6 +183,7 @@ impl SceneResources {
                 blas_idx,
                 blas_instances,
                 blas_idx_to_mesh_mapping,
+                vertex_pool,
             );
         }
 
@@ -207,6 +214,7 @@ impl SceneResources {
                             0,
                             &mut blas_instances,
                             &mut blas_idx_to_mesh_mapping,
+                            &mut self.vertex_pool,
                         );
                     } else {
                         entity_uuids_indices_to_remove.push(i);
@@ -240,5 +248,9 @@ impl SceneResources {
 
         command_encoder
             .build_acceleration_structures(iter::empty(), iter::once(&self.tlas_package));
+    }
+
+    pub fn end_frame(&mut self) {
+        self.vertex_pool.end_frame();
     }
 }

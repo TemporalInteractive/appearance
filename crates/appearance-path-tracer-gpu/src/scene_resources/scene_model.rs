@@ -12,6 +12,7 @@ use super::{
 pub struct SceneModel {
     pub root_nodes: Vec<u32>,
     pub blases: Vec<wgpu::Blas>,
+    pub is_emissive: Vec<bool>,
     pub vertex_pool_allocs: Vec<VertexPoolAlloc>,
     pub nodes: Vec<ModelNode>,
 }
@@ -26,6 +27,7 @@ impl SceneModel {
         queue: &wgpu::Queue,
     ) -> Self {
         let mut blases = vec![];
+        let mut is_emissive = vec![];
         let mut vertex_pool_allocs = vec![];
 
         // TODO: make this into an offset, supply per triangle / primitive material indices
@@ -101,12 +103,14 @@ impl SceneModel {
             command_encoder.build_acceleration_structures(iter::once(&build_entry), iter::empty());
 
             blases.push(blas);
+            is_emissive.push(mesh.is_emissive);
             vertex_pool_allocs.push(vertex_pool_alloc);
         }
 
         Self {
             root_nodes: model.root_nodes,
             blases,
+            is_emissive,
             vertex_pool_allocs,
             nodes: model.nodes,
         }

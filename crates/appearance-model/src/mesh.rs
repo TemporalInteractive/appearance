@@ -9,6 +9,7 @@ pub struct Mesh {
     pub triangle_material_indices: Vec<u32>,
     pub indices: Vec<u32>,
     pub opaque: bool,
+    pub is_emissive: bool,
 }
 
 impl Mesh {
@@ -20,6 +21,7 @@ impl Mesh {
         triangle_material_indices: Vec<u32>,
         indices: Vec<u32>,
         opaque: bool,
+        is_emissive: bool,
     ) -> Self {
         debug_assert_eq!(triangle_material_indices.len(), indices.len() / 3);
 
@@ -31,6 +33,7 @@ impl Mesh {
             triangle_material_indices,
             indices,
             opaque,
+            is_emissive,
         }
     }
 

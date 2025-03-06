@@ -127,6 +127,7 @@ fn process_node(
             let mut mesh_triangle_material_indices = vec![];
             let mut mesh_indices = vec![];
             let mut opaque = true;
+            let mut is_emissive = false;
 
             for primitive in mesh.primitives() {
                 if primitive.mode() == gltf::mesh::Mode::Triangles {
@@ -329,6 +330,7 @@ fn process_node(
                     }
 
                     opaque = opaque && material.is_opaque;
+                    is_emissive = is_emissive || material.is_emissive();
                 } else {
                     panic!("Only triangles are supported.");
                 }
@@ -342,6 +344,7 @@ fn process_node(
                 mesh_triangle_material_indices,
                 mesh_indices,
                 opaque,
+                is_emissive,
             );
             if !mesh.has_normals() {
                 mesh.generate_normals();

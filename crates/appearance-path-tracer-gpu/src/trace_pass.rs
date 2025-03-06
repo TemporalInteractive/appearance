@@ -164,7 +164,7 @@ pub fn encode(
             cpass.set_bind_group(0, &bind_group, &[]);
             cpass.set_bind_group(
                 1,
-                parameters.scene_resources.vertex_pool().bind_group(),
+                &parameters.scene_resources.vertex_pool().bind_group(device),
                 &[],
             );
             cpass.set_bind_group(2, material_pool_bind_group, &[]);

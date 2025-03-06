@@ -234,5 +234,6 @@ impl PathTracerGpu {
         result_callback(&pixels);
 
         self.frame_idx += 1;
+        self.scene_resources.end_frame();
     }
 }

@@ -7,6 +7,8 @@
 @include appearance-path-tracer-gpu::shared/material_pool_bindings
 @include appearance-path-tracer-gpu::shared/sky_bindings
 
+@include appearance-path-tracer-gpu::shared/nee
+
 struct Constants {
     ray_count: u32,
     bounce: u32,
@@ -163,12 +165,37 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
 
             let disney_bsdf = DisneyBsdf::from_material(material);
 
-            let shadow_direction: vec3<f32> = Sky::direction_to_sun(vec2<f32>(random_uniform_float(&rng), random_uniform_float(&rng)));
+            // let shadow_direction: vec3<f32> = Sky::direction_to_sun(vec2<f32>(random_uniform_float(&rng), random_uniform_float(&rng)));
+            // let shadow_origin: vec3<f32> = hit_point_ws + shadow_direction * 0.0001;
+            // let n_dot_l: f32 = dot(shadow_direction, front_facing_shading_normal_ws);
+            // if (n_dot_l > 0.0) {
+            //     var shadow_rq: ray_query;
+            //     rayQueryInitialize(&shadow_rq, scene, RayDesc(0x4, 0xFFu, 0.0, 1000.0, shadow_origin, shadow_direction));
+            //     rayQueryProceed(&shadow_rq);
+            //     let intersection = rayQueryGetCommittedIntersection(&shadow_rq);
+            //     if (intersection.kind != RAY_QUERY_INTERSECTION_TRIANGLE) {
+            //         let w_in_worldspace: vec3<f32> = shadow_direction;
+
+            //         var shading_pdf: f32;
+            //         let reflectance: vec3<f32> = DisneyBsdf::evaluate(disney_bsdf, front_facing_shading_normal_ws, tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
+            //             w_out_worldspace, w_in_worldspace, &shading_pdf);
+
+            //         let sun_intensity: f32 = Sky::sun_intensity(shadow_direction.y);
+
+            //         let sun_contribution: vec3<f32> = throughput * reflectance * sun_intensity * n_dot_l;
+            //         accumulated += sun_contribution;
+            //     };
+            // }
+
+            let light_sample: LightSample = Nee::sample_emissive_triangle(random_uniform_float(&rng), random_uniform_float(&rng),
+                vec2<f32>(random_uniform_float(&rng), random_uniform_float(&rng)),
+                hit_point_ws, 0.0);
+            let shadow_direction: vec3<f32> = light_sample.direction;
             let shadow_origin: vec3<f32> = hit_point_ws + shadow_direction * 0.0001;
             let n_dot_l: f32 = dot(shadow_direction, front_facing_shading_normal_ws);
-            if (n_dot_l > 0.0) {
+            if (n_dot_l > 0.0 && light_sample.pdf > 0.0) {
                 var shadow_rq: ray_query;
-                rayQueryInitialize(&shadow_rq, scene, RayDesc(0x4, 0xFFu, 0.0, 1000.0, shadow_origin, shadow_direction));
+                rayQueryInitialize(&shadow_rq, scene, RayDesc(0x4, 0xFFu, 0.0, light_sample.distance, shadow_origin, shadow_direction));
                 rayQueryProceed(&shadow_rq);
                 let intersection = rayQueryGetCommittedIntersection(&shadow_rq);
                 if (intersection.kind != RAY_QUERY_INTERSECTION_TRIANGLE) {
@@ -178,10 +205,11 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
                     let reflectance: vec3<f32> = DisneyBsdf::evaluate(disney_bsdf, front_facing_shading_normal_ws, tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
                         w_out_worldspace, w_in_worldspace, &shading_pdf);
 
-                    let sun_intensity: f32 = Sky::sun_intensity(shadow_direction.y);
+                    let light_intensity: vec3<f32> = Nee::emissive_triangle_intensity(light_sample.triangle, light_sample.distance, shadow_direction) * light_sample.emission;
+                    //vec3<f32>(Sky::sun_intensity(shadow_direction.y));
 
-                    let sun_contribution: vec3<f32> = throughput * reflectance * sun_intensity * n_dot_l;
-                    accumulated += sun_contribution;
+                    let contribution: vec3<f32> = throughput * reflectance * light_intensity * n_dot_l / light_sample.pdf;
+                    accumulated += contribution;
                 };
             }
 
