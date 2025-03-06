@@ -161,16 +161,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
                 }
             }
 
-            // let clearcoat_tangent_to_world: mat3x3<f32> = build_orthonormal_basis(hit_normal_ws);
-            // let clearcoat_world_to_tangent: mat3x3<f32> = transpose(clearcoat_tangent_to_world);
-
-            // let diffuse_lobe = DiffuseLobe::new(material.base_color.rgb);
-            // let bsdf_sample: BsdfSample = DiffuseLobe::sample(diffuse_lobe, random_uniform_float2(&rng));
-            // var bsdf_eval: BsdfEval = DiffuseLobe::eval(diffuse_lobe);
-
-            // var w_in_worldspace: vec3<f32>;
-            // let sample_valid: bool = apply_bsdf(bsdf_sample, bsdf_eval, tangent_to_world, normal, &throughput, &w_in_worldspace);
-
             let disney_bsdf = DisneyBsdf::from_material(material);
 
             let shadow_direction: vec3<f32> = Sky::direction_to_sun(vec2<f32>(random_uniform_float(&rng), random_uniform_float(&rng)));
