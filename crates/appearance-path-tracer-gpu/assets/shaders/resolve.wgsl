@@ -4,8 +4,8 @@
 struct Constants {
     width: u32,
     height: u32,
+    sample_count: u32,
     _padding0: u32,
-    _padding1: u32,
 }
 
 @group(0)
@@ -42,6 +42,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     var payload: Payload = payloads[i];
     var accumulated: vec3<f32> = PackedRgb9e5::unpack(payload.accumulated);
 
+    accumulated /= f32(constants.sample_count);
     accumulated = hdr_to_sdr(accumulated);
 
     let block_id: vec2<u32> = linear_to_block_pixel_idx(id, constants.width);

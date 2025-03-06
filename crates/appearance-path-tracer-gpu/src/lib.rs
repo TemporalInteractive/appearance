@@ -67,11 +67,15 @@ impl SizedResources {
 #[derive(Debug, Clone, Copy)]
 pub struct PathTracerGpuConfig {
     max_bounces: u32,
+    sample_count: u32,
 }
 
 impl Default for PathTracerGpuConfig {
     fn default() -> Self {
-        Self { max_bounces: 5 }
+        Self {
+            max_bounces: 5,
+            sample_count: 1,
+        }
     }
 }
 
@@ -171,41 +175,47 @@ impl PathTracerGpu {
         self.scene_resources
             .rebuild_tlas(&mut command_encoder, &ctx.queue);
 
-        raygen_pass::encode(
-            &RaygenPassParameters {
-                inv_view,
-                inv_proj,
-                resolution: self.local_resolution,
-                rays: &self.sized_resources.rays[0],
-            },
-            &ctx.device,
-            &mut command_encoder,
-            pipeline_database,
-        );
-
-        for i in 0..self.config.max_bounces {
-            let in_rays = &self.sized_resources.rays[(i as usize) % 2];
-            let out_rays = &self.sized_resources.rays[(i as usize + 1) % 2];
-
-            trace_pass::encode(
-                &TracePassParameters {
-                    ray_count: self.local_resolution.x * self.local_resolution.y,
-                    bounce: i,
-                    seed: self.frame_idx,
-                    in_rays,
-                    out_rays,
-                    payloads: &self.sized_resources.payloads,
-                    scene_resources: &self.scene_resources,
+        for sample in 0..self.config.sample_count {
+            raygen_pass::encode(
+                &RaygenPassParameters {
+                    inv_view,
+                    inv_proj,
+                    resolution: self.local_resolution,
+                    rays: &self.sized_resources.rays[0],
                 },
                 &ctx.device,
                 &mut command_encoder,
                 pipeline_database,
             );
+
+            for i in 0..self.config.max_bounces {
+                let in_rays = &self.sized_resources.rays[(i as usize) % 2];
+                let out_rays = &self.sized_resources.rays[(i as usize + 1) % 2];
+
+                let seed = self.frame_idx * self.config.sample_count + sample;
+
+                trace_pass::encode(
+                    &TracePassParameters {
+                        ray_count: self.local_resolution.x * self.local_resolution.y,
+                        bounce: i,
+                        seed,
+                        sample,
+                        in_rays,
+                        out_rays,
+                        payloads: &self.sized_resources.payloads,
+                        scene_resources: &self.scene_resources,
+                    },
+                    &ctx.device,
+                    &mut command_encoder,
+                    pipeline_database,
+                );
+            }
         }
 
         resolve_pass::encode(
             &ResolvePassParameters {
                 resolution: self.local_resolution,
+                sample_count: self.config.sample_count,
                 payloads: &self.sized_resources.payloads,
                 target_view: self.sized_resources.film.texture_view(),
             },

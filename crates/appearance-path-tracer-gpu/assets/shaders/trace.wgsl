@@ -11,7 +11,7 @@ struct Constants {
     ray_count: u32,
     bounce: u32,
     seed: u32,
-    _padding0: u32,
+    sample: u32,
 }
 
 @group(0)
@@ -47,8 +47,12 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
 
     var payload: Payload = payloads[id];
     if (constants.bounce == 0) {
-        let rng = pcg_hash(id ^ xor_shift_u32(constants.seed));
-        payload = Payload::new(vec3<f32>(0.0, 0.0, 0.0), vec3<f32>(1.0, 1.0, 1.0), rng, 1);
+        if (constants.sample == 0) {
+            payload.accumulated = PackedRgb9e5::new(vec3<f32>(0.0));
+        }
+        payload.throughput = PackedRgb9e5::new(vec3<f32>(1.0));
+        payload.rng = pcg_hash(id ^ xor_shift_u32(constants.seed));
+        payload.alive = 1;
     }
 
     if (payload.alive == 0) { return; } // TODO: indirect dispatch with pids

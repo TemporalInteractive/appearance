@@ -14,12 +14,13 @@ struct Constants {
     ray_count: u32,
     bounce: u32,
     seed: u32,
-    _padding0: u32,
+    sample: u32,
 }
 
 pub struct TracePassParameters<'a> {
     pub ray_count: u32,
     pub bounce: u32,
+    pub sample: u32,
     pub seed: u32,
     pub in_rays: &'a wgpu::Buffer,
     pub out_rays: &'a wgpu::Buffer,
@@ -116,7 +117,7 @@ pub fn encode(
             ray_count: parameters.ray_count,
             bounce: parameters.bounce,
             seed: parameters.seed,
-            _padding0: 0,
+            sample: parameters.sample,
         }),
         usage: wgpu::BufferUsages::UNIFORM,
     });

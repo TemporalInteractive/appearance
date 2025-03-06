@@ -12,12 +12,13 @@ use glam::UVec2;
 struct Constants {
     width: u32,
     height: u32,
+    sample_count: u32,
     _padding0: u32,
-    _padding1: u32,
 }
 
 pub struct ResolvePassParameters<'a> {
     pub resolution: UVec2,
+    pub sample_count: u32,
     pub payloads: &'a wgpu::Buffer,
     pub target_view: &'a wgpu::TextureView,
 }
@@ -88,8 +89,8 @@ pub fn encode(
         contents: bytemuck::bytes_of(&Constants {
             width: parameters.resolution.x,
             height: parameters.resolution.y,
+            sample_count: parameters.sample_count,
             _padding0: 0,
-            _padding1: 0,
         }),
         usage: wgpu::BufferUsages::UNIFORM,
     });
