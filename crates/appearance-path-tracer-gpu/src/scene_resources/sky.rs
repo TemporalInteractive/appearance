@@ -35,7 +35,7 @@ impl Default for SunInfo {
             direction: Vec3::new(-0.2, -1.0, 0.1).normalize(),
             color: Vec3::new(1.0, 1.0, 1.0),
             size: 0.5,
-            intensity: 50.0,
+            intensity: 0.0, //50.0,
         }
     }
 }
