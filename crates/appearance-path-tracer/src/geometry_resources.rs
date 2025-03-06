@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use crate::{
     light_sources::{
-        distant_light::DistantLight, infinite_light::InfiniteLight, point_light::PointLight,
+        distant_light::DistantLight, infinite_light::InfiniteLight,
         uniform_light_sampler::UniformLightSourceSampler, LightSourceSampler,
     },
     radiometry::{

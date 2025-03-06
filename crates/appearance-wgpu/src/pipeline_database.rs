@@ -5,6 +5,7 @@ use std::{
     collections::HashMap,
     sync::{Arc, OnceLock},
 };
+use uuid::Uuid;
 
 use appearance_asset_database::{Asset, AssetDatabase};
 
@@ -12,6 +13,7 @@ pub struct ShaderAsset {
     pub file_path: String,
     pub src: String,
     shader_module: OnceLock<wgpu::ShaderModule>,
+    uuid: Uuid,
 }
 
 impl Asset for ShaderAsset {
@@ -22,7 +24,12 @@ impl Asset for ShaderAsset {
             file_path: file_path.to_owned(),
             src,
             shader_module: OnceLock::new(),
+            uuid: Uuid::new_v4(),
         })
+    }
+
+    fn uuid(&self) -> uuid::Uuid {
+        self.uuid
     }
 }
 
@@ -98,11 +105,15 @@ impl PipelineDatabase {
         module
     }
 
-    pub fn render_pipeline(
+    pub fn render_pipeline<F>(
         &mut self,
         device: &wgpu::Device,
         descriptor: wgpu::RenderPipelineDescriptor,
-    ) -> Arc<wgpu::RenderPipeline> {
+        create_layout_fn: F,
+    ) -> Arc<wgpu::RenderPipeline>
+    where
+        F: Fn() -> wgpu::PipelineLayout, //d
+    {
         appearance_profiling::profile_function!();
 
         let entry = descriptor
@@ -112,6 +123,12 @@ impl PipelineDatabase {
             return pipeline.clone();
         }
 
+        let pipeline_layout = create_layout_fn();
+        let descriptor = wgpu::RenderPipelineDescriptor {
+            layout: Some(&pipeline_layout),
+            ..descriptor
+        };
+
         let pipeline = Arc::new(device.create_render_pipeline(&descriptor));
 
         self.render_pipelines
@@ -119,11 +136,15 @@ impl PipelineDatabase {
         pipeline
     }
 
-    pub fn compute_pipeline(
+    pub fn compute_pipeline<F>(
         &mut self,
         device: &wgpu::Device,
         descriptor: wgpu::ComputePipelineDescriptor,
-    ) -> Arc<wgpu::ComputePipeline> {
+        create_layout_fn: F,
+    ) -> Arc<wgpu::ComputePipeline>
+    where
+        F: Fn() -> wgpu::PipelineLayout,
+    {
         appearance_profiling::profile_function!();
 
         let entry = descriptor
@@ -132,6 +153,12 @@ impl PipelineDatabase {
         if let Some(pipeline) = self.compute_pipelines.get(entry) {
             return pipeline.clone();
         }
+
+        let pipeline_layout = create_layout_fn();
+        let descriptor = wgpu::ComputePipelineDescriptor {
+            layout: Some(&pipeline_layout),
+            ..descriptor
+        };
 
         let pipeline = Arc::new(device.create_compute_pipeline(&descriptor));
 

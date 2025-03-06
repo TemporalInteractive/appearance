@@ -15,8 +15,8 @@ fn parse_shader_includes_recursive(name: &str, includes: &mut Vec<String>) -> St
     }
     includes.push(file_path.clone());
 
-    let mut contents =
-        std::fs::read_to_string(format!("{}.wgsl", file_path)).expect("Invalid shader name.");
+    let mut contents = std::fs::read_to_string(format!("{}.wgsl", file_path))
+        .unwrap_or_else(|_| panic!("Invalid shader name: {}.", file_path));
 
     let mut include_indices: Vec<usize> = contents.match_indices("@include").map(|i| i.0).collect();
     include_indices.reverse();

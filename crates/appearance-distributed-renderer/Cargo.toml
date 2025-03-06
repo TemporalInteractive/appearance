@@ -1,0 +1,17 @@
+[package]
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+name = "appearance-distributed-renderer"
+publish.workspace = true
+version = "0.1.0"
+
+[dependencies]
+appearance-path-tracer-gpu.workspace = true
+appearance-render-loop.workspace = true
+appearance-wgpu.workspace = true
+appearance-world.workspace = true
+
+futures.workspace = true
+glam.workspace = true

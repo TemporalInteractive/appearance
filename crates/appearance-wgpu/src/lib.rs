@@ -1,5 +1,7 @@
-use std::sync::Arc;
+use std::{future::IntoFuture, sync::Arc};
 
+use bytemuck::Pod;
+use futures::{channel::oneshot, executor::block_on};
 use wgpu::{DownlevelCapabilities, Features, Instance, Limits, PowerPreference};
 use winit::{
     dpi::PhysicalSize,
@@ -118,7 +120,7 @@ impl Surface {
                 wgpu::SurfaceError::Outdated
                 | wgpu::SurfaceError::Lost
                 // If OutOfMemory happens, reconfiguring may not help, but we might as well try
-                | wgpu::SurfaceError::OutOfMemory,
+                | wgpu::SurfaceError::OutOfMemory | wgpu::SurfaceError::Other,
             ) => {
                 surface.configure(&context.device, self.config());
                 surface
@@ -154,28 +156,13 @@ pub struct Context {
 }
 
 impl Context {
-    pub async fn init_async(
-        surface: &mut Surface,
-        window: Arc<Window>,
+    async fn init_with_instance(
+        instance: Instance,
         optional_features: Features,
         required_features: Features,
         required_downlevel_capabilities: DownlevelCapabilities,
         required_limits: Limits,
     ) -> Self {
-        log::info!("Initializing wgpu...");
-
-        let backends = wgpu::util::backend_bits_from_env().unwrap_or_default();
-        let dx12_shader_compiler = wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default();
-        let gles_minor_version = wgpu::util::gles_minor_version_from_env().unwrap_or_default();
-
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends,
-            flags: wgpu::InstanceFlags::DEBUG, //wgpu::InstanceFlags::from_build_config().with_env(),
-            dx12_shader_compiler,
-            gles_minor_version,
-        });
-        surface.pre_adapter(&instance, window);
-
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: PowerPreference::HighPerformance,
@@ -227,6 +214,57 @@ impl Context {
             queue,
         }
     }
+
+    pub async fn init_with_window(
+        surface: &mut Surface,
+        window: Arc<Window>,
+        optional_features: Features,
+        required_features: Features,
+        required_downlevel_capabilities: DownlevelCapabilities,
+        required_limits: Limits,
+    ) -> Self {
+        log::info!("Initializing wgpu...");
+
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::VULKAN,
+            flags: wgpu::InstanceFlags::DEBUG | wgpu::InstanceFlags::VALIDATION,
+            backend_options: wgpu::BackendOptions::default(),
+        });
+        surface.pre_adapter(&instance, window);
+
+        Self::init_with_instance(
+            instance,
+            optional_features,
+            required_features,
+            required_downlevel_capabilities,
+            required_limits,
+        )
+        .await
+    }
+
+    pub async fn init(
+        optional_features: Features,
+        required_features: Features,
+        required_downlevel_capabilities: DownlevelCapabilities,
+        required_limits: Limits,
+    ) -> Self {
+        log::info!("Initializing wgpu...");
+
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::VULKAN,
+            flags: wgpu::InstanceFlags::DEBUG | wgpu::InstanceFlags::VALIDATION,
+            backend_options: wgpu::BackendOptions::default(),
+        });
+
+        Self::init_with_instance(
+            instance,
+            optional_features,
+            required_features,
+            required_downlevel_capabilities,
+            required_limits,
+        )
+        .await
+    }
 }
 
 pub trait ComputePipelineDescriptorExtensions<'a> {
@@ -239,9 +277,56 @@ impl<'a> ComputePipelineDescriptorExtensions<'a> for wgpu::ComputePipelineDescri
             label: None,
             layout: None,
             module,
-            entry_point: Some("main"),
+            entry_point: None,
             compilation_options: wgpu::PipelineCompilationOptions::default(),
             cache: None,
         }
     }
+}
+
+pub async fn readback_buffer_async<T: Pod>(
+    staging_buffer: &wgpu::Buffer,
+    device: &wgpu::Device,
+) -> Vec<T> {
+    let buffer_slice = staging_buffer.slice(..);
+    let (sender, receiver) = oneshot::channel();
+    buffer_slice.map_async(wgpu::MapMode::Read, move |v| sender.send(v).unwrap());
+
+    device.poll(wgpu::PollType::Wait).unwrap();
+    receiver.into_future().await.unwrap().unwrap();
+
+    let data = buffer_slice.get_mapped_range();
+    let result = bytemuck::cast_slice(&data).to_vec();
+    drop(data);
+    staging_buffer.unmap();
+    result
+}
+
+pub fn readback_buffer<T: Pod>(staging_buffer: &wgpu::Buffer, device: &wgpu::Device) -> Vec<T> {
+    block_on(readback_buffer_async(staging_buffer, device))
+}
+
+static EMPTY_TEXTURE_VIEW: std::sync::OnceLock<wgpu::TextureView> = std::sync::OnceLock::new();
+
+pub fn empty_texture_view(device: &wgpu::Device) -> &wgpu::TextureView {
+    EMPTY_TEXTURE_VIEW.get_or_init(|| {
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            size: wgpu::Extent3d {
+                width: 1,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING,
+            label: Some("Empty"),
+            view_formats: &[],
+        });
+        texture.create_view(&wgpu::TextureViewDescriptor {
+            dimension: Some(wgpu::TextureViewDimension::D2),
+            ..Default::default()
+        })
+    })
 }

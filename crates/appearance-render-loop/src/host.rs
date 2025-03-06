@@ -16,8 +16,10 @@ use unreliable::{Socket, SocketEvent};
 /// Size of each rendered block is a multiple of 8x8, as this is the minimum size jpeg is able to compress. This must also be a multiple of `PATH_TRACER_RAY_PACKET_SIZE`, which is 16.
 pub const RENDER_BLOCK_SIZE: u32 = 64;
 pub const BYTES_PER_PIXEL: usize = 4;
-pub const NODE_BYTES_PER_PIXEL: usize = 3;
-pub const NODE_PIXEL_FORMAT: turbojpeg::PixelFormat = turbojpeg::PixelFormat::RGB;
+pub const NODE_BYTES_PER_PIXEL: usize = 4;
+
+pub const ENABLE_COMPRESSION: bool = true;
+pub const NODE_PIXEL_FORMAT: turbojpeg::PixelFormat = turbojpeg::PixelFormat::RGBX;
 
 pub struct RenderPartialFinishedData {
     pub row: u32,
@@ -194,21 +196,17 @@ impl BufferedPixelData {
         }
 
         if let Ok(mut pixels) = self.pixels[idx].lock() {
-            for local_y in 0..RENDER_BLOCK_SIZE {
-                for local_x in 0..RENDER_BLOCK_SIZE {
-                    let x =
-                        local_x + (render_partial_finished_data.column_block * RENDER_BLOCK_SIZE);
-                    let y = local_y + render_partial_finished_data.row;
+            unsafe {
+                let bytes_per_block = RENDER_BLOCK_SIZE * RENDER_BLOCK_SIZE * 4;
+                let blocks_per_row = self.width / RENDER_BLOCK_SIZE;
+                let offset = render_partial_finished_data.column_block * bytes_per_block
+                    + (render_partial_finished_data.row / RENDER_BLOCK_SIZE)
+                        * blocks_per_row
+                        * bytes_per_block;
 
-                    let id = (y * self.width + x) as usize;
-                    let local_id = (local_y * RENDER_BLOCK_SIZE + local_x) as usize;
-
-                    for i in 0..NODE_BYTES_PER_PIXEL {
-                        pixels[id * BYTES_PER_PIXEL + i] =
-                            render_pixels[local_id * NODE_BYTES_PER_PIXEL + i];
-                    }
-                    pixels[id * BYTES_PER_PIXEL + BYTES_PER_PIXEL - 1] = 255;
-                }
+                let dst_ptr = &mut pixels[offset as usize] as *mut u8;
+                let src_ptr = &render_pixels[0] as *const u8;
+                std::ptr::copy_nonoverlapping(src_ptr, dst_ptr, bytes_per_block as usize);
             }
         }
 
@@ -255,6 +253,9 @@ pub struct Host {
     socket: Socket,
     node_port: u16,
 
+    receive_events_thread: Option<thread::JoinHandle<()>>,
+    receive_events_running: Arc<AtomicBool>,
+
     width: u32,
     height: u32,
     pixels: Arc<BufferedPixelData>,
@@ -266,43 +267,66 @@ impl Host {
         let connected_nodes = Arc::new(Mutex::new(Vec::new()));
         let has_received_new_connections = Arc::new(AtomicBool::new(false));
         let pixels = Arc::new(BufferedPixelData::new(width, height));
+        let socket = Socket::new(None, host_port)?;
 
-        let mut socket = Socket::new(None, host_port)?;
-
-        let receive_events_event_receiver = socket.event_receiver().clone();
-        let recieve_events_connected_nodes = connected_nodes.clone();
-        let recieve_events_has_received_new_connections = has_received_new_connections.clone();
-        let recieve_events_pixels = pixels.clone();
-        thread::spawn(move || {
-            Self::receive_events(
-                receive_events_event_receiver,
-                recieve_events_connected_nodes,
-                recieve_events_has_received_new_connections,
-                recieve_events_pixels,
-            )
-        });
-
-        Ok(Self {
+        let mut host = Self {
             connected_nodes,
             has_received_new_connections,
             socket,
             node_port,
 
+            receive_events_thread: None,
+            receive_events_running: Arc::new(AtomicBool::new(false)),
+
             width,
             height,
             pixels,
             frame_idx: 0,
-        })
+        };
+
+        host.respawn_recieve_events();
+
+        Ok(host)
+    }
+
+    fn respawn_recieve_events(&mut self) {
+        println!("Respawn recieve events...");
+
+        if let Some(receive_events_thread) = self.receive_events_thread.take() {
+            println!("Trying to kill current thread");
+            self.receive_events_running.store(false, Ordering::SeqCst);
+            let _ = receive_events_thread.join();
+            println!("Killed current thread!");
+        }
+
+        self.receive_events_running.store(true, Ordering::SeqCst);
+
+        let receive_events_event_receiver = self.socket.event_receiver().clone();
+        let recieve_events_connected_nodes = self.connected_nodes.clone();
+        let recieve_events_has_received_new_connections = self.has_received_new_connections.clone();
+        let recieve_events_receive_events_running = self.receive_events_running.clone();
+        let recieve_events_pixels = self.pixels.clone();
+        self.receive_events_thread = Some(thread::spawn(move || {
+            Self::receive_events(
+                receive_events_event_receiver,
+                recieve_events_connected_nodes,
+                recieve_events_has_received_new_connections,
+                recieve_events_receive_events_running,
+                recieve_events_pixels,
+            )
+        }));
+        println!("Spawned new thread!");
     }
 
     fn receive_events(
         event_receiver: Receiver<SocketEvent>,
         connected_nodes: Arc<Mutex<Vec<SocketAddr>>>,
         has_received_new_connections: Arc<AtomicBool>,
+        receive_events_running: Arc<AtomicBool>,
         pixels: Arc<BufferedPixelData>,
     ) {
-        loop {
-            if let Ok(socket_event) = event_receiver.recv() {
+        while receive_events_running.load(Ordering::SeqCst) {
+            if let Ok(socket_event) = event_receiver.try_recv() {
                 match socket_event {
                     SocketEvent::Packet(packet, delay) => {
                         if delay > 1 {
@@ -314,13 +338,21 @@ impl Host {
                             if let Ok(message) = NodeToHostMessage::from_bytes(packet.payload()) {
                                 match message {
                                     NodeToHostMessage::RenderPartialFinished(data) => {
-                                        let image = turbojpeg::decompress(
-                                            &data.compressed_pixel_bytes,
-                                            NODE_PIXEL_FORMAT,
-                                        )
-                                        .unwrap();
+                                        let uncompressed_pixels = if ENABLE_COMPRESSION {
+                                            turbojpeg::decompress(
+                                                &data.compressed_pixel_bytes,
+                                                NODE_PIXEL_FORMAT,
+                                            )
+                                            .unwrap()
+                                            .pixels
+                                        } else {
+                                            data.compressed_pixel_bytes.clone()
+                                        };
 
-                                        pixels.write_render_finished_pixels(&image.pixels, data);
+                                        pixels.write_render_finished_pixels(
+                                            &uncompressed_pixels,
+                                            data,
+                                        );
 
                                         // TODO: in the future the 8x8 blocks can be memcpied, however this will require a more advanced blit pass to display correctly
                                         // let first_dst_pixel = (data.row * width) + data.row_start;
@@ -369,6 +401,17 @@ impl Host {
 
             thread::yield_now();
         }
+    }
+
+    pub fn resize(&mut self, width: u32, height: u32) {
+        self.width = width;
+        self.height = height;
+
+        // Invalidate any current incoming pixels by skipping a few frames ahead
+        self.frame_idx += 3;
+        self.pixels = Arc::new(BufferedPixelData::new(width, height));
+
+        self.respawn_recieve_events();
     }
 
     pub fn send_visible_world_actions(&mut self, visible_world_actions: Vec<VisibleWorldAction>) {

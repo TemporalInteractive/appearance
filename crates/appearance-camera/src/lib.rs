@@ -117,7 +117,7 @@ impl Camera {
         let mut matrix = self.matrix.lock().unwrap();
 
         if matrix.1 {
-            matrix.0 = Mat4::perspective_lh(
+            matrix.0 = Mat4::perspective_rh(
                 self.fov.to_radians(),
                 self.aspect_ratio,
                 self.near,
@@ -160,11 +160,11 @@ impl CameraController {
 
         self.vertical_rotation *= Quat::from_axis_angle(
             UP,
-            (input.mouse_motion().x * self.look_sensitivity).to_radians(),
+            (-input.mouse_motion().x * self.look_sensitivity).to_radians(),
         );
         self.horizontal_rotation *= Quat::from_axis_angle(
             RIGHT,
-            (input.mouse_motion().y * self.look_sensitivity).to_radians(),
+            (-input.mouse_motion().y * self.look_sensitivity).to_radians(),
         );
         transform.set_rotation(self.vertical_rotation * self.horizontal_rotation);
 

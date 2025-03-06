@@ -8,6 +8,7 @@ pub const CRATES: &[&str] = &[
     "appearance-input",
     "appearance-model",
     "appearance-path-tracer",
+    "appearance-path-tracer-gpu",
     "appearance-profiling",
     "appearance-render-loop",
     "appearance-texture",

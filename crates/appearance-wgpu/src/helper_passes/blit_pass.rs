@@ -17,7 +17,7 @@ pub fn encode(
     let pipeline = pipeline_database.render_pipeline(
         device,
         wgpu::RenderPipelineDescriptor {
-            label: Some("blit_pass"),
+            label: Some("appearance-wgpu::blit"),
             layout: None,
             vertex: wgpu::VertexState {
                 module: &shader,
@@ -36,6 +36,37 @@ pub fn encode(
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
             cache: None,
+        },
+        || {
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("appearance-wgpu::blit"),
+                bind_group_layouts: &[&device.create_bind_group_layout(
+                    &wgpu::BindGroupLayoutDescriptor {
+                        label: None,
+                        entries: &[
+                            wgpu::BindGroupLayoutEntry {
+                                binding: 0,
+                                visibility: wgpu::ShaderStages::FRAGMENT,
+                                ty: wgpu::BindingType::Texture {
+                                    sample_type: wgpu::TextureSampleType::Float {
+                                        filterable: true,
+                                    },
+                                    view_dimension: wgpu::TextureViewDimension::D2,
+                                    multisampled: false,
+                                },
+                                count: None,
+                            },
+                            wgpu::BindGroupLayoutEntry {
+                                binding: 1,
+                                visibility: wgpu::ShaderStages::FRAGMENT,
+                                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                                count: None,
+                            },
+                        ],
+                    },
+                )],
+                push_constant_ranges: &[],
+            })
         },
     );
 

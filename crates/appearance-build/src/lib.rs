@@ -1,9 +1,8 @@
 use std::path::{Path, PathBuf};
 
+mod shader_resolve;
 use shader_resolve::parse_shader_includes;
 pub use xshell::Shell;
-
-mod shader_resolve;
 
 const ASSET_DIR_IGNORE: &[&str] = &["target", ".gitignore", ".vscode"];
 

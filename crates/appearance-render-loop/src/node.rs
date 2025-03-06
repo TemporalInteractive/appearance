@@ -1,4 +1,5 @@
 use core::{net::SocketAddr, ops::FnMut, sync::atomic::Ordering};
+use glam::UVec2;
 use std::thread;
 
 use anyhow::Result;
@@ -7,7 +8,7 @@ use unreliable::{Socket, SocketEvent};
 
 use crate::host::{
     HostToNodeMessage, NodeToHostMessage, RenderPartialFinishedData, StartRenderData,
-    NODE_BYTES_PER_PIXEL, NODE_PIXEL_FORMAT, RENDER_BLOCK_SIZE,
+    ENABLE_COMPRESSION, NODE_BYTES_PER_PIXEL, NODE_PIXEL_FORMAT, RENDER_BLOCK_SIZE,
 };
 
 pub trait NodeRenderer {
@@ -16,8 +17,7 @@ pub trait NodeRenderer {
 
     fn render<F: FnMut(&[u8])>(
         &mut self,
-        width: u32,
-        height: u32,
+        resolution: UVec2,
         start_row: u32,
         end_row: u32,
         result_callback: F,
@@ -45,8 +45,7 @@ impl<T: NodeRenderer + 'static> Node<T> {
         log::info!("start render: {:?}", data);
 
         self.renderer.render(
-            data.width,
-            data.height,
+            UVec2::new(data.width, data.height),
             data.row_start,
             data.row_end,
             |pixels| {
@@ -70,15 +69,21 @@ impl<T: NodeRenderer + 'static> Node<T> {
                             pitch: RENDER_BLOCK_SIZE as usize * NODE_BYTES_PER_PIXEL,
                             format: NODE_PIXEL_FORMAT,
                         };
-                        let compressed_pixel_bytes =
-                            turbojpeg::compress(image, 95, turbojpeg::Subsamp::Sub2x2).unwrap();
+
+                        let compressed_pixel_bytes = if ENABLE_COMPRESSION {
+                            turbojpeg::compress(image, 95, turbojpeg::Subsamp::Sub2x2)
+                                .unwrap()
+                                .to_vec()
+                        } else {
+                            block_pixels.to_vec()
+                        };
 
                         let message =
                             NodeToHostMessage::RenderPartialFinished(RenderPartialFinishedData {
                                 row: (local_block_y * RENDER_BLOCK_SIZE) + data.row_start,
                                 column_block: local_block_x,
                                 frame_idx: data.frame_idx,
-                                compressed_pixel_bytes: compressed_pixel_bytes.to_vec(),
+                                compressed_pixel_bytes,
                             });
 
                         let mut addr = *addr;

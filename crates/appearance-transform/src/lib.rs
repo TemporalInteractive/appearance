@@ -2,9 +2,10 @@ use core::sync::atomic::{AtomicBool, Ordering};
 use glam::{Mat4, Quat, Vec3};
 use std::sync::Mutex;
 
+// Right handed coordinate system
 pub const RIGHT: Vec3 = Vec3::new(1.0, 0.0, 0.0);
 pub const UP: Vec3 = Vec3::new(0.0, 1.0, 0.0);
-pub const FORWARD: Vec3 = Vec3::new(0.0, 0.0, 1.0);
+pub const FORWARD: Vec3 = Vec3::new(0.0, 0.0, -1.0);
 
 #[derive(Debug)]
 pub struct Transform {

@@ -10,9 +10,10 @@ version = "0.1.0"
 [dependencies]
 appearance-asset-database.workspace = true
 appearance-camera.workspace = true
+appearance-distributed-renderer.workspace = true
 appearance-input.workspace = true
 appearance-model.workspace = true
-appearance-path-tracer.workspace = true
+appearance-path-tracer-gpu.workspace = true
 appearance-profiling.workspace = true
 appearance-render-loop.workspace = true
 appearance-time.workspace = true

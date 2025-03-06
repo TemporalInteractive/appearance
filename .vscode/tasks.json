@@ -2,6 +2,23 @@
     "version": "2.0.0",
     "tasks": [
         {
+            "label": "rust: cargo build",
+            "type": "process",
+            "command": "cargo",
+            "args": [
+                "build",
+            ],
+        },
+        {
+            "label": "rust: cargo build -r",
+            "type": "process",
+            "command": "cargo",
+            "args": [
+                "build",
+                "-r",
+            ],
+        },
+        {
             "label": "rust: cargo build host",
             "type": "process",
             "command": "cargo",
