@@ -620,10 +620,14 @@ fn DisneyBsdf::evaluate(_self: DisneyBsdf, i_n: vec3<f32>, tangent_to_world: mat
     if (weights.x + weights.y > 0.0) {
         let m: vec3<f32> = normalize(wiw + wow);
         if (weights.x > 0.0) {
-            *pdf += weights.x * DisneyBsdf::evaluate_diffuse(_self, i_n, wow, wiw, m, &value); // TODO: is overwriting value correct?
+            var contrib: vec3<f32>;
+            *pdf += weights.x * DisneyBsdf::evaluate_diffuse(_self, i_n, wow, wiw, m, &contrib);
+            value += contrib;
         }
         if (weights.y > 0.0) {
-            *pdf += weights.y * DisneyBsdf::evaluate_sheen(_self, wow, wiw, m, &value);
+            var contrib: vec3<f32>;
+            *pdf += weights.y * DisneyBsdf::evaluate_sheen(_self, wow, wiw, m, &contrib);
+            value += contrib;
         }
     }
 
