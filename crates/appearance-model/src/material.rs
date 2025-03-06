@@ -36,6 +36,7 @@ pub struct Material {
     pub clearcoat_texture: Option<Arc<Texture>>,
     pub clearcoat_roughness: f32,
     pub clearcoat_roughness_texture: Option<Arc<Texture>>,
+    pub clearcoat_normal_texture: Option<Arc<Texture>>,
 
     pub is_opaque: bool,
     pub alpha_cutoff: f32,
@@ -74,6 +75,7 @@ impl Default for Material {
             clearcoat_texture: None,
             clearcoat_roughness: 0.0,
             clearcoat_roughness_texture: None,
+            clearcoat_normal_texture: None,
 
             is_opaque: true,
             alpha_cutoff: 0.0,

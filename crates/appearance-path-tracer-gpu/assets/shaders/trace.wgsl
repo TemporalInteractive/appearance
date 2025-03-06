@@ -115,27 +115,50 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
             var hit_normal_ws: vec3<f32> = normalize((local_to_world_inv_trans * vec4<f32>(tbn[2], 1.0)).xyz);
             let hit_point_ws = origin + direction * intersection.t;
 
-            var tangent_to_world = mat3x3<f32>(
+            let hit_tangent_to_world = mat3x3<f32>(
                 hit_tangent_ws,
                 hit_bitangent_ws,
                 hit_normal_ws
             );
 
             // Apply normal mapping when available, unlike the name suggest, still not front facing
-            var front_facing_normal_ws: vec3<f32> = MaterialDescriptor::apply_normal_mapping(material_descriptor, tex_coord, hit_normal_ws, tangent_to_world);
+            var front_facing_normal_ws: vec3<f32> = hit_normal_ws;
+            var front_facing_shading_normal_ws: vec3<f32> = MaterialDescriptor::apply_normal_mapping(material_descriptor, tex_coord, hit_normal_ws, hit_tangent_to_world);
 
             let w_out_worldspace: vec3<f32> = -direction;
 
             // Make sure the hit normal and normal mapped normal are front facing
             let back_face: bool = dot(w_out_worldspace, hit_normal_ws) < 0.0;
             if (back_face) {
-                hit_normal_ws *= -1.0;
                 front_facing_normal_ws *= -1.0;
+                front_facing_shading_normal_ws *= -1.0;
             }
 
             // Construct tangent <-> world matrices
-            tangent_to_world = build_orthonormal_basis(front_facing_normal_ws);
+            let tangent_to_world: mat3x3<f32> = build_orthonormal_basis(front_facing_shading_normal_ws);
             let world_to_tangent: mat3x3<f32> = transpose(tangent_to_world);
+
+            var clearcoat_tangent_to_world: mat3x3<f32>;
+            var clearcoat_world_to_tangent: mat3x3<f32>;
+            if (material_descriptor.clearcoat > 0.0) {
+                if (material_descriptor.clearcoat_normal_texture == INVALID_TEXTURE) {
+                    clearcoat_tangent_to_world = build_orthonormal_basis(front_facing_normal_ws);
+                    clearcoat_world_to_tangent = transpose(clearcoat_tangent_to_world);
+                } else if (material_descriptor.clearcoat_normal_texture == material_descriptor.normal_texture) {
+                    clearcoat_tangent_to_world = tangent_to_world;
+                    clearcoat_world_to_tangent = world_to_tangent;
+                } else {
+                    var front_facing_clearcoat_normal_ws: vec3<f32> = MaterialDescriptor::apply_clearcoat_normal_mapping(material_descriptor, tex_coord, hit_normal_ws, hit_tangent_to_world);
+                    if (back_face) {
+                        front_facing_clearcoat_normal_ws *= -1.0;
+                    }
+                    clearcoat_tangent_to_world = build_orthonormal_basis(front_facing_clearcoat_normal_ws);
+                    clearcoat_world_to_tangent = transpose(clearcoat_tangent_to_world);
+                }
+            }
+
+            // let clearcoat_tangent_to_world: mat3x3<f32> = build_orthonormal_basis(hit_normal_ws);
+            // let clearcoat_world_to_tangent: mat3x3<f32> = transpose(clearcoat_tangent_to_world);
 
             // let diffuse_lobe = DiffuseLobe::new(material.base_color.rgb);
             // let bsdf_sample: BsdfSample = DiffuseLobe::sample(diffuse_lobe, random_uniform_float2(&rng));
@@ -148,7 +171,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
 
             let shadow_direction: vec3<f32> = Sky::direction_to_sun(vec2<f32>(random_uniform_float(&rng), random_uniform_float(&rng)));
             let shadow_origin: vec3<f32> = hit_point_ws + shadow_direction * 0.0001;
-            let n_dot_l: f32 = dot(shadow_direction, front_facing_normal_ws);
+            let n_dot_l: f32 = dot(shadow_direction, front_facing_shading_normal_ws);
             if (n_dot_l > 0.0) {
                 var shadow_rq: ray_query;
                 rayQueryInitialize(&shadow_rq, scene, RayDesc(0x4, 0xFFu, 0.0, 1000.0, shadow_origin, shadow_direction));
@@ -158,7 +181,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
                     let w_in_worldspace: vec3<f32> = shadow_direction;
 
                     var shading_pdf: f32;
-                    let reflectance: vec3<f32> = DisneyBsdf::evaluate(disney_bsdf, front_facing_normal_ws, tangent_to_world, world_to_tangent,
+                    let reflectance: vec3<f32> = DisneyBsdf::evaluate(disney_bsdf, front_facing_shading_normal_ws, tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
                         w_out_worldspace, w_in_worldspace, &shading_pdf);
 
                     let sun_intensity: f32 = Sky::sun_intensity(shadow_direction.y);
@@ -172,7 +195,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
             var pdf: f32;
             var specular: bool;
             let reflectance: vec3<f32> = DisneyBsdf::sample(disney_bsdf,
-                front_facing_normal_ws, tangent_to_world, world_to_tangent,
+                front_facing_shading_normal_ws, tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
                 w_out_worldspace, intersection.t, back_face,
                 random_uniform_float(&rng), random_uniform_float(&rng), random_uniform_float(&rng),
                 &w_in_worldspace, &pdf, &specular
@@ -180,7 +203,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
 
             let sample_valid: bool = pdf > 1e-6;
             if (sample_valid) {
-                let cos_in: f32 = abs(dot(front_facing_normal_ws, w_in_worldspace));
+                let cos_in: f32 = abs(dot(front_facing_shading_normal_ws, w_in_worldspace));
                 let contribution: vec3<f32> = (1.0 / pdf) * reflectance * cos_in;
                 throughput *= contribution;
             

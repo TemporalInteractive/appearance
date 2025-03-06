@@ -37,6 +37,10 @@ pub struct MaterialDescriptor {
     pub clearcoat_roughness_texture: u32,
     pub alpha_cutoff: f32,
     pub sheen_tint_texture: u32,
+    pub clearcoat_normal_texture: u32,
+    pub _padding0: u32,
+    pub _padding1: u32,
+    pub _padding2: u32,
     pub sheen_tint: Vec3,
     pub transmission_texture: u32,
 }
@@ -199,6 +203,15 @@ impl MaterialPool {
             } else {
                 u32::MAX
             };
+        let clearcoat_normal_texture = if let Some(texture) = &material.clearcoat_normal_texture {
+            if let Some(texture_idx) = self.texture_indices.get(&texture.uuid()) {
+                *texture_idx as u32
+            } else {
+                self.alloc_texture(texture, device, queue)
+            }
+        } else {
+            u32::MAX
+        };
         let transmission_texture = if let Some(texture) = &material.transmission_texture {
             if let Some(texture_idx) = self.texture_indices.get(&texture.uuid()) {
                 *texture_idx as u32
@@ -253,7 +266,11 @@ impl MaterialPool {
             clearcoat_roughness_texture,
             alpha_cutoff: material.alpha_cutoff,
             sheen_texture,
+            clearcoat_normal_texture,
             sheen_tint_texture,
+            _padding0: 0,
+            _padding1: 0,
+            _padding2: 0,
         };
 
         self.material_descriptors.push(material_descriptor);

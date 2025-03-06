@@ -31,6 +31,10 @@ struct MaterialDescriptor {
     clearcoat_roughness_texture: u32,
     alpha_cutoff: f32,
     sheen_tint_texture: u32,
+    clearcoat_normal_texture: u32,
+    _padding0: u32,
+    _padding1: u32,
+    _padding2: u32,
 
     sheen_tint: vec3<f32>,
     transmission_texture: u32,

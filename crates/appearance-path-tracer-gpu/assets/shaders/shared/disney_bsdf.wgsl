@@ -390,7 +390,9 @@ fn DisneyBsdf::evaluate_sheen(_self: DisneyBsdf, wow: vec3<f32>, wiw: vec3<f32>,
     return 1.0 / (2.0 * PI);
 }
 
-fn DisneyBsdf::sample(_self: DisneyBsdf, i_n: vec3<f32>, tangent_to_world: mat3x3<f32>, world_to_tangent: mat3x3<f32>,
+fn DisneyBsdf::sample(_self: DisneyBsdf, i_n: vec3<f32>,
+     tangent_to_world: mat3x3<f32>, world_to_tangent: mat3x3<f32>,
+     clearcoat_tangent_to_world: mat3x3<f32>, clearcoat_world_to_tangent: mat3x3<f32>,
      wow: vec3<f32>, distance: f32, back_face: bool, r0: f32, r1: f32, r2: f32,
      wiw: ptr<function, vec3<f32>>, pdf: ptr<function, f32>, specular: ptr<function, bool>) -> vec3<f32> {
     // TODO: ??
@@ -500,15 +502,19 @@ fn DisneyBsdf::sample(_self: DisneyBsdf, i_n: vec3<f32>, tangent_to_world: mat3x
             weights.y = 0.0;
         }
     } else {
-        let wol: vec3<f32> = world_to_tangent * wow;
+        var wol: vec3<f32>;
         var wil: vec3<f32>;
         if (r3 < cdf.z) {
+            wol = world_to_tangent * wow;
+
             let r2: f32 = (r3 - cdf.y) / (cdf.z - cdf.y);
             let alpha: vec2<f32> = microfacet_alpha_from_roughness(_self.roughness, _self.anisotropic);
             DisneyBsdf::sample_mf(_self, r2, r1, alpha.x, alpha.y, wol, false, &wil, &component_pdf, &value);
             probability = weights.z * component_pdf;
             weights.z = 0.0;
         } else {
+            wol = clearcoat_world_to_tangent * wow;
+
             let r2: f32 = (r3 - cdf.z) / (1.0 - cdf.z);
             let alpha: f32 = DisneyBsdf::clearcoat_roughness(_self);
             DisneyBsdf::sample_mf(_self, r2, r1, alpha, alpha, wol, true, &wil, &component_pdf, &value);
@@ -516,7 +522,12 @@ fn DisneyBsdf::sample(_self: DisneyBsdf, i_n: vec3<f32>, tangent_to_world: mat3x
             weights.w = 0.0;
         }
         value *= 1.0 / abs(4.0 * wol.z * wil.z);
-        *wiw = tangent_to_world * wil;
+
+        if (r3 < cdf.z) {
+            *wiw = tangent_to_world * wil;
+        } else {
+            *wiw = clearcoat_tangent_to_world * wil;
+        }
     }
 
     var contrib: vec3<f32>;
@@ -533,15 +544,20 @@ fn DisneyBsdf::sample(_self: DisneyBsdf, i_n: vec3<f32>, tangent_to_world: mat3x
     }
 
     if (weights.z + weights.w > 0.0) {
-        let wol: vec3<f32> = world_to_tangent * wow;
-        let wil: vec3<f32> = world_to_tangent * (*wiw);
-        let m: vec3<f32> = normalize(wol + wil);
         if (weights.z > 0.0) {
+            let wol: vec3<f32> = world_to_tangent * wow;
+            let wil: vec3<f32> = world_to_tangent * (*wiw);
+            let m: vec3<f32> = normalize(wol + wil);
+
             let alpha: vec2<f32> = microfacet_alpha_from_roughness(_self.roughness, _self.anisotropic);
             probability += weights.z * DisneyBsdf::evaluate_mf(_self, alpha.x, alpha.y, wol, wil, m, false, &contrib);
             value += contrib;
         }
         if (weights.w > 0.0) {
+            let wol: vec3<f32> = clearcoat_world_to_tangent * wow;
+            let wil: vec3<f32> = clearcoat_world_to_tangent * (*wiw);
+            let m: vec3<f32> = normalize(wol + wil);
+
             let alpha: f32 = DisneyBsdf::clearcoat_roughness(_self);
             probability += weights.w * DisneyBsdf::evaluate_mf(_self, alpha, alpha, wol, wil, m, true, &contrib);
             value += contrib;
@@ -556,7 +572,9 @@ fn DisneyBsdf::sample(_self: DisneyBsdf, i_n: vec3<f32>, tangent_to_world: mat3x
     return value;
 }
 
-fn DisneyBsdf::evaluate(_self: DisneyBsdf, i_n: vec3<f32>, tangent_to_world: mat3x3<f32>, world_to_tangent: mat3x3<f32>,
+fn DisneyBsdf::evaluate(_self: DisneyBsdf, i_n: vec3<f32>,
+     tangent_to_world: mat3x3<f32>, world_to_tangent: mat3x3<f32>,
+     clearcoat_tangent_to_world: mat3x3<f32>, clearcoat_world_to_tangent: mat3x3<f32>,
      wow: vec3<f32>, wiw: vec3<f32>, pdf: ptr<function, f32>) -> vec3<f32> {
     if (_self.transmission > 0.5) {
         let wol: vec3<f32> = world_to_tangent * wow;
@@ -632,10 +650,11 @@ fn DisneyBsdf::evaluate(_self: DisneyBsdf, i_n: vec3<f32>, tangent_to_world: mat
     }
 
     if (weights.z + weights.w > 0.0) {
-        let wol: vec3<f32> = world_to_tangent * wow;
-        let wil: vec3<f32> = world_to_tangent * wiw;
-        let m: vec3<f32> = normalize(wol + wil);
         if (weights.z > 0.0) {
+            let wol: vec3<f32> = world_to_tangent * wow;
+            let wil: vec3<f32> = world_to_tangent * wiw;
+            let m: vec3<f32> = normalize(wol + wil);
+
             let alpha: vec2<f32> = microfacet_alpha_from_roughness(_self.roughness, _self.anisotropic);
             var contrib: vec3<f32>;
             let spec_pdf: f32 = weights.z * DisneyBsdf::evaluate_mf(_self, alpha.x, alpha.y, wol, wil, m, false, &contrib);
@@ -646,6 +665,10 @@ fn DisneyBsdf::evaluate(_self: DisneyBsdf, i_n: vec3<f32>, tangent_to_world: mat
             }
         }
         if (weights.w > 0.0) {
+            let wol: vec3<f32> = clearcoat_world_to_tangent * wow;
+            let wil: vec3<f32> = clearcoat_world_to_tangent * wiw;
+            let m: vec3<f32> = normalize(wol + wil);
+
             let alpha: f32 = DisneyBsdf::clearcoat_roughness(_self);
             var contrib: vec3<f32>;
             let clearcoat_pdf: f32 = weights.w * DisneyBsdf::evaluate_mf(_self, alpha, alpha, wol, wil, m, true, &contrib);

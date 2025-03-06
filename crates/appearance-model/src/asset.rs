@@ -249,6 +249,15 @@ fn process_node(
                                     tex.texture().name().unwrap_or("Clearcoat Roughness"),
                                 ));
                             }
+                            if let Some(tex) = clearcoat.clearcoat_normal_texture() {
+                                material.clearcoat_normal_texture = Some(process_tex(
+                                    document,
+                                    images,
+                                    internal_images,
+                                    &tex.texture(),
+                                    tex.texture().name().unwrap_or("Clearcoat Normal"),
+                                ));
+                            }
                         }
                         if let Some(sheen) = prim_material.sheen() {
                             material.sheen = sheen.sheen_roughness_factor();
