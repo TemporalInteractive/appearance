@@ -8,6 +8,7 @@
 /// appearance-path-tracer-gpu::shared/sky_bindings
 ///
 
+// Used for sampling lights in the world, can both sample emissive triangles or the sun, indicated by triangle_area = 0
 struct LightSample {
     direction: vec3<f32>,
     distance: f32,
@@ -17,6 +18,7 @@ struct LightSample {
     triangle_normal: vec3<f32>,
 }
 
+// Packed representation of LightSample
 struct PackedLightSample {
     direction: PackedNormalizedXyz10,
     distance: f32,
@@ -24,6 +26,15 @@ struct PackedLightSample {
     emission: PackedRgb9e5,
     triangle_area: f32,
     triangle_normal: PackedNormalizedXyz10,
+}
+
+// Context required to evaluate a light sample
+struct LightSampleCtx {
+    hit_tex_coord: vec2<f32>,
+    hit_material_idx: u32,
+    throughput: PackedRgb9e5,
+    front_facing_shading_normal_ws: PackedNormalizedXyz10,
+    front_facing_clearcoat_normal_ws: PackedNormalizedXyz10,
 }
 
 fn LightSample::new_triangle_sample(direction: vec3<f32>, distance: f32, pdf: f32, emission: vec3<f32>, triangle: Triangle) -> LightSample {
@@ -72,6 +83,16 @@ fn PackedLightSample::unpack(_self: PackedLightSample) -> LightSample {
         PackedRgb9e5::unpack(_self.emission),
         _self.triangle_area,
         PackedNormalizedXyz10::unpack(_self.triangle_normal, 0)
+    );
+}
+
+fn LightSampleCtx::new(hit_tex_coord: vec2<f32>, hit_material_idx: u32, throughput: vec3<f32>, front_facing_shading_normal_ws: vec3<f32>, front_facing_clearcoat_normal_ws: vec3<f32>) -> LightSampleCtx {
+    return LightSampleCtx(
+        hit_tex_coord,
+        hit_material_idx,
+        PackedRgb9e5::new(throughput),
+        PackedNormalizedXyz10::new(front_facing_shading_normal_ws, 0),
+        PackedNormalizedXyz10::new(front_facing_clearcoat_normal_ws, 0)
     );
 }
 

@@ -3,13 +3,15 @@
 use appearance_camera::Camera;
 use appearance_wgpu::{pipeline_database::PipelineDatabase, wgpu, Context};
 use appearance_world::visible_world_action::VisibleWorldActionType;
+use apply_di_pass::ApplyDiPassParameters;
 use film::Film;
-use glam::{UVec2, Vec3};
+use glam::{UVec2, Vec2, Vec3};
 use raygen_pass::RaygenPassParameters;
 use resolve_pass::ResolvePassParameters;
 use scene_resources::SceneResources;
 use trace_pass::TracePassParameters;
 
+mod apply_di_pass;
 mod film;
 mod raygen_pass;
 mod resolve_pass;
@@ -27,13 +29,34 @@ struct Payload {
     accumulated: u32,
     throughput: u32,
     rng: u32,
-    alive: u32,
+    t: f32,
+}
+
+#[repr(C)]
+struct PackedLightSample {
+    direction: u32,
+    distance: f32,
+    pdf: f32,
+    emission: u32,
+    triangle_area: f32,
+    triangle_normal: u32,
+}
+
+#[repr(C)]
+struct LightSampleCtx {
+    hit_tex_coord: Vec2,
+    hit_material_idx: u32,
+    throughput: u32,
+    front_facing_shading_normal_ws: u32,
+    front_facing_clearcoat_normal_ws: u32,
 }
 
 struct SizedResources {
     film: Film,
     rays: [wgpu::Buffer; 2],
     payloads: wgpu::Buffer,
+    light_samples: wgpu::Buffer,
+    light_sample_ctxs: wgpu::Buffer,
 }
 
 impl SizedResources {
@@ -56,10 +79,28 @@ impl SizedResources {
             usage: wgpu::BufferUsages::STORAGE,
         });
 
+        let light_samples = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("appearance-path-tracer-gpu light_samples"),
+            size: (std::mem::size_of::<PackedLightSample>() as u32 * resolution.x * resolution.y)
+                as u64,
+            mapped_at_creation: false,
+            usage: wgpu::BufferUsages::STORAGE,
+        });
+
+        let light_sample_ctxs = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("appearance-path-tracer-gpu light_sample_ctxs"),
+            size: (std::mem::size_of::<LightSampleCtx>() as u32 * resolution.x * resolution.y)
+                as u64,
+            mapped_at_creation: false,
+            usage: wgpu::BufferUsages::STORAGE,
+        });
+
         Self {
             film,
             rays,
             payloads,
+            light_samples,
+            light_sample_ctxs,
         }
     }
 }
@@ -203,6 +244,22 @@ impl PathTracerGpu {
                         in_rays,
                         out_rays,
                         payloads: &self.sized_resources.payloads,
+                        light_samples: &self.sized_resources.light_samples,
+                        light_sample_ctxs: &self.sized_resources.light_sample_ctxs,
+                        scene_resources: &self.scene_resources,
+                    },
+                    &ctx.device,
+                    &mut command_encoder,
+                    pipeline_database,
+                );
+
+                apply_di_pass::encode(
+                    &ApplyDiPassParameters {
+                        ray_count: self.local_resolution.x * self.local_resolution.y,
+                        in_rays,
+                        payloads: &self.sized_resources.payloads,
+                        light_samples: &self.sized_resources.light_samples,
+                        light_sample_ctxs: &self.sized_resources.light_sample_ctxs,
                         scene_resources: &self.scene_resources,
                     },
                     &ctx.device,

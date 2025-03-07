@@ -36,6 +36,14 @@ var<storage, read_write> payloads: array<Payload>;
 @binding(4)
 var scene: acceleration_structure;
 
+@group(0)
+@binding(5)
+var<storage, read_write> light_samples: array<PackedLightSample>;
+
+@group(0)
+@binding(6)
+var<storage, read_write> light_sample_ctxs: array<LightSampleCtx>;
+
 @compute
 @workgroup_size(128)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
@@ -54,10 +62,10 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
         }
         payload.throughput = PackedRgb9e5::new(vec3<f32>(1.0));
         payload.rng = pcg_hash(id ^ xor_shift_u32(constants.seed));
-        payload.alive = 1;
+        payload.t = 0.0;
     }
 
-    if (payload.alive == 0) { return; } // TODO: indirect dispatch with pids
+    if (payload.t < 0.0) { return; } // TODO: indirect dispatch with pids
 
     var accumulated: vec3<f32> = PackedRgb9e5::unpack(payload.accumulated);
     var throughput: vec3<f32> = PackedRgb9e5::unpack(payload.throughput);
@@ -167,27 +175,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
 
             let light_sample: LightSample = Nee::sample(random_uniform_float(&rng), random_uniform_float(&rng), random_uniform_float(&rng),
                 vec2<f32>(random_uniform_float(&rng), random_uniform_float(&rng)), hit_point_ws);
-            let shadow_direction: vec3<f32> = light_sample.direction;
-            let shadow_origin: vec3<f32> = hit_point_ws + shadow_direction * 0.0001;
-            let n_dot_l: f32 = dot(shadow_direction, front_facing_shading_normal_ws);
-            if (n_dot_l > 0.0 && light_sample.pdf > 0.0) {
-                var shadow_rq: ray_query;
-                rayQueryInitialize(&shadow_rq, scene, RayDesc(0x4, 0xFFu, 0.0, light_sample.distance, shadow_origin, shadow_direction));
-                rayQueryProceed(&shadow_rq);
-                let intersection = rayQueryGetCommittedIntersection(&shadow_rq);
-                if (intersection.kind != RAY_QUERY_INTERSECTION_TRIANGLE) {
-                    let w_in_worldspace: vec3<f32> = shadow_direction;
-
-                    var shading_pdf: f32;
-                    let reflectance: vec3<f32> = DisneyBsdf::evaluate(disney_bsdf, front_facing_shading_normal_ws, tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
-                        w_out_worldspace, w_in_worldspace, &shading_pdf);
-
-                    let light_intensity: vec3<f32> = LightSample::intensity(light_sample) * light_sample.emission;
-
-                    let contribution: vec3<f32> = throughput * reflectance * light_intensity * n_dot_l / light_sample.pdf;
-                    accumulated += contribution;
-                };
-            }
+            light_samples[id] = PackedLightSample::new(light_sample);
+            light_sample_ctxs[id] = LightSampleCtx::new(tex_coord, material_idx, throughput, front_facing_shading_normal_ws, clearcoat_tangent_to_world[2]);
 
             var w_in_worldspace: vec3<f32>;
             var pdf: f32;
@@ -207,13 +196,15 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
             
                 let out_ray = Ray::new(hit_point_ws + w_in_worldspace * 0.0001, w_in_worldspace);
                 out_rays[id] = out_ray;
+
+                payload.t = intersection.t;
             } else {
-                payload.alive = 0;
+                payload.t = -1.0;
             }
         } else {
             let color = Sky::sky(direction, true);
             accumulated += throughput * color;
-            payload.alive = 0;
+            payload.t = -1.0;
         }
 
         break;
