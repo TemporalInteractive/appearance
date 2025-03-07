@@ -1,19 +1,31 @@
 @include ::triangle
 
+///
+/// BINDING DEPENDENCIES:
+/// appearance-path-tracer-gpu::shared/vertex_pool_bindings
+/// appearance-path-tracer-gpu::shared/material_pool_bindings
+/// appearance-path-tracer-gpu::shared/sky_bindings
+///
+
 struct LightSample {
     direction: vec3<f32>,
     distance: f32,
     pdf: f32,
     emission: vec3<f32>,
+    sun_sample: bool,
     triangle: Triangle,
 }
 
-fn LightSample::new(direction: vec3<f32>, distance: f32, pdf: f32, emission: vec3<f32>, triangle: Triangle) -> LightSample {
-    return LightSample(direction, distance, pdf, emission, triangle);
+fn LightSample::new_triangle_sample(direction: vec3<f32>, distance: f32, pdf: f32, emission: vec3<f32>, triangle: Triangle) -> LightSample {
+    return LightSample(direction, distance, pdf, emission, false, triangle);
+}
+
+fn LightSample::new_sun_sample(direction: vec3<f32>, distance: f32, pdf: f32, emission: vec3<f32>) -> LightSample {
+    return LightSample(direction, distance, pdf, emission, true, Triangle::empty());
 }
 
 fn LightSample::empty() -> LightSample {
-    return LightSample(vec3<f32>(0.0), 0.0, 0.0, vec3<f32>(0.0), Triangle::empty());
+    return LightSample(vec3<f32>(0.0), 0.0, 0.0, vec3<f32>(0.0), false, Triangle::empty());
 }
 
 fn Nee::emissive_triangle_intensity(triangle: Triangle, distance: f32, hit_to_triangle: vec3<f32>) -> f32 {
@@ -23,7 +35,19 @@ fn Nee::emissive_triangle_intensity(triangle: Triangle, distance: f32, hit_to_tr
     let normal: vec3<f32> = normalize(cross(p01, p02));
     let cos_out: f32 = abs(dot(normal, -hit_to_triangle));
 
-    return Triangle::solid_angle(cos_out, area, distance);
+    return Triangle::solid_angle(cos_out, area, distance) * 10.0;
+}
+
+fn Nee::sun_intensity(hit_to_triangle: vec3<f32>) -> f32 {
+    return Sky::sun_intensity(hit_to_triangle.y);
+}
+
+fn Nee::intensity(light_sample: LightSample) -> f32 {
+    if (light_sample.sun_sample) {
+        return Nee::sun_intensity(light_sample.direction);
+    } else {
+        return Nee::emissive_triangle_intensity(light_sample.triangle, light_sample.distance, light_sample.direction);
+    }
 }
 
 fn Nee::sample_emissive_triangle(r0: f32, r1: f32, r23: vec2<f32>, sample_point: vec3<f32>, sun_pick_probability: f32) -> LightSample {
@@ -66,9 +90,32 @@ fn Nee::sample_emissive_triangle(r0: f32, r1: f32, r23: vec2<f32>, sample_point:
             let material_descriptor: MaterialDescriptor = material_descriptors[material_idx];
             let emission: vec3<f32> = MaterialDescriptor::emission(material_descriptor, tex_coord);
 
-            return LightSample::new(direction, distance, pdf, emission, triangle);
+            return LightSample::new_triangle_sample(direction, distance, pdf, emission, triangle);
         }
     }
 
     return LightSample::empty();
+}
+
+fn Nee::sample_sun(r01: vec2<f32>, sun_pick_probability: f32) -> LightSample {
+    let direction: vec3<f32> =  Sky::direction_to_sun(r01);
+    let distance: f32 = 10000.0;
+    let pdf: f32 = sun_pick_probability;
+    let emission = sky_constants.sun_color;
+    return LightSample::new_sun_sample(direction, distance, pdf, emission);
+}
+
+fn Nee::sample(r0: f32, r1: f32, r2: f32, r34: vec2<f32>, sample_point: vec3<f32>) -> LightSample {
+    var sun_pick_probability: f32;
+    if (vertex_pool_constants.num_emissive_triangles > 0) {
+        sun_pick_probability = 0.5;
+    } else {
+        sun_pick_probability = 1.0;
+    }
+
+    if (r0 < sun_pick_probability) {
+        return Nee::sample_sun(r34, sun_pick_probability);
+    } else {
+        return Nee::sample_emissive_triangle(r1, r2, r34, sample_point, sun_pick_probability);
+    }
 }
