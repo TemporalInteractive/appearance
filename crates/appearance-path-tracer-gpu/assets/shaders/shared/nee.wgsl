@@ -1,4 +1,5 @@
 @include ::triangle
+@include ::packing
 
 ///
 /// BINDING DEPENDENCIES:
@@ -12,42 +13,66 @@ struct LightSample {
     distance: f32,
     pdf: f32,
     emission: vec3<f32>,
-    sun_sample: bool,
-    triangle: Triangle,
+    triangle_area: f32,
+    triangle_normal: vec3<f32>,
+}
+
+struct PackedLightSample {
+    direction: PackedNormalizedXyz10,
+    distance: f32,
+    pdf: f32,
+    emission: PackedRgb9e5,
+    triangle_area: f32,
+    triangle_normal: PackedNormalizedXyz10,
 }
 
 fn LightSample::new_triangle_sample(direction: vec3<f32>, distance: f32, pdf: f32, emission: vec3<f32>, triangle: Triangle) -> LightSample {
-    return LightSample(direction, distance, pdf, emission, false, triangle);
+    let p01: vec3<f32> = triangle.p1 - triangle.p0;
+    let p02: vec3<f32> = triangle.p2 - triangle.p0;
+    let triangle_area: f32 = Triangle::area_from_edges(p01, p02);
+    let triangle_normal: vec3<f32> = normalize(cross(p01, p02));
+
+    return LightSample(direction, distance, pdf, emission, triangle_area, triangle_normal);
 }
 
 fn LightSample::new_sun_sample(direction: vec3<f32>, distance: f32, pdf: f32, emission: vec3<f32>) -> LightSample {
-    return LightSample(direction, distance, pdf, emission, true, Triangle::empty());
+    return LightSample(direction, distance, pdf, emission, 0.0, UP);
 }
 
 fn LightSample::empty() -> LightSample {
-    return LightSample(vec3<f32>(0.0), 0.0, 0.0, vec3<f32>(0.0), false, Triangle::empty());
+    return LightSample(vec3<f32>(0.0), 0.0, 0.0, vec3<f32>(0.0), 0.0, UP);
 }
 
-fn Nee::emissive_triangle_intensity(triangle: Triangle, distance: f32, hit_to_triangle: vec3<f32>) -> f32 {
-    let p01: vec3<f32> = triangle.p1 - triangle.p0;
-    let p02: vec3<f32> = triangle.p2 - triangle.p0;
-    let area: f32 = Triangle::area_from_edges(p01, p02);
-    let normal: vec3<f32> = normalize(cross(p01, p02));
-    let cos_out: f32 = abs(dot(normal, -hit_to_triangle));
-
-    return Triangle::solid_angle(cos_out, area, distance) * 10.0;
-}
-
-fn Nee::sun_intensity(hit_to_triangle: vec3<f32>) -> f32 {
-    return Sky::sun_intensity(hit_to_triangle.y);
-}
-
-fn Nee::intensity(light_sample: LightSample) -> f32 {
-    if (light_sample.sun_sample) {
-        return Nee::sun_intensity(light_sample.direction);
+fn LightSample::intensity(_self: LightSample) -> f32 {
+    if (_self.triangle_area == 0.0) {
+        return Sky::sun_intensity(_self.direction.y);
     } else {
-        return Nee::emissive_triangle_intensity(light_sample.triangle, light_sample.distance, light_sample.direction);
+        let cos_out: f32 = abs(dot(_self.triangle_normal, -_self.direction));
+
+        return Triangle::solid_angle(cos_out, _self.triangle_area, _self.distance) * 10.0;
     }
+}
+
+fn PackedLightSample::new(light_sample: LightSample) -> PackedLightSample {
+    return PackedLightSample(
+        PackedNormalizedXyz10::new(light_sample.direction, 0),
+        light_sample.distance,
+        light_sample.pdf,
+        PackedRgb9e5::new(light_sample.emission),
+        light_sample.triangle_area,
+        PackedNormalizedXyz10::new(light_sample.triangle_normal, 0)
+    );
+}
+
+fn PackedLightSample::unpack(_self: PackedLightSample) -> LightSample {
+    return LightSample(
+        PackedNormalizedXyz10::unpack(_self.direction, 0),
+        _self.distance,
+        _self.pdf,
+        PackedRgb9e5::unpack(_self.emission),
+        _self.triangle_area,
+        PackedNormalizedXyz10::unpack(_self.triangle_normal, 0)
+    );
 }
 
 fn Nee::sample_emissive_triangle(r0: f32, r1: f32, r23: vec2<f32>, sample_point: vec3<f32>, sun_pick_probability: f32) -> LightSample {

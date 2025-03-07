@@ -182,7 +182,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
                     let reflectance: vec3<f32> = DisneyBsdf::evaluate(disney_bsdf, front_facing_shading_normal_ws, tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
                         w_out_worldspace, w_in_worldspace, &shading_pdf);
 
-                    let light_intensity: vec3<f32> = Nee::intensity(light_sample) * light_sample.emission;
+                    let light_intensity: vec3<f32> = LightSample::intensity(light_sample) * light_sample.emission;
 
                     let contribution: vec3<f32> = throughput * reflectance * light_intensity * n_dot_l / light_sample.pdf;
                     accumulated += contribution;
