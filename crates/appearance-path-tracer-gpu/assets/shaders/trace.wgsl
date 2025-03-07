@@ -1,11 +1,12 @@
 @include ::random
 @include appearance-path-tracer-gpu::shared/ray
-@include appearance-path-tracer-gpu::shared/diffuse_brdf
-@include appearance-path-tracer-gpu::shared/disney_bsdf
+@include appearance-path-tracer-gpu::shared/material/disney_bsdf
 
 @include appearance-path-tracer-gpu::shared/vertex_pool_bindings
-@include appearance-path-tracer-gpu::shared/material_pool_bindings
+@include appearance-path-tracer-gpu::shared/material/material_pool_bindings
 @include appearance-path-tracer-gpu::shared/sky_bindings
+
+@include appearance-path-tracer-gpu::shared/nee
 
 struct Constants {
     ray_count: u32,
@@ -34,6 +35,14 @@ var<storage, read_write> payloads: array<Payload>;
 @binding(4)
 var scene: acceleration_structure;
 
+@group(0)
+@binding(5)
+var<storage, read_write> light_samples: array<PackedLightSample>;
+
+@group(0)
+@binding(6)
+var<storage, read_write> light_sample_ctxs: array<LightSampleCtx>;
+
 @compute
 @workgroup_size(128)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
@@ -52,10 +61,10 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
         }
         payload.throughput = PackedRgb9e5::new(vec3<f32>(1.0));
         payload.rng = pcg_hash(id ^ xor_shift_u32(constants.seed));
-        payload.alive = 1;
+        payload.t = 0.0;
     }
 
-    if (payload.alive == 0) { return; } // TODO: indirect dispatch with pids
+    if (payload.t < 0.0) { return; } // TODO: indirect dispatch with pids
 
     var accumulated: vec3<f32> = PackedRgb9e5::unpack(payload.accumulated);
     var throughput: vec3<f32> = PackedRgb9e5::unpack(payload.throughput);
@@ -161,39 +170,18 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
                 }
             }
 
-            // let clearcoat_tangent_to_world: mat3x3<f32> = build_orthonormal_basis(hit_normal_ws);
-            // let clearcoat_world_to_tangent: mat3x3<f32> = transpose(clearcoat_tangent_to_world);
-
-            // let diffuse_lobe = DiffuseLobe::new(material.base_color.rgb);
-            // let bsdf_sample: BsdfSample = DiffuseLobe::sample(diffuse_lobe, random_uniform_float2(&rng));
-            // var bsdf_eval: BsdfEval = DiffuseLobe::eval(diffuse_lobe);
-
-            // var w_in_worldspace: vec3<f32>;
-            // let sample_valid: bool = apply_bsdf(bsdf_sample, bsdf_eval, tangent_to_world, normal, &throughput, &w_in_worldspace);
-
             let disney_bsdf = DisneyBsdf::from_material(material);
 
-            let shadow_direction: vec3<f32> = Sky::direction_to_sun(vec2<f32>(random_uniform_float(&rng), random_uniform_float(&rng)));
-            let shadow_origin: vec3<f32> = hit_point_ws + shadow_direction * 0.0001;
-            let n_dot_l: f32 = dot(shadow_direction, front_facing_shading_normal_ws);
-            if (n_dot_l > 0.0) {
-                var shadow_rq: ray_query;
-                rayQueryInitialize(&shadow_rq, scene, RayDesc(0x4, 0xFFu, 0.0, 1000.0, shadow_origin, shadow_direction));
-                rayQueryProceed(&shadow_rq);
-                let intersection = rayQueryGetCommittedIntersection(&shadow_rq);
-                if (intersection.kind != RAY_QUERY_INTERSECTION_TRIANGLE) {
-                    let w_in_worldspace: vec3<f32> = shadow_direction;
-
-                    var shading_pdf: f32;
-                    let reflectance: vec3<f32> = DisneyBsdf::evaluate(disney_bsdf, front_facing_shading_normal_ws, tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
-                        w_out_worldspace, w_in_worldspace, &shading_pdf);
-
-                    let sun_intensity: f32 = Sky::sun_intensity(shadow_direction.y);
-
-                    let sun_contribution: vec3<f32> = throughput * reflectance * sun_intensity * n_dot_l;
-                    accumulated += sun_contribution;
-                };
-            }
+            // let light_sample: LightSample = Nee::sample_uniform(random_uniform_float(&rng), random_uniform_float(&rng), random_uniform_float(&rng),
+            //     vec2<f32>(random_uniform_float(&rng), random_uniform_float(&rng)), hit_point_ws);
+            let di_reservoir: DiReservoir = Nee::sample_ris(hit_point_ws, w_out_worldspace, front_facing_shading_normal_ws,
+                tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
+                disney_bsdf, &rng);
+            var light_sample: LightSample = di_reservoir.sample;
+            light_sample.pdf = 1.0 / di_reservoir.contribution_weight;
+            
+            light_samples[id] = PackedLightSample::new(light_sample);
+            light_sample_ctxs[id] = LightSampleCtx::new(tex_coord, material_idx, throughput, front_facing_shading_normal_ws, clearcoat_tangent_to_world[2]);
 
             var w_in_worldspace: vec3<f32>;
             var pdf: f32;
@@ -213,13 +201,15 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
             
                 let out_ray = Ray::new(hit_point_ws + w_in_worldspace * 0.0001, w_in_worldspace);
                 out_rays[id] = out_ray;
+
+                payload.t = intersection.t;
             } else {
-                payload.alive = 0;
+                payload.t = -1.0;
             }
         } else {
             let color = Sky::sky(direction, true);
             accumulated += throughput * color;
-            payload.alive = 0;
+            payload.t = -1.0;
         }
 
         break;

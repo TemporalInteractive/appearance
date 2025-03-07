@@ -82,3 +82,9 @@ impl Default for Material {
         }
     }
 }
+
+impl Material {
+    pub fn is_emissive(&self) -> bool {
+        self.emission.max_element() > 0.001
+    }
+}

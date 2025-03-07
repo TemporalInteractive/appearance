@@ -12,18 +12,14 @@ use crate::scene_resources::SceneResources;
 #[repr(C)]
 struct Constants {
     ray_count: u32,
-    bounce: u32,
-    seed: u32,
-    sample: u32,
+    _padding0: u32,
+    _padding1: u32,
+    _padding2: u32,
 }
 
-pub struct TracePassParameters<'a> {
+pub struct ApplyDiPassParameters<'a> {
     pub ray_count: u32,
-    pub bounce: u32,
-    pub sample: u32,
-    pub seed: u32,
     pub in_rays: &'a wgpu::Buffer,
-    pub out_rays: &'a wgpu::Buffer,
     pub payloads: &'a wgpu::Buffer,
     pub light_samples: &'a wgpu::Buffer,
     pub light_sample_ctxs: &'a wgpu::Buffer,
@@ -31,24 +27,24 @@ pub struct TracePassParameters<'a> {
 }
 
 pub fn encode(
-    parameters: &TracePassParameters,
+    parameters: &ApplyDiPassParameters,
     device: &wgpu::Device,
     command_encoder: &mut wgpu::CommandEncoder,
     pipeline_database: &mut PipelineDatabase,
 ) {
     let shader = pipeline_database.shader_from_src(
         device,
-        include_shader_src!("crates/appearance-path-tracer-gpu/assets/shaders/trace.wgsl"),
+        include_shader_src!("crates/appearance-path-tracer-gpu/assets/shaders/apply_di.wgsl"),
     );
     let pipeline = pipeline_database.compute_pipeline(
         device,
         wgpu::ComputePipelineDescriptor {
-            label: Some("appearance-path-tracer-gpu::trace"),
+            label: Some("appearance-path-tracer-gpu::apply_di"),
             ..wgpu::ComputePipelineDescriptor::partial_default(&shader)
         },
         || {
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("appearance-path-tracer-gpu::trace"),
+                label: Some("appearance-path-tracer-gpu::apply_di"),
                 bind_group_layouts: &[
                     &device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                         label: None,
@@ -86,34 +82,24 @@ pub fn encode(
                             wgpu::BindGroupLayoutEntry {
                                 binding: 3,
                                 visibility: wgpu::ShaderStages::COMPUTE,
-                                ty: wgpu::BindingType::Buffer {
-                                    ty: wgpu::BufferBindingType::Storage { read_only: false },
-                                    has_dynamic_offset: false,
-                                    min_binding_size: None,
-                                },
+                                ty: wgpu::BindingType::AccelerationStructure,
                                 count: None,
                             },
                             wgpu::BindGroupLayoutEntry {
                                 binding: 4,
                                 visibility: wgpu::ShaderStages::COMPUTE,
-                                ty: wgpu::BindingType::AccelerationStructure,
+                                ty: wgpu::BindingType::Buffer {
+                                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                                    has_dynamic_offset: false,
+                                    min_binding_size: None,
+                                },
                                 count: None,
                             },
                             wgpu::BindGroupLayoutEntry {
                                 binding: 5,
                                 visibility: wgpu::ShaderStages::COMPUTE,
                                 ty: wgpu::BindingType::Buffer {
-                                    ty: wgpu::BufferBindingType::Storage { read_only: false },
-                                    has_dynamic_offset: false,
-                                    min_binding_size: None,
-                                },
-                                count: None,
-                            },
-                            wgpu::BindGroupLayoutEntry {
-                                binding: 6,
-                                visibility: wgpu::ShaderStages::COMPUTE,
-                                ty: wgpu::BindingType::Buffer {
-                                    ty: wgpu::BufferBindingType::Storage { read_only: false },
+                                    ty: wgpu::BufferBindingType::Storage { read_only: true },
                                     has_dynamic_offset: false,
                                     min_binding_size: None,
                                 },
@@ -134,12 +120,12 @@ pub fn encode(
     );
 
     let constants = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("appearance-path-tracer-gpu::trace constants"),
+        label: Some("appearance-path-tracer-gpu::apply_di constants"),
         contents: bytemuck::bytes_of(&Constants {
             ray_count: parameters.ray_count,
-            bounce: parameters.bounce,
-            seed: parameters.seed,
-            sample: parameters.sample,
+            _padding0: 0,
+            _padding1: 0,
+            _padding2: 0,
         }),
         usage: wgpu::BufferUsages::UNIFORM,
     });
@@ -159,24 +145,20 @@ pub fn encode(
             },
             wgpu::BindGroupEntry {
                 binding: 2,
-                resource: parameters.out_rays.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 3,
                 resource: parameters.payloads.as_entire_binding(),
             },
             wgpu::BindGroupEntry {
-                binding: 4,
+                binding: 3,
                 resource: wgpu::BindingResource::AccelerationStructure(
                     parameters.scene_resources.tlas(),
                 ),
             },
             wgpu::BindGroupEntry {
-                binding: 5,
+                binding: 4,
                 resource: parameters.light_samples.as_entire_binding(),
             },
             wgpu::BindGroupEntry {
-                binding: 6,
+                binding: 5,
                 resource: parameters.light_sample_ctxs.as_entire_binding(),
             },
         ],
@@ -187,7 +169,7 @@ pub fn encode(
         device,
         |material_pool_bind_group| {
             let mut cpass = command_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("appearance-path-tracer-gpu::trace"),
+                label: Some("appearance-path-tracer-gpu::apply_di"),
                 timestamp_writes: None,
             });
             cpass.set_pipeline(&pipeline);
@@ -199,7 +181,7 @@ pub fn encode(
             );
             cpass.set_bind_group(2, material_pool_bind_group, &[]);
             cpass.set_bind_group(3, &parameters.scene_resources.sky().bind_group(device), &[]);
-            cpass.insert_debug_marker("appearance-path-tracer-gpu::trace");
+            cpass.insert_debug_marker("appearance-path-tracer-gpu::apply_di");
             cpass.dispatch_workgroups(parameters.ray_count.div_ceil(128), 1, 1);
         },
     );

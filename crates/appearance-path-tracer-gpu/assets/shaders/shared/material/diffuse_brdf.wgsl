@@ -1,4 +1,4 @@
-@include appearance-path-tracer-gpu::shared/bsdf
+@include appearance-path-tracer-gpu::shared/material/bsdf
 
 struct DiffuseLobe {
     albedo: vec3<f32>,

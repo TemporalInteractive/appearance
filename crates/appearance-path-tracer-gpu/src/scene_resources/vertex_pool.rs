@@ -1,6 +1,6 @@
-use appearance_wgpu::wgpu;
+use appearance_wgpu::wgpu::{self, util::DeviceExt};
 use bytemuck::{Pod, Zeroable};
-use glam::{Vec2, Vec4};
+use glam::{Mat4, Vec2, Vec4};
 
 pub const MAX_VERTEX_POOL_VERTICES: usize = 1024 * 1024 * 32;
 
@@ -49,6 +49,25 @@ impl VertexPoolSlice {
     }
 }
 
+#[derive(Pod, Clone, Copy, Zeroable)]
+#[repr(C)]
+struct VertexPoolConstants {
+    num_emissive_triangle_instances: u32,
+    num_emissive_triangles: u32,
+    _padding1: u32,
+    _padding2: u32,
+}
+
+#[derive(Pod, Clone, Copy, Zeroable)]
+#[repr(C)]
+struct EmissiveTriangleInstance {
+    transform: Mat4,
+    vertex_pool_slice_idx: u32,
+    num_triangles: u32,
+    cdf: f32,
+    _padding0: u32,
+}
+
 pub struct VertexPool {
     vertex_position_buffer: wgpu::Buffer,
     vertex_normal_buffer: wgpu::Buffer,
@@ -56,12 +75,14 @@ pub struct VertexPool {
     vertex_tex_coord_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
     triangle_material_index_buffer: wgpu::Buffer,
+    emissive_triangle_instance_buffer: wgpu::Buffer,
     slices_buffer: wgpu::Buffer,
 
+    emissive_triangle_instances: Vec<EmissiveTriangleInstance>,
+    emissive_triangle_count: u32,
     slices: Vec<VertexPoolSlice>,
 
     bind_group_layout: wgpu::BindGroupLayout,
-    bind_group: wgpu::BindGroup,
 }
 
 impl VertexPool {
@@ -112,6 +133,13 @@ impl VertexPool {
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
 
+        let emissive_triangle_instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("appearance-path-tracer-gpu::vertex_pool emissive_triangle_instances"),
+            mapped_at_creation: false,
+            size: (std::mem::size_of::<EmissiveTriangleInstance>() * 1024) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        });
+
         let slices_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("appearance-path-tracer-gpu::vertex_pool slices"),
             mapped_at_creation: false,
@@ -126,7 +154,7 @@ impl VertexPool {
                     binding: 0,
                     visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
                         min_binding_size: None,
                     },
@@ -192,40 +220,25 @@ impl VertexPool {
                     },
                     count: None,
                 },
-            ],
-        });
-
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: None,
-            layout: &bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: vertex_position_buffer.as_entire_binding(),
+                wgpu::BindGroupLayoutEntry {
+                    binding: 7,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
                 },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: vertex_normal_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: vertex_tangent_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: vertex_tex_coord_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 4,
-                    resource: index_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 5,
-                    resource: triangle_material_index_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 6,
-                    resource: slices_buffer.as_entire_binding(),
+                wgpu::BindGroupLayoutEntry {
+                    binding: 8,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
                 },
             ],
         });
@@ -237,10 +250,12 @@ impl VertexPool {
             vertex_tex_coord_buffer,
             index_buffer,
             triangle_material_index_buffer,
+            emissive_triangle_instance_buffer,
             slices_buffer,
+            emissive_triangle_instances: Vec::new(),
+            emissive_triangle_count: 0,
             slices: Vec::new(),
             bind_group_layout,
-            bind_group,
         }
     }
 
@@ -284,12 +299,44 @@ impl VertexPool {
         );
     }
 
-    pub fn write_slices(&self, queue: &wgpu::Queue) {
+    pub fn write_slices(&mut self, queue: &wgpu::Queue) {
+        self.calculate_emissive_slice_instance_cdfs();
+
+        queue.write_buffer(
+            &self.emissive_triangle_instance_buffer,
+            0,
+            bytemuck::cast_slice(self.emissive_triangle_instances.as_slice()),
+        );
+
         queue.write_buffer(
             &self.slices_buffer,
             0,
             bytemuck::cast_slice(self.slices.as_slice()),
         );
+    }
+
+    pub fn submit_emissive_slice_instance(&mut self, index: u32, transform: Mat4) {
+        let num_triangles = self.slices[index as usize].num_indices / 3;
+        let instance = EmissiveTriangleInstance {
+            transform,
+            vertex_pool_slice_idx: index,
+            num_triangles,
+            cdf: 0.0,
+            _padding0: 0,
+        };
+
+        self.emissive_triangle_instances.push(instance);
+        self.emissive_triangle_count += num_triangles;
+    }
+
+    fn calculate_emissive_slice_instance_cdfs(&mut self) {
+        let mut cdf = 0.0;
+        for instance in &mut self.emissive_triangle_instances {
+            let pdf = instance.num_triangles as f32 / self.emissive_triangle_count as f32;
+            cdf += pdf;
+
+            instance.cdf = cdf;
+        }
     }
 
     pub fn alloc(
@@ -383,8 +430,60 @@ impl VertexPool {
         &self.bind_group_layout
     }
 
-    pub fn bind_group(&self) -> &wgpu::BindGroup {
-        &self.bind_group
+    pub fn bind_group(&self, device: &wgpu::Device) -> wgpu::BindGroup {
+        let constants = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("appearance-path-tracer-gpu::vertex_pool constants"),
+            contents: bytemuck::bytes_of(&VertexPoolConstants {
+                num_emissive_triangle_instances: self.emissive_triangle_instances.len() as u32,
+                num_emissive_triangles: self.emissive_triangle_count,
+                _padding1: 0,
+                _padding2: 0,
+            }),
+            usage: wgpu::BufferUsages::UNIFORM,
+        });
+
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: None,
+            layout: &self.bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: constants.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: self.vertex_position_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: self.vertex_normal_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: self.vertex_tangent_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: self.vertex_tex_coord_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 5,
+                    resource: self.index_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 6,
+                    resource: self.triangle_material_index_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 7,
+                    resource: self.emissive_triangle_instance_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 8,
+                    resource: self.slices_buffer.as_entire_binding(),
+                },
+            ],
+        })
     }
 
     pub fn vertex_position_buffer(&self) -> &wgpu::Buffer {
@@ -393,5 +492,10 @@ impl VertexPool {
 
     pub fn index_buffer(&self) -> &wgpu::Buffer {
         &self.index_buffer
+    }
+
+    pub fn end_frame(&mut self) {
+        self.emissive_triangle_instances.clear();
+        self.emissive_triangle_count = 0;
     }
 }
