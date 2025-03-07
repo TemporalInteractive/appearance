@@ -1,58 +1,12 @@
-@include ::triangle
-@include ::packing
+@include appearance-path-tracer-gpu::shared/restir_di/di_reservoir
+@include appearance-path-tracer-gpu::shared/material/disney_bsdf
 
 ///
 /// BINDING DEPENDENCIES:
 /// appearance-path-tracer-gpu::shared/vertex_pool_bindings
-/// appearance-path-tracer-gpu::shared/material_pool_bindings
+/// appearance-path-tracer-gpu::shared/material/material_pool_bindings
 /// appearance-path-tracer-gpu::shared/sky_bindings
 ///
-
-// Used for sampling lights in the world, can both sample emissive triangles or the sun, indicated by triangle_area = 0
-struct LightSample {
-    direction: vec3<f32>,
-    distance: f32,
-    pdf: f32,
-    emission: vec3<f32>,
-    triangle_area: f32,
-    triangle_normal: vec3<f32>,
-}
-
-// Packed representation of LightSample
-struct PackedLightSample {
-    direction: PackedNormalizedXyz10,
-    distance: f32,
-    pdf: f32,
-    emission: PackedRgb9e5,
-    triangle_area: f32,
-    triangle_normal: PackedNormalizedXyz10,
-}
-
-// Context required to evaluate a light sample
-struct LightSampleCtx {
-    hit_tex_coord: vec2<f32>,
-    hit_material_idx: u32,
-    throughput: PackedRgb9e5,
-    front_facing_shading_normal_ws: PackedNormalizedXyz10,
-    front_facing_clearcoat_normal_ws: PackedNormalizedXyz10,
-}
-
-fn LightSample::new_triangle_sample(direction: vec3<f32>, distance: f32, pdf: f32, emission: vec3<f32>, triangle: Triangle) -> LightSample {
-    let p01: vec3<f32> = triangle.p1 - triangle.p0;
-    let p02: vec3<f32> = triangle.p2 - triangle.p0;
-    let triangle_area: f32 = Triangle::area_from_edges(p01, p02);
-    let triangle_normal: vec3<f32> = normalize(cross(p01, p02));
-
-    return LightSample(direction, distance, pdf, emission, triangle_area, triangle_normal);
-}
-
-fn LightSample::new_sun_sample(direction: vec3<f32>, distance: f32, pdf: f32, emission: vec3<f32>) -> LightSample {
-    return LightSample(direction, distance, pdf, emission, 0.0, UP);
-}
-
-fn LightSample::empty() -> LightSample {
-    return LightSample(vec3<f32>(0.0), 0.0, 0.0, vec3<f32>(0.0), 0.0, UP);
-}
 
 fn LightSample::intensity(_self: LightSample) -> f32 {
     if (_self.triangle_area == 0.0) {
@@ -62,38 +16,6 @@ fn LightSample::intensity(_self: LightSample) -> f32 {
 
         return Triangle::solid_angle(cos_out, _self.triangle_area, _self.distance) * 10.0;
     }
-}
-
-fn PackedLightSample::new(light_sample: LightSample) -> PackedLightSample {
-    return PackedLightSample(
-        PackedNormalizedXyz10::new(light_sample.direction, 0),
-        light_sample.distance,
-        light_sample.pdf,
-        PackedRgb9e5::new(light_sample.emission),
-        light_sample.triangle_area,
-        PackedNormalizedXyz10::new(light_sample.triangle_normal, 0)
-    );
-}
-
-fn PackedLightSample::unpack(_self: PackedLightSample) -> LightSample {
-    return LightSample(
-        PackedNormalizedXyz10::unpack(_self.direction, 0),
-        _self.distance,
-        _self.pdf,
-        PackedRgb9e5::unpack(_self.emission),
-        _self.triangle_area,
-        PackedNormalizedXyz10::unpack(_self.triangle_normal, 0)
-    );
-}
-
-fn LightSampleCtx::new(hit_tex_coord: vec2<f32>, hit_material_idx: u32, throughput: vec3<f32>, front_facing_shading_normal_ws: vec3<f32>, front_facing_clearcoat_normal_ws: vec3<f32>) -> LightSampleCtx {
-    return LightSampleCtx(
-        hit_tex_coord,
-        hit_material_idx,
-        PackedRgb9e5::new(throughput),
-        PackedNormalizedXyz10::new(front_facing_shading_normal_ws, 0),
-        PackedNormalizedXyz10::new(front_facing_clearcoat_normal_ws, 0)
-    );
 }
 
 fn Nee::sample_emissive_triangle(r0: f32, r1: f32, r23: vec2<f32>, sample_point: vec3<f32>, sun_pick_probability: f32) -> LightSample {
@@ -151,7 +73,7 @@ fn Nee::sample_sun(r01: vec2<f32>, sun_pick_probability: f32) -> LightSample {
     return LightSample::new_sun_sample(direction, distance, pdf, emission);
 }
 
-fn Nee::sample(r0: f32, r1: f32, r2: f32, r34: vec2<f32>, sample_point: vec3<f32>) -> LightSample {
+fn Nee::sample_uniform(r0: f32, r1: f32, r2: f32, r34: vec2<f32>, sample_point: vec3<f32>) -> LightSample {
     var sun_pick_probability: f32;
     if (vertex_pool_constants.num_emissive_triangles > 0) {
         sun_pick_probability = 0.5;
@@ -164,4 +86,47 @@ fn Nee::sample(r0: f32, r1: f32, r2: f32, r34: vec2<f32>, sample_point: vec3<f32
     } else {
         return Nee::sample_emissive_triangle(r1, r2, r34, sample_point, sun_pick_probability);
     }
+}
+
+fn Nee::sample_ris(hit_point_ws: vec3<f32>, w_out_worldspace: vec3<f32>, front_facing_shading_normal_ws: vec3<f32>,
+     tangent_to_world: mat3x3<f32>, world_to_tangent: mat3x3<f32>, clearcoat_tangent_to_world: mat3x3<f32>, clearcoat_world_to_tangent: mat3x3<f32>,
+     disney_bsdf: DisneyBsdf, rng: ptr<function, u32>) -> DiReservoir {
+    const NUM_SAMPLES: u32 = 4;
+
+    var selected_phat: f32 = 0.0;
+    var di_reservoir = DiReservoir::new();
+
+    for (var i: u32 = 0; i < NUM_SAMPLES; i += 1) {
+        let sample: LightSample = Nee::sample_uniform(random_uniform_float(rng), random_uniform_float(rng), random_uniform_float(rng),
+            vec2<f32>(random_uniform_float(rng), random_uniform_float(rng)), hit_point_ws);
+
+        let w_in_worldspace: vec3<f32> = sample.direction;
+
+        let n_dot_l: f32 = dot(w_in_worldspace, front_facing_shading_normal_ws);
+        if (n_dot_l > 0.0) {
+            let sample_intensity = LightSample::intensity(sample);
+
+            // TODO: a cheaper approximation of the disney bsdf is desirable here
+            var shading_pdf: f32;
+            let reflectance: vec3<f32> = DisneyBsdf::evaluate(disney_bsdf, front_facing_shading_normal_ws,
+                tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
+                w_out_worldspace, w_in_worldspace, &shading_pdf);
+            let contribution: vec3<f32> = n_dot_l * reflectance;
+
+            let phat: f32 = length(contribution * sample_intensity);
+            let weight: f32 = phat / sample.pdf;
+            if (DiReservoir::update(&di_reservoir, weight, rng, sample)) {
+                selected_phat = phat;
+            }
+        } else {
+            di_reservoir.sample_count += 1;
+        }
+    }
+
+    if (selected_phat > 0.0) {
+        di_reservoir.contribution_weight = (1.0 / selected_phat) * (1.0 / di_reservoir.sample_count * di_reservoir.weight_sum);
+        // TODO: visibility trace
+    }
+
+    return di_reservoir;
 }

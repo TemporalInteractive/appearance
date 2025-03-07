@@ -1,5 +1,5 @@
-@include appearance-path-tracer-gpu::shared/material_pool
 @include ::color
+@include appearance-path-tracer-gpu::shared/material/material_pool
 
 @group(2)
 @binding(0)

@@ -1,10 +1,9 @@
 @include ::random
 @include appearance-path-tracer-gpu::shared/ray
-@include appearance-path-tracer-gpu::shared/diffuse_brdf
-@include appearance-path-tracer-gpu::shared/disney_bsdf
+@include appearance-path-tracer-gpu::shared/material/disney_bsdf
 
 @include appearance-path-tracer-gpu::shared/vertex_pool_bindings
-@include appearance-path-tracer-gpu::shared/material_pool_bindings
+@include appearance-path-tracer-gpu::shared/material/material_pool_bindings
 @include appearance-path-tracer-gpu::shared/sky_bindings
 
 @include appearance-path-tracer-gpu::shared/nee

@@ -15,9 +15,9 @@
    all copies or substantial portions of the Software.
 */
 
-@include appearance-path-tracer-gpu::shared/bsdf
-@include appearance-path-tracer-gpu::shared/ggxmdf
-@include appearance-path-tracer-gpu::shared/material_pool
+@include appearance-path-tracer-gpu::shared/material/bsdf
+@include appearance-path-tracer-gpu::shared/material/ggxmdf
+@include appearance-path-tracer-gpu::shared/material/material_pool
 
 fn world_2_tangent(v: vec3<f32>, n: vec3<f32>, t: vec3<f32>, b: vec3<f32>) -> vec3<f32> {
     return vec3<f32>(

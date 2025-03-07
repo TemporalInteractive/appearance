@@ -1,10 +1,9 @@
 @include ::random
 @include appearance-path-tracer-gpu::shared/ray
-@include appearance-path-tracer-gpu::shared/diffuse_brdf
-@include appearance-path-tracer-gpu::shared/disney_bsdf
+@include appearance-path-tracer-gpu::shared/material/disney_bsdf
 
 @include appearance-path-tracer-gpu::shared/vertex_pool_bindings
-@include appearance-path-tracer-gpu::shared/material_pool_bindings
+@include appearance-path-tracer-gpu::shared/material/material_pool_bindings
 @include appearance-path-tracer-gpu::shared/sky_bindings
 
 @include appearance-path-tracer-gpu::shared/nee
@@ -173,8 +172,14 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
 
             let disney_bsdf = DisneyBsdf::from_material(material);
 
-            let light_sample: LightSample = Nee::sample(random_uniform_float(&rng), random_uniform_float(&rng), random_uniform_float(&rng),
-                vec2<f32>(random_uniform_float(&rng), random_uniform_float(&rng)), hit_point_ws);
+            // let light_sample: LightSample = Nee::sample_uniform(random_uniform_float(&rng), random_uniform_float(&rng), random_uniform_float(&rng),
+            //     vec2<f32>(random_uniform_float(&rng), random_uniform_float(&rng)), hit_point_ws);
+            let di_reservoir: DiReservoir = Nee::sample_ris(hit_point_ws, w_out_worldspace, front_facing_shading_normal_ws,
+                tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
+                disney_bsdf, &rng);
+            var light_sample: LightSample = di_reservoir.sample;
+            light_sample.pdf = 1.0 / di_reservoir.contribution_weight;
+            
             light_samples[id] = PackedLightSample::new(light_sample);
             light_sample_ctxs[id] = LightSampleCtx::new(tex_coord, material_idx, throughput, front_facing_shading_normal_ws, clearcoat_tangent_to_world[2]);
 
