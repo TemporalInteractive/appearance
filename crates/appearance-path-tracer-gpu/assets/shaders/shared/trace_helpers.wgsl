@@ -4,11 +4,25 @@
 /// appearance-path-tracer-gpu::shared/material/material_pool_bindings
 ///
 
+const MAX_NON_OPAQUE_DEPTH: u32 = 1;
+
+fn trace_shadow_ray_opaque(origin: vec3<f32>, direction: vec3<f32>, distance: f32, scene: acceleration_structure) -> bool {
+    var shadow_rq: ray_query;
+    rayQueryInitialize(&shadow_rq, scene, RayDesc(0x4, 0xFFu, 0.0, distance, origin + direction * 0.00001, direction));
+    rayQueryProceed(&shadow_rq);
+    let intersection = rayQueryGetCommittedIntersection(&shadow_rq);
+    return intersection.kind != RAY_QUERY_INTERSECTION_TRIANGLE;
+}
+
 fn trace_shadow_ray(_origin: vec3<f32>, direction: vec3<f32>, distance: f32, scene: acceleration_structure) -> bool {
     var origin: vec3<f32> = _origin;
 
+    if (MAX_NON_OPAQUE_DEPTH == 1) {
+        return trace_shadow_ray_opaque(origin, direction, distance, scene);
+    }
+
     var travelled_distance: f32 = 0.0;
-    for (var step: u32 = 0; step < 64; step += 1) {
+    for (var step: u32 = 0; step < MAX_NON_OPAQUE_DEPTH; step += 1) {
         var rq: ray_query;
         rayQueryInitialize(&rq, scene, RayDesc(0u, 0xFFu, 0.0, distance - travelled_distance, origin + direction * 0.00001, direction));
         rayQueryProceed(&rq);

@@ -7,6 +7,7 @@
 @include appearance-path-tracer-gpu::shared/sky_bindings
 
 @include appearance-path-tracer-gpu::shared/nee
+@include appearance-path-tracer-gpu::shared/trace_helpers
 
 struct Constants {
     ray_count: u32,
@@ -71,7 +72,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     var throughput: vec3<f32> = PackedRgb9e5::unpack(payload.throughput);
     var rng: u32 = payload.rng;
 
-    for (var step: u32 = 0; step < 64; step += 1) {
+    for (var step: u32 = 0; step < MAX_NON_OPAQUE_DEPTH; step += 1) {
         var rq: ray_query;
         rayQueryInitialize(&rq, scene, RayDesc(0u, 0xFFu, 0.0, 1000.0, origin, direction));
         rayQueryProceed(&rq);
@@ -97,9 +98,15 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
             let material: Material = Material::from_material_descriptor(material_descriptor, tex_coord);
 
             if (material.luminance < material.alpha_cutoff) {
-                // TODO: non-opaque geometry would be a better choice, not properly supported by wgpu yet
-                origin += direction * (intersection.t + 0.001);
-                continue;
+                if (step + 1 < MAX_NON_OPAQUE_DEPTH) {
+                    // TODO: non-opaque geometry would be a better choice, not properly supported by wgpu yet
+                    origin += direction * (intersection.t + 0.001);
+                    continue;
+                } else {
+                    // Non-opaque geometry can get funky when trying to shade a non-existing surface, just kill the path
+                    payload.t = -1.0;
+                    break;
+                }
             }
 
             if (constants.bounce == 0) {

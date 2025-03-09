@@ -1,3 +1,4 @@
+@include ::color
 @include appearance-path-tracer-gpu::shared/ray
 @include appearance-path-tracer-gpu::shared/restir_di/di_reservoir
 @include appearance-path-tracer-gpu::shared/material/disney_bsdf
@@ -51,13 +52,6 @@ fn Nee::sample_emissive_triangle(r0: f32, r1: f32, r23: vec2<f32>, sample_point:
             triangle = Triangle::transform(triangle, emissive_triangle_instance.transform);
             let point: vec3<f32> = triangle.p0 * barycentrics.x + triangle.p1 * barycentrics.y + triangle.p2 * barycentrics.z;
 
-            // var direction: vec3<f32> = sample_point - position;
-            // let distance: f32 = length(direction);
-            // direction /= distance;
-
-            // let direction: vec3<f32> = normalize(position - sample_point);
-            // let distance: f32 = distance(sample_point, position);
-
             *pdf = max(1e-6, (1.0 - sun_pick_probability) / f32(vertex_pool_constants.num_emissive_triangles));
 
             let material_idx: u32 = vertex_pool_slice.material_idx + triangle_material_indices[vertex_pool_slice.first_index / 3 + local_triangle_idx];
@@ -102,7 +96,7 @@ fn Nee::sample_uniform(r0: f32, r1: f32, r2: f32, r34: vec2<f32>, sample_point: 
 fn Nee::sample_ris(hit_point_ws: vec3<f32>, w_out_worldspace: vec3<f32>, front_facing_shading_normal_ws: vec3<f32>,
      tangent_to_world: mat3x3<f32>, world_to_tangent: mat3x3<f32>, clearcoat_tangent_to_world: mat3x3<f32>, clearcoat_world_to_tangent: mat3x3<f32>,
      disney_bsdf: DisneyBsdf, rng: ptr<function, u32>, scene: acceleration_structure) -> DiReservoir {
-    const NUM_SAMPLES: u32 = 8;
+    const NUM_SAMPLES: u32 = 1;
 
     var di_reservoir = DiReservoir::new();
 
@@ -114,7 +108,7 @@ fn Nee::sample_ris(hit_point_ws: vec3<f32>, w_out_worldspace: vec3<f32>, front_f
         let w_in_worldspace: vec3<f32> = normalize(sample.point - hit_point_ws);
 
         let n_dot_l: f32 = dot(w_in_worldspace, front_facing_shading_normal_ws);
-        if (n_dot_l > 0.0) {
+        if (n_dot_l > 0.0 && sample_pdf > 0.0) {
             let sample_intensity = LightSample::intensity(sample, hit_point_ws);
 
             // TODO: a cheaper approximation of the disney bsdf is desirable here
@@ -122,13 +116,13 @@ fn Nee::sample_ris(hit_point_ws: vec3<f32>, w_out_worldspace: vec3<f32>, front_f
             let reflectance: vec3<f32> = DisneyBsdf::evaluate(disney_bsdf, front_facing_shading_normal_ws,
                 tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
                 w_out_worldspace, w_in_worldspace, &shading_pdf);
-            let contribution: vec3<f32> = n_dot_l * reflectance;
-
-            let phat: f32 = length(contribution * sample_intensity);
-            let weight: f32 = phat / sample_pdf;
-            DiReservoir::update(&di_reservoir, weight, rng, sample, phat);
-        } else {
-            di_reservoir.sample_count += 1;
+            
+            if (shading_pdf > 0.0) {
+                let contribution: vec3<f32> = n_dot_l * reflectance;
+                let phat: f32 = linear_to_luma(contribution * sample_intensity);
+                let weight: f32 = phat / sample_pdf;
+                DiReservoir::update(&di_reservoir, weight, rng, sample, phat);
+            }
         }
     }
 
