@@ -184,6 +184,17 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
             light_sample_reservoirs[id] = PackedDiReservoir::new(di_reservoir);
             light_sample_ctxs[id] = LightSampleCtx::new(tex_coord, material_idx, throughput, front_facing_shading_normal_ws, clearcoat_tangent_to_world[2]);
 
+            if (constants.bounce > 1) {
+                let russian_roulette: f32 = max(throughput.r, max(throughput.g, throughput.b));
+
+                if (russian_roulette < random_uniform_float(&rng)) {
+                    payload.t = -1.0;
+                    break;
+                } else {
+                    throughput *= 1.0 / russian_roulette;
+                }
+            }
+
             var w_in_worldspace: vec3<f32>;
             var pdf: f32;
             var specular: bool;
