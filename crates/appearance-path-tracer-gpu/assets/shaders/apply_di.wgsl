@@ -1,6 +1,7 @@
 @include ::random
 @include appearance-path-tracer-gpu::shared/ray
 @include appearance-path-tracer-gpu::shared/material/disney_bsdf
+@include appearance-path-tracer-gpu::shared/restir_di/di_reservoir
 
 @include appearance-path-tracer-gpu::shared/vertex_pool_bindings
 @include appearance-path-tracer-gpu::shared/material/material_pool_bindings
@@ -33,7 +34,7 @@ var scene: acceleration_structure;
 
 @group(0)
 @binding(4)
-var<storage, read> light_samples: array<PackedLightSample>;
+var<storage, read> light_sample_reservoirs: array<PackedDiReservoir>;
 
 @group(0)
 @binding(5)
@@ -53,7 +54,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     var payload: Payload = payloads[id];
     if (payload.t < 0.0) { return; } // TODO: indirect dispatch with pids
 
-    let light_sample: LightSample = PackedLightSample::unpack(light_samples[id]);
+    let di_reservoir: DiReservoir = PackedDiReservoir::unpack(light_sample_reservoirs[id]);
+    let light_sample: LightSample = di_reservoir.sample;
     if (light_sample.pdf == 0.0) { return; }
 
     let light_sample_ctx: LightSampleCtx = light_sample_ctxs[id];
@@ -96,7 +98,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
 
             let light_intensity: vec3<f32> = LightSample::intensity(light_sample) * light_sample.emission;
 
-            let contribution: vec3<f32> = throughput * reflectance * light_intensity * n_dot_l / light_sample.pdf;
+            let contribution: vec3<f32> = throughput * reflectance * light_intensity * n_dot_l * di_reservoir.contribution_weight;
             accumulated += contribution;
         };
     }

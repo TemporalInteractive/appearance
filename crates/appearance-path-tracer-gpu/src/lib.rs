@@ -51,11 +51,20 @@ struct LightSampleCtx {
     front_facing_clearcoat_normal_ws: u32,
 }
 
+#[repr(C)]
+struct PackedDiReservoir {
+    sample_count: f32,
+    contribution_weight: f32,
+    weight_sum: f32,
+    _padding0: u32,
+    sample: PackedLightSample,
+}
+
 struct SizedResources {
     film: Film,
     rays: [wgpu::Buffer; 2],
     payloads: wgpu::Buffer,
-    light_samples: wgpu::Buffer,
+    light_sample_reservoirs: wgpu::Buffer,
     light_sample_ctxs: wgpu::Buffer,
 }
 
@@ -79,9 +88,9 @@ impl SizedResources {
             usage: wgpu::BufferUsages::STORAGE,
         });
 
-        let light_samples = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("appearance-path-tracer-gpu light_samples"),
-            size: (std::mem::size_of::<PackedLightSample>() as u32 * resolution.x * resolution.y)
+        let light_sample_reservoirs = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("appearance-path-tracer-gpu light_sample_reservoirs"),
+            size: (std::mem::size_of::<PackedDiReservoir>() as u32 * resolution.x * resolution.y)
                 as u64,
             mapped_at_creation: false,
             usage: wgpu::BufferUsages::STORAGE,
@@ -99,7 +108,7 @@ impl SizedResources {
             film,
             rays,
             payloads,
-            light_samples,
+            light_sample_reservoirs,
             light_sample_ctxs,
         }
     }
@@ -244,7 +253,7 @@ impl PathTracerGpu {
                         in_rays,
                         out_rays,
                         payloads: &self.sized_resources.payloads,
-                        light_samples: &self.sized_resources.light_samples,
+                        light_sample_reservoirs: &self.sized_resources.light_sample_reservoirs,
                         light_sample_ctxs: &self.sized_resources.light_sample_ctxs,
                         scene_resources: &self.scene_resources,
                     },
@@ -258,7 +267,7 @@ impl PathTracerGpu {
                         ray_count: self.local_resolution.x * self.local_resolution.y,
                         in_rays,
                         payloads: &self.sized_resources.payloads,
-                        light_samples: &self.sized_resources.light_samples,
+                        light_sample_reservoirs: &self.sized_resources.light_sample_reservoirs,
                         light_sample_ctxs: &self.sized_resources.light_sample_ctxs,
                         scene_resources: &self.scene_resources,
                     },

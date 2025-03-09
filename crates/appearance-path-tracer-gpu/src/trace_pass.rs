@@ -25,7 +25,7 @@ pub struct TracePassParameters<'a> {
     pub in_rays: &'a wgpu::Buffer,
     pub out_rays: &'a wgpu::Buffer,
     pub payloads: &'a wgpu::Buffer,
-    pub light_samples: &'a wgpu::Buffer,
+    pub light_sample_reservoirs: &'a wgpu::Buffer,
     pub light_sample_ctxs: &'a wgpu::Buffer,
     pub scene_resources: &'a SceneResources,
 }
@@ -173,7 +173,7 @@ pub fn encode(
             },
             wgpu::BindGroupEntry {
                 binding: 5,
-                resource: parameters.light_samples.as_entire_binding(),
+                resource: parameters.light_sample_reservoirs.as_entire_binding(),
             },
             wgpu::BindGroupEntry {
                 binding: 6,
