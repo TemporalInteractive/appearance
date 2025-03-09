@@ -95,19 +95,18 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
 
             let material_idx: u32 = vertex_pool_slice.material_idx + triangle_material_indices[vertex_pool_slice.first_index / 3 + intersection.primitive_index];
             let material_descriptor: MaterialDescriptor = material_descriptors[material_idx];
-            let material: Material = Material::from_material_descriptor(material_descriptor, tex_coord);
+            var material_color: vec4<f32> = MaterialDescriptor::color(material_descriptor, tex_coord);
 
-            if (material.luminance < material.alpha_cutoff) {
+            if (material_color.a < material_descriptor.alpha_cutoff) {
                 if (step + 1 < MAX_NON_OPAQUE_DEPTH) {
                     // TODO: non-opaque geometry would be a better choice, not properly supported by wgpu yet
                     origin += direction * (intersection.t + 0.001);
                     continue;
                 } else {
-                    // Non-opaque geometry can get funky when trying to shade a non-existing surface, just kill the path
-                    payload.t = -1.0;
-                    break;
+                    material_color.a = 1.0;
                 }
             }
+            let material: Material = Material::from_material_descriptor_with_color(material_descriptor, tex_coord, material_color);
 
             if (constants.bounce == 0) {
                 accumulated += throughput * material.emission;
@@ -180,8 +179,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
 
             let disney_bsdf = DisneyBsdf::from_material(material);
 
-            // let light_sample: LightSample = Nee::sample_uniform(random_uniform_float(&rng), random_uniform_float(&rng), random_uniform_float(&rng),
-            //     vec2<f32>(random_uniform_float(&rng), random_uniform_float(&rng)), hit_point_ws);
             let di_reservoir: DiReservoir = Nee::sample_ris(hit_point_ws, w_out_worldspace, front_facing_shading_normal_ws,
                 tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
                 disney_bsdf, &rng, scene);

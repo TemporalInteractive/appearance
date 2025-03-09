@@ -4,7 +4,7 @@
 /// appearance-path-tracer-gpu::shared/material/material_pool_bindings
 ///
 
-const MAX_NON_OPAQUE_DEPTH: u32 = 1;
+const MAX_NON_OPAQUE_DEPTH: u32 = 3;
 
 fn trace_shadow_ray_opaque(origin: vec3<f32>, direction: vec3<f32>, distance: f32, scene: acceleration_structure) -> bool {
     var shadow_rq: ray_query;

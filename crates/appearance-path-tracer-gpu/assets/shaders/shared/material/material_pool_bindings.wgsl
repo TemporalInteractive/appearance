@@ -125,9 +125,8 @@ fn MaterialDescriptor::apply_clearcoat_normal_mapping(_self: MaterialDescriptor,
     return normal_ws;
 }
 
-fn Material::from_material_descriptor(material_descriptor: MaterialDescriptor, tex_coord: vec2<f32>) -> Material {
+fn Material::from_material_descriptor_with_color(material_descriptor: MaterialDescriptor, tex_coord: vec2<f32>, color: vec4<f32>) -> Material {
     var material: Material;
-    let color: vec4<f32> = MaterialDescriptor::color(material_descriptor, tex_coord);
     material.color = color.rgb;
     material.luminance = color.a;
     let metallic_roughness = MaterialDescriptor::metallic_roughness(material_descriptor, tex_coord);
@@ -147,4 +146,9 @@ fn Material::from_material_descriptor(material_descriptor: MaterialDescriptor, t
     material.clearcoat_roughness = MaterialDescriptor::clearcoat_roughness(material_descriptor, tex_coord);
     material.alpha_cutoff = material_descriptor.alpha_cutoff;
     return material;
+}
+
+fn Material::from_material_descriptor(material_descriptor: MaterialDescriptor, tex_coord: vec2<f32>) -> Material {
+    let color: vec4<f32> = MaterialDescriptor::color(material_descriptor, tex_coord);
+    return Material::from_material_descriptor_with_color(material_descriptor, tex_coord, color);
 }
