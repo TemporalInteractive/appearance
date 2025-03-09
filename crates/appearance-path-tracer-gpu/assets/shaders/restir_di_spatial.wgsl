@@ -16,6 +16,10 @@ struct Constants {
     resolution: vec2<u32>,
     spatial_pass_count: u32,
     spatial_pass_idx: u32,
+    pixel_radius: f32,
+    _padding0: u32,
+    _padding1: u32,
+    _padding2: u32,
 }
 
 @group(0)
@@ -104,8 +108,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     for (var i: u32 = 0; i < NUM_SAMPLES; i += 1) {
         let center_id = vec2<i32>(i32(id.x), i32(id.y));
         let offset = vec2<i32>(
-            i32((random_uniform_float(&rng) * 2.0 - 1.0) * 30.0),
-            i32((random_uniform_float(&rng) * 2.0 - 1.0) * 30.0)
+            i32((random_uniform_float(&rng) * 2.0 - 1.0) * constants.pixel_radius),
+            i32((random_uniform_float(&rng) * 2.0 - 1.0) * constants.pixel_radius)
         );
         let neighbour_id = mirror_pixel(center_id + offset);
         let flat_neighbour_id: u32 = neighbour_id.y * constants.resolution.x + neighbour_id.x;

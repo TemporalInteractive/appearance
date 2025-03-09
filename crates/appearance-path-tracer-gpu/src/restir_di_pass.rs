@@ -24,6 +24,10 @@ struct SpatialConstants {
     resolution: UVec2,
     spatial_pass_count: u32,
     spatial_pass_idx: u32,
+    pixel_radius: f32,
+    _padding0: u32,
+    _padding1: u32,
+    _padding2: u32,
 }
 
 #[repr(C)]
@@ -57,6 +61,7 @@ pub struct PackedDiReservoir {
 pub struct RestirDiPassParameters<'a> {
     pub resolution: UVec2,
     pub spatial_pass_count: u32,
+    pub spatial_pixel_radius: f32,
     pub in_rays: &'a wgpu::Buffer,
     pub payloads: &'a wgpu::Buffer,
     pub light_sample_reservoirs: &'a wgpu::Buffer,
@@ -406,6 +411,10 @@ impl RestirDiPass {
                     resolution: parameters.resolution,
                     spatial_pass_count: parameters.spatial_pass_count,
                     spatial_pass_idx: i,
+                    pixel_radius: parameters.spatial_pixel_radius,
+                    _padding0: 0,
+                    _padding1: 0,
+                    _padding2: 0,
                 }),
                 usage: wgpu::BufferUsages::UNIFORM,
             });
