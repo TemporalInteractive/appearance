@@ -244,7 +244,7 @@ impl PathTracerGpu {
                 self.sized_resources.restir_di_pass.encode(
                     &RestirDiPassParameters {
                         resolution: self.local_resolution,
-                        spatial_pass_count: 0,
+                        spatial_pass_count: 2,
                         in_rays,
                         payloads: &self.sized_resources.payloads,
                         light_sample_reservoirs: &self.sized_resources.light_sample_reservoirs,

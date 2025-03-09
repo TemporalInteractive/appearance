@@ -10,6 +10,8 @@
 
 @include appearance-path-tracer-gpu::shared/nee
 
+const NUM_SAMPLES: u32 = 5;
+
 struct Constants {
     resolution: vec2<u32>,
     spatial_pass_count: u32,
@@ -88,7 +90,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     var combined_sample_count: f32 = reservoir.sample_count;
     DiReservoir::update(&combined_reservoir, reservoir.selected_phat * reservoir.contribution_weight * reservoir.sample_count, &rng, reservoir.sample, reservoir.selected_phat);
 
-    for (var i: u32 = 0; i < 4; i += 1) {
+    for (var i: u32 = 0; i < NUM_SAMPLES; i += 1) {
         let center_id = vec2<i32>(i32(id.x), i32(id.y));
         let offset = vec2<i32>(
             i32((random_uniform_float(&rng) * 2.0 - 1.0) * 30.0),
@@ -97,8 +99,12 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
         let neighbour_id = vec2<u32>(clamp(center_id + offset, vec2<i32>(0), vec2<i32>(constants.resolution)));
         let flat_neighbour_id: u32 = neighbour_id.y * constants.resolution.x + neighbour_id.x;
 
+        if (flat_neighbour_id == flat_id) {
+            continue;
+        }
+
         // TODO: gbuffer based rejection
-        var neighbour_reservoir: DiReservoir = PackedDiReservoir::unpack(prev_reservoirs[flat_neighbour_id]);
+        var neighbour_reservoir: DiReservoir = PackedDiReservoir::unpack(in_reservoirs[flat_neighbour_id]);
 
         let w_out_worldspace: vec3<f32> = -direction;
         let w_in_worldspace: vec3<f32> = normalize(neighbour_reservoir.sample.point - hit_point_ws);

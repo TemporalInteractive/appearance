@@ -110,7 +110,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     }
 
     reservoirs[id] = PackedDiReservoir::new(combined_reservoir);
-    prev_reservoirs[id] = PackedDiReservoir::new(combined_reservoir);
 
     payload.rng = rng;
     payloads[id] = payload;
