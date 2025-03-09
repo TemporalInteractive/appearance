@@ -5,9 +5,10 @@ use appearance_wgpu::{pipeline_database::PipelineDatabase, wgpu, Context};
 use appearance_world::visible_world_action::VisibleWorldActionType;
 use apply_di_pass::ApplyDiPassParameters;
 use film::Film;
-use glam::{UVec2, Vec2, Vec3};
+use glam::{UVec2, Vec3};
 use raygen_pass::RaygenPassParameters;
 use resolve_pass::ResolvePassParameters;
+use restir_di_pass::{LightSampleCtx, PackedDiReservoir, RestirDiPass, RestirDiPassParameters};
 use scene_resources::SceneResources;
 use trace_pass::TracePassParameters;
 
@@ -15,6 +16,7 @@ mod apply_di_pass;
 mod film;
 mod raygen_pass;
 mod resolve_pass;
+mod restir_di_pass;
 mod scene_resources;
 mod trace_pass;
 
@@ -32,40 +34,14 @@ struct Payload {
     t: f32,
 }
 
-#[repr(C)]
-struct PackedLightSample {
-    direction: u32,
-    distance: f32,
-    pdf: f32,
-    emission: u32,
-    triangle_area: f32,
-    triangle_normal: u32,
-}
-
-#[repr(C)]
-struct LightSampleCtx {
-    hit_tex_coord: Vec2,
-    hit_material_idx: u32,
-    throughput: u32,
-    front_facing_shading_normal_ws: u32,
-    front_facing_clearcoat_normal_ws: u32,
-}
-
-#[repr(C)]
-struct PackedDiReservoir {
-    sample_count: f32,
-    contribution_weight: f32,
-    weight_sum: f32,
-    _padding0: u32,
-    sample: PackedLightSample,
-}
-
 struct SizedResources {
     film: Film,
     rays: [wgpu::Buffer; 2],
     payloads: wgpu::Buffer,
     light_sample_reservoirs: wgpu::Buffer,
     light_sample_ctxs: wgpu::Buffer,
+
+    restir_di_pass: RestirDiPass,
 }
 
 impl SizedResources {
@@ -104,12 +80,15 @@ impl SizedResources {
             usage: wgpu::BufferUsages::STORAGE,
         });
 
+        let restir_di_pass = RestirDiPass::new(resolution, device);
+
         Self {
             film,
             rays,
             payloads,
             light_sample_reservoirs,
             light_sample_ctxs,
+            restir_di_pass,
         }
     }
 }
@@ -252,6 +231,20 @@ impl PathTracerGpu {
                         sample,
                         in_rays,
                         out_rays,
+                        payloads: &self.sized_resources.payloads,
+                        light_sample_reservoirs: &self.sized_resources.light_sample_reservoirs,
+                        light_sample_ctxs: &self.sized_resources.light_sample_ctxs,
+                        scene_resources: &self.scene_resources,
+                    },
+                    &ctx.device,
+                    &mut command_encoder,
+                    pipeline_database,
+                );
+
+                self.sized_resources.restir_di_pass.encode(
+                    &RestirDiPassParameters {
+                        ray_count: self.local_resolution.x * self.local_resolution.y,
+                        in_rays,
                         payloads: &self.sized_resources.payloads,
                         light_sample_reservoirs: &self.sized_resources.light_sample_reservoirs,
                         light_sample_ctxs: &self.sized_resources.light_sample_ctxs,

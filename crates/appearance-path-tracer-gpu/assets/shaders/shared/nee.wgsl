@@ -1,3 +1,4 @@
+@include appearance-path-tracer-gpu::shared/ray
 @include appearance-path-tracer-gpu::shared/restir_di/di_reservoir
 @include appearance-path-tracer-gpu::shared/material/disney_bsdf
 
@@ -81,6 +82,8 @@ fn Nee::sample_uniform(r0: f32, r1: f32, r2: f32, r34: vec2<f32>, sample_point: 
         sun_pick_probability = 1.0;
     }
 
+    sun_pick_probability = 0.0; // TODO: temp
+
     if (r0 < sun_pick_probability) {
         return Nee::sample_sun(r34, sun_pick_probability);
     } else {
@@ -90,10 +93,9 @@ fn Nee::sample_uniform(r0: f32, r1: f32, r2: f32, r34: vec2<f32>, sample_point: 
 
 fn Nee::sample_ris(hit_point_ws: vec3<f32>, w_out_worldspace: vec3<f32>, front_facing_shading_normal_ws: vec3<f32>,
      tangent_to_world: mat3x3<f32>, world_to_tangent: mat3x3<f32>, clearcoat_tangent_to_world: mat3x3<f32>, clearcoat_world_to_tangent: mat3x3<f32>,
-     disney_bsdf: DisneyBsdf, rng: ptr<function, u32>) -> DiReservoir {
+     disney_bsdf: DisneyBsdf, rng: ptr<function, u32>, scene: acceleration_structure) -> DiReservoir {
     const NUM_SAMPLES: u32 = 4;
 
-    var selected_phat: f32 = 0.0;
     var di_reservoir = DiReservoir::new();
 
     for (var i: u32 = 0; i < NUM_SAMPLES; i += 1) {
@@ -115,17 +117,18 @@ fn Nee::sample_ris(hit_point_ws: vec3<f32>, w_out_worldspace: vec3<f32>, front_f
 
             let phat: f32 = length(contribution * sample_intensity);
             let weight: f32 = phat / sample.pdf;
-            if (DiReservoir::update(&di_reservoir, weight, rng, sample)) {
-                selected_phat = phat;
-            }
+            DiReservoir::update(&di_reservoir, weight, rng, sample, phat);
         } else {
             di_reservoir.sample_count += 1;
         }
     }
 
-    if (selected_phat > 0.0) {
-        di_reservoir.contribution_weight = (1.0 / selected_phat) * (1.0 / di_reservoir.sample_count * di_reservoir.weight_sum);
-        // TODO: visibility trace
+    if (di_reservoir.selected_phat > 0.0) {
+        di_reservoir.contribution_weight = (1.0 / di_reservoir.selected_phat) * (1.0 / di_reservoir.sample_count * di_reservoir.weight_sum);
+        
+        if (!trace_shadow_ray(hit_point_ws, di_reservoir.sample.direction, di_reservoir.sample.distance, scene)) {
+            di_reservoir.contribution_weight = 0.0;
+        }
     }
 
     return di_reservoir;

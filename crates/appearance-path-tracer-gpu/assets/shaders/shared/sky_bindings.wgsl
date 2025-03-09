@@ -45,10 +45,9 @@ fn Sky::sky(direction: vec3<f32>, skip_sun: bool) -> vec3<f32> {
         var cos_theta: f32 = dot(direction, l);
         var sun_angular_diameter_cos: f32 = cos(sky_constants.sun_size * 0.1);
         var sundisk: f32 = smoothstep(sun_angular_diameter_cos, sun_angular_diameter_cos + 0.4, cos_theta);
-        //select(0.0, 1.0, cos_theta > sun_angular_diameter_cos);
 
         sky_color += intensity * 1000.0 * sundisk * sky_constants.sun_color;
     }
 
-    return sky_color;
+    return vec3<f32>(0.0);//sky_color;
 }
