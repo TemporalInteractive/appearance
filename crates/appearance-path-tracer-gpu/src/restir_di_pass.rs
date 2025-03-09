@@ -5,7 +5,7 @@ use appearance_wgpu::{
     ComputePipelineDescriptorExtensions,
 };
 use bytemuck::{Pod, Zeroable};
-use glam::{UVec2, Vec2};
+use glam::{UVec2, Vec2, Vec3};
 
 use crate::scene_resources::SceneResources;
 
@@ -20,9 +20,7 @@ struct Constants {
 
 #[repr(C)]
 pub struct PackedLightSample {
-    direction: u32,
-    distance: f32,
-    pdf: f32,
+    point: Vec3,
     emission: u32,
     triangle_area: f32,
     triangle_normal: u32,
@@ -42,7 +40,7 @@ pub struct PackedDiReservoir {
     sample_count: f32,
     contribution_weight: f32,
     weight_sum: f32,
-    _padding0: u32,
+    selected_phat: f32,
     sample: PackedLightSample,
 }
 
