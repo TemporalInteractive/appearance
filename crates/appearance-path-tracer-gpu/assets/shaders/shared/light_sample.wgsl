@@ -15,6 +15,8 @@ struct PackedLightSample {
     emission: PackedRgb9e5,
     triangle_area: f32,
     triangle_normal: PackedNormalizedXyz10,
+    _padding0: u32,
+    _padding1: u32,
 }
 
 // Context required to evaluate a light sample
@@ -48,7 +50,9 @@ fn PackedLightSample::new(light_sample: LightSample) -> PackedLightSample {
         light_sample.point,
         PackedRgb9e5::new(light_sample.emission),
         light_sample.triangle_area,
-        PackedNormalizedXyz10::new(light_sample.triangle_normal, 0)
+        PackedNormalizedXyz10::new(light_sample.triangle_normal, 0),
+        0,
+        0
     );
 }
 
