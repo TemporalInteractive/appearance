@@ -38,7 +38,6 @@ var scene: acceleration_structure;
 
 @group(0)
 @binding(5)
-//var<storage, read_write> light_samples: array<PackedLightSample>;
 var<storage, read_write> light_sample_reservoirs: array<PackedDiReservoir>;
 
 @group(0)
