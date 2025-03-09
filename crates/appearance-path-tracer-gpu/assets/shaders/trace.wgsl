@@ -1,5 +1,6 @@
 @include ::random
 @include appearance-path-tracer-gpu::shared/ray
+@include appearance-path-tracer-gpu::shared/gbuffer
 @include appearance-path-tracer-gpu::shared/material/disney_bsdf
 
 @include appearance-path-tracer-gpu::shared/vertex_pool_bindings
@@ -7,6 +8,7 @@
 @include appearance-path-tracer-gpu::shared/sky_bindings
 
 @include appearance-path-tracer-gpu::shared/nee
+@include appearance-path-tracer-gpu::shared/trace_helpers
 
 struct Constants {
     ray_count: u32,
@@ -37,12 +39,15 @@ var scene: acceleration_structure;
 
 @group(0)
 @binding(5)
-//var<storage, read_write> light_samples: array<PackedLightSample>;
 var<storage, read_write> light_sample_reservoirs: array<PackedDiReservoir>;
 
 @group(0)
 @binding(6)
 var<storage, read_write> light_sample_ctxs: array<LightSampleCtx>;
+
+@group(0)
+@binding(7)
+var<storage, read_write> gbuffer: array<GBufferTexel>;
 
 @compute
 @workgroup_size(128)
@@ -71,13 +76,16 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     var throughput: vec3<f32> = PackedRgb9e5::unpack(payload.throughput);
     var rng: u32 = payload.rng;
 
-    for (var step: u32 = 0; step < 64; step += 1) {
+    var depth_ws: f32 = 0.0;
+    for (var step: u32 = 0; step < MAX_NON_OPAQUE_DEPTH; step += 1) {
         var rq: ray_query;
         rayQueryInitialize(&rq, scene, RayDesc(0u, 0xFFu, 0.0, 1000.0, origin, direction));
         rayQueryProceed(&rq);
 
         let intersection = rayQueryGetCommittedIntersection(&rq);
         if (intersection.kind == RAY_QUERY_INTERSECTION_TRIANGLE) {
+            depth_ws += intersection.t;
+
             let vertex_pool_slice_index: u32 = intersection.instance_custom_data;
             let vertex_pool_slice: VertexPoolSlice = vertex_pool_slices[vertex_pool_slice_index];
 
@@ -94,13 +102,18 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
 
             let material_idx: u32 = vertex_pool_slice.material_idx + triangle_material_indices[vertex_pool_slice.first_index / 3 + intersection.primitive_index];
             let material_descriptor: MaterialDescriptor = material_descriptors[material_idx];
-            let material: Material = Material::from_material_descriptor(material_descriptor, tex_coord);
+            var material_color: vec4<f32> = MaterialDescriptor::color(material_descriptor, tex_coord);
 
-            if (material.luminance < material.alpha_cutoff) {
-                // TODO: non-opaque geometry would be a better choice, not properly supported by wgpu yet
-                origin += direction * (intersection.t + 0.001);
-                continue;
+            if (material_color.a < material_descriptor.alpha_cutoff) {
+                if (step + 1 < MAX_NON_OPAQUE_DEPTH) {
+                    // TODO: non-opaque geometry would be a better choice, not properly supported by wgpu yet
+                    origin += direction * (intersection.t + 0.001);
+                    continue;
+                } else {
+                    material_color.a = 1.0;
+                }
             }
+            let material: Material = Material::from_material_descriptor_with_color(material_descriptor, tex_coord, material_color);
 
             if (constants.bounce == 0) {
                 accumulated += throughput * material.emission;
@@ -171,15 +184,32 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
                 }
             }
 
+            if (constants.bounce == 0) {
+                // Write out all gbuffer data
+                gbuffer[id] = GBufferTexel::new(
+                    depth_ws,
+                    front_facing_shading_normal_ws
+                );
+            }
+
             let disney_bsdf = DisneyBsdf::from_material(material);
 
-            // let light_sample: LightSample = Nee::sample_uniform(random_uniform_float(&rng), random_uniform_float(&rng), random_uniform_float(&rng),
-            //     vec2<f32>(random_uniform_float(&rng), random_uniform_float(&rng)), hit_point_ws);
             let di_reservoir: DiReservoir = Nee::sample_ris(hit_point_ws, w_out_worldspace, front_facing_shading_normal_ws,
                 tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
                 disney_bsdf, &rng, scene);
             light_sample_reservoirs[id] = PackedDiReservoir::new(di_reservoir);
             light_sample_ctxs[id] = LightSampleCtx::new(tex_coord, material_idx, throughput, front_facing_shading_normal_ws, clearcoat_tangent_to_world[2]);
+
+            if (constants.bounce > 1) {
+                let russian_roulette: f32 = max(throughput.r, max(throughput.g, throughput.b));
+
+                if (russian_roulette < random_uniform_float(&rng)) {
+                    payload.t = -1.0;
+                    break;
+                } else {
+                    throughput *= 1.0 / russian_roulette;
+                }
+            }
 
             var w_in_worldspace: vec3<f32>;
             var pdf: f32;

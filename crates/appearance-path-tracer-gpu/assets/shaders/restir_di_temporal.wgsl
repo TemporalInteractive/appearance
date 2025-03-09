@@ -1,6 +1,7 @@
 @include ::random
 @include ::color
 @include appearance-path-tracer-gpu::shared/ray
+@include appearance-path-tracer-gpu::shared/gbuffer
 @include appearance-path-tracer-gpu::shared/material/disney_bsdf
 @include appearance-path-tracer-gpu::shared/restir_di/di_reservoir
 
@@ -12,9 +13,9 @@
 
 struct Constants {
     ray_count: u32,
+    spatial_pass_count: u32,
     _padding0: u32,
     _padding1: u32,
-    _padding2: u32,
 }
 
 @group(0)
@@ -44,6 +45,14 @@ var<storage, read_write> prev_reservoirs: array<PackedDiReservoir>;
 @group(0)
 @binding(6)
 var<storage, read> light_sample_ctxs: array<LightSampleCtx>;
+
+@group(0)
+@binding(7)
+var<storage, read> gbuffer: array<GBufferTexel>;
+
+@group(0)
+@binding(8)
+var<storage, read> prev_gbuffer: array<GBufferTexel>;
 
 @compute
 @workgroup_size(128)
@@ -80,37 +89,54 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
 
     let reservoir: DiReservoir = PackedDiReservoir::unpack(reservoirs[id]);
 
-    // TODO: projection mapping & gbuffer based rejection
-    var prev_reservoir: DiReservoir = PackedDiReservoir::unpack(prev_reservoirs[id]);
-    prev_reservoir.sample_count = min(prev_reservoir.sample_count, 20.0 * reservoir.sample_count);
+    let current_gbuffer_texel: GBufferTexel = gbuffer[id];
+    let prev_gbuffer_texel: GBufferTexel = prev_gbuffer[id]; // TODO: velocity mapping
+    let current_depth_cs: f32 = GBufferTexel::depth_cs(current_gbuffer_texel, 0.001, 10000.0);
+    let prev_depth_cs: f32 = GBufferTexel::depth_cs(prev_gbuffer_texel, 0.001, 10000.0);
+    let valid_delta_depth: bool = (abs(current_depth_cs - prev_depth_cs) / current_depth_cs) < 0.1;
+    let current_normal_ws: vec3<f32> = PackedNormalizedXyz10::unpack(current_gbuffer_texel.normal_ws, 0);
+    let prev_normal_ws: vec3<f32> = PackedNormalizedXyz10::unpack(prev_gbuffer_texel.normal_ws, 0);
+    let valid_delta_normal: bool = dot(current_normal_ws, prev_normal_ws) > 0.906; // 25 degrees
 
-    let w_out_worldspace: vec3<f32> = -direction;
-    let w_in_worldspace: vec3<f32> = normalize(prev_reservoir.sample.point - hit_point_ws);
-    let n_dot_l: f32 = dot(w_in_worldspace, front_facing_shading_normal_ws);
-    if (n_dot_l > 0.0) {
-        let sample_intensity = LightSample::intensity(prev_reservoir.sample, hit_point_ws);
+    let valid_prev_reservoir: bool = valid_delta_depth && valid_delta_normal;
+    if (valid_prev_reservoir) {
+        // TODO: velocity mapping
+        var prev_reservoir: DiReservoir = PackedDiReservoir::unpack(prev_reservoirs[id]);
+        prev_reservoir.sample_count = min(prev_reservoir.sample_count, 20.0 * reservoir.sample_count);
 
-        var shading_pdf: f32;
-        let reflectance: vec3<f32> = DisneyBsdf::evaluate(disney_bsdf, front_facing_shading_normal_ws,
-            tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
-            w_out_worldspace, w_in_worldspace, &shading_pdf);
-        let contribution: vec3<f32> = n_dot_l * reflectance;
+        let w_out_worldspace: vec3<f32> = -direction;
+        let w_in_worldspace: vec3<f32> = normalize(prev_reservoir.sample.point - hit_point_ws);
+        let n_dot_l: f32 = dot(w_in_worldspace, front_facing_shading_normal_ws);
+        if (n_dot_l > 0.0) {
+            let sample_intensity = LightSample::intensity(prev_reservoir.sample, hit_point_ws);
 
-        prev_reservoir.selected_phat = linear_to_luma(contribution * sample_intensity);
-    } else {
-        prev_reservoir.selected_phat = 0.0;
+            var shading_pdf: f32;
+            let reflectance: vec3<f32> = DisneyBsdf::evaluate(disney_bsdf, front_facing_shading_normal_ws,
+                tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
+                w_out_worldspace, w_in_worldspace, &shading_pdf);
+            let contribution: vec3<f32> = n_dot_l * reflectance;
+
+            prev_reservoir.selected_phat = linear_to_luma(contribution * sample_intensity);
+        } else {
+            prev_reservoir.selected_phat = 0.0;
+        }
+
+        var combined_reservoir = DiReservoir::new();
+        DiReservoir::update(&combined_reservoir, reservoir.selected_phat * reservoir.contribution_weight * reservoir.sample_count, &rng, reservoir.sample, reservoir.selected_phat);
+        DiReservoir::update(&combined_reservoir, prev_reservoir.selected_phat * prev_reservoir.contribution_weight * prev_reservoir.sample_count, &rng, prev_reservoir.sample, prev_reservoir.selected_phat);
+        combined_reservoir.sample_count = reservoir.sample_count + prev_reservoir.sample_count;
+        if (combined_reservoir.selected_phat > 0.0) {
+            combined_reservoir.contribution_weight = (1.0 / combined_reservoir.selected_phat) * (1.0 / combined_reservoir.sample_count * combined_reservoir.weight_sum);
+        }
+
+        reservoirs[id] = PackedDiReservoir::new(combined_reservoir);
+        if (constants.spatial_pass_count == 0) {
+            prev_reservoirs[id] = PackedDiReservoir::new(combined_reservoir);
+        }
+
+        payload.rng = rng;
+        payloads[id] = payload;
+    } else if (constants.spatial_pass_count == 0) {
+        prev_reservoirs[id] = PackedDiReservoir::new(reservoir);
     }
-
-    var combined_reservoir = DiReservoir::new();
-    DiReservoir::update(&combined_reservoir, reservoir.selected_phat * reservoir.contribution_weight * reservoir.sample_count, &rng, reservoir.sample, reservoir.selected_phat);
-    DiReservoir::update(&combined_reservoir, prev_reservoir.selected_phat * prev_reservoir.contribution_weight * prev_reservoir.sample_count, &rng, prev_reservoir.sample, prev_reservoir.selected_phat);
-    combined_reservoir.sample_count = reservoir.sample_count + prev_reservoir.sample_count;
-    if (combined_reservoir.selected_phat > 0.0) {
-        combined_reservoir.contribution_weight = (1.0 / combined_reservoir.selected_phat) * (1.0 / combined_reservoir.sample_count * combined_reservoir.weight_sum);
-    }
-
-    reservoirs[id] = PackedDiReservoir::new(combined_reservoir);
-
-    payload.rng = rng;
-    payloads[id] = payload;
 }

@@ -463,7 +463,12 @@ fn DisneyBsdf::sample(_self: DisneyBsdf, i_n: vec3<f32>,
         mix(_self.specular, 1.0, _self.metallic),
         _self.clearcoat * 0.25
     );
-    weights *= 1.0 / (weights.x + weights.y + weights.z + weights.w);
+    let weights_sum: f32 = weights.x + weights.y + weights.z + weights.w;
+    if (weights_sum == 0.0) {
+        *pdf = 0.0;
+        return vec3<f32>(0.0);
+    }
+    weights *= 1.0 / weights_sum;
     let cdf = vec4<f32>(
         weights.x,
         weights.x + weights.y,
@@ -618,7 +623,12 @@ fn DisneyBsdf::evaluate(_self: DisneyBsdf, i_n: vec3<f32>,
         mix(_self.specular, 1.0, _self.metallic),
         _self.clearcoat * 0.25
     );
-    weights *= 1.0 / (weights.x + weights.y + weights.z + weights.w);
+    let weights_sum: f32 = weights.x + weights.y + weights.z + weights.w;
+    if (weights_sum == 0.0) {
+        *pdf = 0.0;
+        return vec3<f32>(0.0);
+    }
+    weights *= 1.0 / weights_sum;
 
     *pdf = 0.0;
     var value = vec3<f32>(0.0);
