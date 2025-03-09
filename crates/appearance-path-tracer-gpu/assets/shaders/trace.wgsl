@@ -1,5 +1,6 @@
 @include ::random
 @include appearance-path-tracer-gpu::shared/ray
+@include appearance-path-tracer-gpu::shared/gbuffer
 @include appearance-path-tracer-gpu::shared/material/disney_bsdf
 
 @include appearance-path-tracer-gpu::shared/vertex_pool_bindings
@@ -44,6 +45,10 @@ var<storage, read_write> light_sample_reservoirs: array<PackedDiReservoir>;
 @binding(6)
 var<storage, read_write> light_sample_ctxs: array<LightSampleCtx>;
 
+@group(0)
+@binding(7)
+var<storage, read_write> gbuffer: array<GBufferTexel>;
+
 @compute
 @workgroup_size(128)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
@@ -71,6 +76,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     var throughput: vec3<f32> = PackedRgb9e5::unpack(payload.throughput);
     var rng: u32 = payload.rng;
 
+    var depth_ws: f32 = 0.0;
     for (var step: u32 = 0; step < MAX_NON_OPAQUE_DEPTH; step += 1) {
         var rq: ray_query;
         rayQueryInitialize(&rq, scene, RayDesc(0u, 0xFFu, 0.0, 1000.0, origin, direction));
@@ -78,6 +84,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
 
         let intersection = rayQueryGetCommittedIntersection(&rq);
         if (intersection.kind == RAY_QUERY_INTERSECTION_TRIANGLE) {
+            depth_ws += intersection.t;
+
             let vertex_pool_slice_index: u32 = intersection.instance_custom_data;
             let vertex_pool_slice: VertexPoolSlice = vertex_pool_slices[vertex_pool_slice_index];
 
@@ -174,6 +182,14 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
                     clearcoat_tangent_to_world = build_orthonormal_basis(front_facing_clearcoat_normal_ws);
                     clearcoat_world_to_tangent = transpose(clearcoat_tangent_to_world);
                 }
+            }
+
+            if (constants.bounce == 0) {
+                // Write out all gbuffer data
+                gbuffer[id] = GBufferTexel::new(
+                    depth_ws,
+                    front_facing_shading_normal_ws
+                );
             }
 
             let disney_bsdf = DisneyBsdf::from_material(material);

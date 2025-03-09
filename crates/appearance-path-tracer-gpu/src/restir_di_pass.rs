@@ -13,9 +13,9 @@ use crate::scene_resources::SceneResources;
 #[repr(C)]
 struct TemporalConstants {
     ray_count: u32,
+    spatial_pass_count: u32,
     _padding0: u32,
     _padding1: u32,
-    _padding2: u32,
 }
 
 #[derive(Pod, Clone, Copy, Zeroable)]
@@ -66,6 +66,8 @@ pub struct RestirDiPassParameters<'a> {
     pub payloads: &'a wgpu::Buffer,
     pub light_sample_reservoirs: &'a wgpu::Buffer,
     pub light_sample_ctxs: &'a wgpu::Buffer,
+    pub gbuffer: &'a wgpu::Buffer,
+    pub prev_gbuffer: &'a wgpu::Buffer,
     pub scene_resources: &'a SceneResources,
 }
 
@@ -201,6 +203,26 @@ impl RestirDiPass {
                                     },
                                     count: None,
                                 },
+                                wgpu::BindGroupLayoutEntry {
+                                    binding: 7,
+                                    visibility: wgpu::ShaderStages::COMPUTE,
+                                    ty: wgpu::BindingType::Buffer {
+                                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                                        has_dynamic_offset: false,
+                                        min_binding_size: None,
+                                    },
+                                    count: None,
+                                },
+                                wgpu::BindGroupLayoutEntry {
+                                    binding: 8,
+                                    visibility: wgpu::ShaderStages::COMPUTE,
+                                    ty: wgpu::BindingType::Buffer {
+                                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                                        has_dynamic_offset: false,
+                                        min_binding_size: None,
+                                    },
+                                    count: None,
+                                },
                             ],
                         }),
                         parameters.scene_resources.vertex_pool().bind_group_layout(),
@@ -220,9 +242,9 @@ impl RestirDiPass {
             label: Some("appearance-path-tracer-gpu::restir_di_temporal constants"),
             contents: bytemuck::bytes_of(&TemporalConstants {
                 ray_count,
+                spatial_pass_count: parameters.spatial_pass_count,
                 _padding0: 0,
                 _padding1: 0,
-                _padding2: 0,
             }),
             usage: wgpu::BufferUsages::UNIFORM,
         });
@@ -261,6 +283,14 @@ impl RestirDiPass {
                 wgpu::BindGroupEntry {
                     binding: 6,
                     resource: parameters.light_sample_ctxs.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 7,
+                    resource: parameters.gbuffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 8,
+                    resource: parameters.prev_gbuffer.as_entire_binding(),
                 },
             ],
         });
@@ -390,6 +420,26 @@ impl RestirDiPass {
                                     },
                                     count: None,
                                 },
+                                wgpu::BindGroupLayoutEntry {
+                                    binding: 8,
+                                    visibility: wgpu::ShaderStages::COMPUTE,
+                                    ty: wgpu::BindingType::Buffer {
+                                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                                        has_dynamic_offset: false,
+                                        min_binding_size: None,
+                                    },
+                                    count: None,
+                                },
+                                wgpu::BindGroupLayoutEntry {
+                                    binding: 9,
+                                    visibility: wgpu::ShaderStages::COMPUTE,
+                                    ty: wgpu::BindingType::Buffer {
+                                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                                        has_dynamic_offset: false,
+                                        min_binding_size: None,
+                                    },
+                                    count: None,
+                                },
                             ],
                         }),
                         parameters.scene_resources.vertex_pool().bind_group_layout(),
@@ -468,6 +518,14 @@ impl RestirDiPass {
                     wgpu::BindGroupEntry {
                         binding: 7,
                         resource: parameters.light_sample_ctxs.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 8,
+                        resource: parameters.gbuffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 9,
+                        resource: parameters.prev_gbuffer.as_entire_binding(),
                     },
                 ],
             });

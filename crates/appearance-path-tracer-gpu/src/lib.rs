@@ -34,12 +34,21 @@ struct Payload {
     t: f32,
 }
 
+#[repr(C)]
+struct GBufferTexel {
+    depth_ws: f32,
+    normal_ws: u32,
+    _padding0: u32,
+    _padding1: u32,
+}
+
 struct SizedResources {
     film: Film,
     rays: [wgpu::Buffer; 2],
     payloads: wgpu::Buffer,
     light_sample_reservoirs: wgpu::Buffer,
     light_sample_ctxs: wgpu::Buffer,
+    gbuffer: [wgpu::Buffer; 2],
 
     restir_di_pass: RestirDiPass,
 }
@@ -80,6 +89,16 @@ impl SizedResources {
             usage: wgpu::BufferUsages::STORAGE,
         });
 
+        let gbuffer = std::array::from_fn(|i| {
+            device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some(&format!("appearance-path-tracer-gpu gbuffer {}", i)),
+                size: (std::mem::size_of::<GBufferTexel>() as u32 * resolution.x * resolution.y)
+                    as u64,
+                mapped_at_creation: false,
+                usage: wgpu::BufferUsages::STORAGE,
+            })
+        });
+
         let restir_di_pass = RestirDiPass::new(resolution, device);
 
         Self {
@@ -88,6 +107,7 @@ impl SizedResources {
             payloads,
             light_sample_reservoirs,
             light_sample_ctxs,
+            gbuffer,
             restir_di_pass,
         }
     }
@@ -220,6 +240,8 @@ impl PathTracerGpu {
             for i in 0..self.config.max_bounces {
                 let in_rays = &self.sized_resources.rays[(i as usize) % 2];
                 let out_rays = &self.sized_resources.rays[(i as usize + 1) % 2];
+                let gbuffer = &self.sized_resources.gbuffer[(self.frame_idx as usize) % 2];
+                let prev_gbuffer = &self.sized_resources.gbuffer[(self.frame_idx as usize + 1) % 2];
 
                 let seed = self.frame_idx * self.config.sample_count + sample;
 
@@ -234,6 +256,7 @@ impl PathTracerGpu {
                         payloads: &self.sized_resources.payloads,
                         light_sample_reservoirs: &self.sized_resources.light_sample_reservoirs,
                         light_sample_ctxs: &self.sized_resources.light_sample_ctxs,
+                        gbuffer,
                         scene_resources: &self.scene_resources,
                     },
                     &ctx.device,
@@ -251,6 +274,8 @@ impl PathTracerGpu {
                             payloads: &self.sized_resources.payloads,
                             light_sample_reservoirs: &self.sized_resources.light_sample_reservoirs,
                             light_sample_ctxs: &self.sized_resources.light_sample_ctxs,
+                            gbuffer,
+                            prev_gbuffer,
                             scene_resources: &self.scene_resources,
                         },
                         &ctx.device,
