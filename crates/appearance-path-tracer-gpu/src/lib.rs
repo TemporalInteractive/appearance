@@ -69,7 +69,7 @@ impl SizedResources {
             size: (std::mem::size_of::<PackedDiReservoir>() as u32 * resolution.x * resolution.y)
                 as u64,
             mapped_at_creation: false,
-            usage: wgpu::BufferUsages::STORAGE,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
 
         let light_sample_ctxs = device.create_buffer(&wgpu::BufferDescriptor {
@@ -243,7 +243,8 @@ impl PathTracerGpu {
 
                 self.sized_resources.restir_di_pass.encode(
                     &RestirDiPassParameters {
-                        ray_count: self.local_resolution.x * self.local_resolution.y,
+                        resolution: self.local_resolution,
+                        spatial_pass_count: 0,
                         in_rays,
                         payloads: &self.sized_resources.payloads,
                         light_sample_reservoirs: &self.sized_resources.light_sample_reservoirs,

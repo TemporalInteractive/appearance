@@ -1,4 +1,5 @@
 @include ::random
+@include ::color
 @include appearance-path-tracer-gpu::shared/ray
 @include appearance-path-tracer-gpu::shared/material/disney_bsdf
 @include appearance-path-tracer-gpu::shared/restir_di/di_reservoir
@@ -83,6 +84,23 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     var prev_reservoir: DiReservoir = PackedDiReservoir::unpack(prev_reservoirs[id]);
     prev_reservoir.sample_count = min(prev_reservoir.sample_count, 20.0 * reservoir.sample_count);
 
+    let w_out_worldspace: vec3<f32> = -direction;
+    let w_in_worldspace: vec3<f32> = normalize(prev_reservoir.sample.point - hit_point_ws);
+    let n_dot_l: f32 = dot(w_in_worldspace, front_facing_shading_normal_ws);
+    if (n_dot_l > 0.0) {
+        let sample_intensity = LightSample::intensity(prev_reservoir.sample, hit_point_ws);
+
+        var shading_pdf: f32;
+        let reflectance: vec3<f32> = DisneyBsdf::evaluate(disney_bsdf, front_facing_shading_normal_ws,
+            tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
+            w_out_worldspace, w_in_worldspace, &shading_pdf);
+        let contribution: vec3<f32> = n_dot_l * reflectance;
+
+        prev_reservoir.selected_phat = linear_to_luma(contribution * sample_intensity);
+    } else {
+        prev_reservoir.selected_phat = 0.0;
+    }
+
     var combined_reservoir = DiReservoir::new();
     DiReservoir::update(&combined_reservoir, reservoir.selected_phat * reservoir.contribution_weight * reservoir.sample_count, &rng, reservoir.sample, reservoir.selected_phat);
     DiReservoir::update(&combined_reservoir, prev_reservoir.selected_phat * prev_reservoir.contribution_weight * prev_reservoir.sample_count, &rng, prev_reservoir.sample, prev_reservoir.selected_phat);
@@ -94,30 +112,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     reservoirs[id] = PackedDiReservoir::new(combined_reservoir);
     prev_reservoirs[id] = PackedDiReservoir::new(combined_reservoir);
 
-    // let shadow_direction: vec3<f32> = light_sample.direction;
-    // let shadow_origin: vec3<f32> = hit_point_ws + shadow_direction * 0.0001;
-    // let n_dot_l: f32 = dot(shadow_direction, front_facing_shading_normal_ws);
-    // if (n_dot_l > 0.0) {
-    //     var shadow_rq: ray_query;
-    //     rayQueryInitialize(&shadow_rq, scene, RayDesc(0x4, 0xFFu, 0.0, light_sample.distance, shadow_origin, shadow_direction));
-    //     rayQueryProceed(&shadow_rq);
-    //     let intersection = rayQueryGetCommittedIntersection(&shadow_rq);
-    //     if (intersection.kind != RAY_QUERY_INTERSECTION_TRIANGLE) {
-    //         let w_out_worldspace: vec3<f32> = -direction;
-    //         let w_in_worldspace: vec3<f32> = shadow_direction;
-
-    //         var shading_pdf: f32;
-    //         let reflectance: vec3<f32> = DisneyBsdf::evaluate(disney_bsdf, front_facing_shading_normal_ws, tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
-    //             w_out_worldspace, w_in_worldspace, &shading_pdf);
-
-    //         let light_intensity: vec3<f32> = LightSample::intensity(light_sample) * light_sample.emission;
-
-    //         let contribution: vec3<f32> = throughput * reflectance * light_intensity * n_dot_l * di_reservoir.contribution_weight;
-    //         accumulated += contribution;
-    //     };
-    // }
-
-    // payload.accumulated = PackedRgb9e5::new(accumulated);
     payload.rng = rng;
     payloads[id] = payload;
 }

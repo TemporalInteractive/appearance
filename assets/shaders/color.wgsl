@@ -13,3 +13,7 @@ fn srgb_to_linear(srgb: vec4<f32>) -> vec4<f32> {
     
     return vec4<f32>(select(higher, lower, cutoff), srgb.a);
 }
+
+fn linear_to_luma(linear: vec3<f32>) -> f32 {
+    return dot(linear, vec3<f32>(0.2126, 0.7152, 0.0722));
+}
