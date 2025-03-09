@@ -2,6 +2,8 @@
 @include appearance-path-tracer-gpu::shared/restir_di/di_reservoir
 @include appearance-path-tracer-gpu::shared/material/disney_bsdf
 
+@include appearance-path-tracer-gpu::shared/trace_helpers
+
 ///
 /// BINDING DEPENDENCIES:
 /// appearance-path-tracer-gpu::shared/vertex_pool_bindings

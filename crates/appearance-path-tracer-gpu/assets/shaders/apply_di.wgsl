@@ -8,6 +8,7 @@
 @include appearance-path-tracer-gpu::shared/sky_bindings
 
 @include appearance-path-tracer-gpu::shared/nee
+@include appearance-path-tracer-gpu::shared/trace_helpers
 
 struct Constants {
     ray_count: u32,
@@ -85,11 +86,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     let shadow_origin: vec3<f32> = hit_point_ws + shadow_direction * 0.0001;
     let n_dot_l: f32 = dot(shadow_direction, front_facing_shading_normal_ws);
     if (n_dot_l > 0.0) {
-        var shadow_rq: ray_query;
-        rayQueryInitialize(&shadow_rq, scene, RayDesc(0x4, 0xFFu, 0.0, shadow_distance, shadow_origin, shadow_direction));
-        rayQueryProceed(&shadow_rq);
-        let intersection = rayQueryGetCommittedIntersection(&shadow_rq);
-        if (intersection.kind != RAY_QUERY_INTERSECTION_TRIANGLE) {
+        if (trace_shadow_ray(shadow_origin, shadow_direction, shadow_distance, scene)) {
             let w_out_worldspace: vec3<f32> = -direction;
             let w_in_worldspace: vec3<f32> = shadow_direction;
 

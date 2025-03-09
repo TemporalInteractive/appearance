@@ -19,18 +19,6 @@
 @include appearance-path-tracer-gpu::shared/material/ggxmdf
 @include appearance-path-tracer-gpu::shared/material/material_pool
 
-fn world_2_tangent(v: vec3<f32>, n: vec3<f32>, t: vec3<f32>, b: vec3<f32>) -> vec3<f32> {
-    return vec3<f32>(
-        dot(v, t),
-        dot(v, b),
-        dot(v, n)
-    );
-}
-
-fn tangent_2_world(v: vec3<f32>, n: vec3<f32>, t: vec3<f32>, b: vec3<f32>) -> vec3<f32> {
-    return v.x * t + v.y * b + v.z * n;
-}
-
 fn schlick_fresnel(u: f32) -> f32 {
     let m: f32 = clamp(1.0 - u, 0.0, 1.0);
     let m4: f32 = sqr(sqr(m));
@@ -216,7 +204,6 @@ fn refract_l(wi: vec3<f32>, n: vec3<f32>, eta: f32, wt: ptr<function, vec3<f32>>
     return true;
 }
 
-// TODO: clearcoat seems broken after making the specular based on roughness hack (maybe specular and clearcoat are not tolerated together? check the specs)
 // TODO: test subsurface (maybe pretty material probe scene?)
 struct DisneyBsdf {
     color: vec3<f32>,
