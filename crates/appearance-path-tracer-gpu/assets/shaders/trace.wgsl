@@ -37,7 +37,8 @@ var scene: acceleration_structure;
 
 @group(0)
 @binding(5)
-var<storage, read_write> light_samples: array<PackedLightSample>;
+//var<storage, read_write> light_samples: array<PackedLightSample>;
+var<storage, read_write> light_sample_reservoirs: array<PackedDiReservoir>;
 
 @group(0)
 @binding(6)
@@ -176,11 +177,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
             //     vec2<f32>(random_uniform_float(&rng), random_uniform_float(&rng)), hit_point_ws);
             let di_reservoir: DiReservoir = Nee::sample_ris(hit_point_ws, w_out_worldspace, front_facing_shading_normal_ws,
                 tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
-                disney_bsdf, &rng);
-            var light_sample: LightSample = di_reservoir.sample;
-            light_sample.pdf = 1.0 / di_reservoir.contribution_weight;
-            
-            light_samples[id] = PackedLightSample::new(light_sample);
+                disney_bsdf, &rng, scene);
+            light_sample_reservoirs[id] = PackedDiReservoir::new(di_reservoir);
             light_sample_ctxs[id] = LightSampleCtx::new(tex_coord, material_idx, throughput, front_facing_shading_normal_ws, clearcoat_tangent_to_world[2]);
 
             var w_in_worldspace: vec3<f32>;

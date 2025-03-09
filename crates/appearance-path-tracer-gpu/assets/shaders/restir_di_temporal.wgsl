@@ -1,4 +1,5 @@
 @include ::random
+@include ::color
 @include appearance-path-tracer-gpu::shared/ray
 @include appearance-path-tracer-gpu::shared/material/disney_bsdf
 @include appearance-path-tracer-gpu::shared/restir_di/di_reservoir
@@ -8,7 +9,6 @@
 @include appearance-path-tracer-gpu::shared/sky_bindings
 
 @include appearance-path-tracer-gpu::shared/nee
-@include appearance-path-tracer-gpu::shared/trace_helpers
 
 struct Constants {
     ray_count: u32,
@@ -35,10 +35,14 @@ var scene: acceleration_structure;
 
 @group(0)
 @binding(4)
-var<storage, read> light_sample_reservoirs: array<PackedDiReservoir>;
+var<storage, read_write> reservoirs: array<PackedDiReservoir>;
 
 @group(0)
 @binding(5)
+var<storage, read_write> prev_reservoirs: array<PackedDiReservoir>;
+
+@group(0)
+@binding(6)
 var<storage, read> light_sample_ctxs: array<LightSampleCtx>;
 
 @compute
@@ -55,15 +59,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     var payload: Payload = payloads[id];
     if (payload.t < 0.0) { return; } // TODO: indirect dispatch with pids
 
-    let di_reservoir: DiReservoir = PackedDiReservoir::unpack(light_sample_reservoirs[id]);
-    let light_sample: LightSample = di_reservoir.sample;
-    if (di_reservoir.contribution_weight == 0.0) { return; }
-
     let light_sample_ctx: LightSampleCtx = light_sample_ctxs[id];
-
-    var accumulated: vec3<f32> = PackedRgb9e5::unpack(payload.accumulated);
-    // Current payload throughput already has the next gi bounce reflection incorporated, take "previous" throughput from the light sample ctx
-    let throughput: vec3<f32> = PackedRgb9e5::unpack(light_sample_ctx.throughput);
+    
     var rng: u32 = payload.rng;
 
     let tex_coord: vec2<f32> = light_sample_ctx.hit_tex_coord;
@@ -81,27 +78,39 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     let clearcoat_tangent_to_world: mat3x3<f32> = build_orthonormal_basis(front_facing_clearcoat_normal_ws);
     let clearcoat_world_to_tangent: mat3x3<f32> = transpose(clearcoat_tangent_to_world);
 
-    let shadow_direction: vec3<f32> = normalize(light_sample.point - hit_point_ws);
-    let shadow_distance: f32 = distance(light_sample.point, hit_point_ws);
-    let shadow_origin: vec3<f32> = hit_point_ws + shadow_direction * 0.0001;
-    let n_dot_l: f32 = dot(shadow_direction, front_facing_shading_normal_ws);
+    let reservoir: DiReservoir = PackedDiReservoir::unpack(reservoirs[id]);
+
+    // TODO: projection mapping & gbuffer based rejection
+    var prev_reservoir: DiReservoir = PackedDiReservoir::unpack(prev_reservoirs[id]);
+    prev_reservoir.sample_count = min(prev_reservoir.sample_count, 20.0 * reservoir.sample_count);
+
+    let w_out_worldspace: vec3<f32> = -direction;
+    let w_in_worldspace: vec3<f32> = normalize(prev_reservoir.sample.point - hit_point_ws);
+    let n_dot_l: f32 = dot(w_in_worldspace, front_facing_shading_normal_ws);
     if (n_dot_l > 0.0) {
-        if (trace_shadow_ray(shadow_origin, shadow_direction, shadow_distance, scene)) {
-            let w_out_worldspace: vec3<f32> = -direction;
-            let w_in_worldspace: vec3<f32> = shadow_direction;
+        let sample_intensity = LightSample::intensity(prev_reservoir.sample, hit_point_ws);
 
-            var shading_pdf: f32;
-            let reflectance: vec3<f32> = DisneyBsdf::evaluate(disney_bsdf, front_facing_shading_normal_ws, tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
-                w_out_worldspace, w_in_worldspace, &shading_pdf);
+        var shading_pdf: f32;
+        let reflectance: vec3<f32> = DisneyBsdf::evaluate(disney_bsdf, front_facing_shading_normal_ws,
+            tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
+            w_out_worldspace, w_in_worldspace, &shading_pdf);
+        let contribution: vec3<f32> = n_dot_l * reflectance;
 
-            let light_intensity: vec3<f32> = LightSample::intensity(light_sample, hit_point_ws) * light_sample.emission;
-
-            let contribution: vec3<f32> = throughput * reflectance * light_intensity * n_dot_l * di_reservoir.contribution_weight;
-            accumulated += contribution;
-        };
+        prev_reservoir.selected_phat = linear_to_luma(contribution * sample_intensity);
+    } else {
+        prev_reservoir.selected_phat = 0.0;
     }
 
-    payload.accumulated = PackedRgb9e5::new(accumulated);
+    var combined_reservoir = DiReservoir::new();
+    DiReservoir::update(&combined_reservoir, reservoir.selected_phat * reservoir.contribution_weight * reservoir.sample_count, &rng, reservoir.sample, reservoir.selected_phat);
+    DiReservoir::update(&combined_reservoir, prev_reservoir.selected_phat * prev_reservoir.contribution_weight * prev_reservoir.sample_count, &rng, prev_reservoir.sample, prev_reservoir.selected_phat);
+    combined_reservoir.sample_count = reservoir.sample_count + prev_reservoir.sample_count;
+    if (combined_reservoir.selected_phat > 0.0) {
+        combined_reservoir.contribution_weight = (1.0 / combined_reservoir.selected_phat) * (1.0 / combined_reservoir.sample_count * combined_reservoir.weight_sum);
+    }
+
+    reservoirs[id] = PackedDiReservoir::new(combined_reservoir);
+
     payload.rng = rng;
     payloads[id] = payload;
 }
