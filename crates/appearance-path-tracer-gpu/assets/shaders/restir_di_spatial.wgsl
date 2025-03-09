@@ -50,6 +50,17 @@ var<storage, read_write> prev_reservoirs: array<PackedDiReservoir>;
 @binding(7)
 var<storage, read> light_sample_ctxs: array<LightSampleCtx>;
 
+fn mirror(x: i32, max: i32) -> u32 {
+    return u32(abs(((x + max) % (2 * max)) - max));
+}
+
+fn mirror_pixel(pixel: vec2<i32>) -> vec2<u32> {
+    return vec2<u32>(
+        mirror(pixel.x, i32(constants.resolution.x)),
+        mirror(pixel.y, i32(constants.resolution.y))
+    );
+}
+
 @compute
 @workgroup_size(16, 16)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
@@ -96,12 +107,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
             i32((random_uniform_float(&rng) * 2.0 - 1.0) * 30.0),
             i32((random_uniform_float(&rng) * 2.0 - 1.0) * 30.0)
         );
-        let neighbour_id = vec2<u32>(clamp(center_id + offset, vec2<i32>(0), vec2<i32>(constants.resolution)));
+        let neighbour_id = mirror_pixel(center_id + offset);
         let flat_neighbour_id: u32 = neighbour_id.y * constants.resolution.x + neighbour_id.x;
-
-        if (flat_neighbour_id == flat_id) {
-            continue;
-        }
 
         // TODO: gbuffer based rejection
         var neighbour_reservoir: DiReservoir = PackedDiReservoir::unpack(in_reservoirs[flat_neighbour_id]);
