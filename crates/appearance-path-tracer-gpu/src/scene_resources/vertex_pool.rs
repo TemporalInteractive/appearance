@@ -1,7 +1,7 @@
 use appearance_model::mesh::PackedVertex;
 use appearance_wgpu::wgpu::{self, util::DeviceExt};
 use bytemuck::{Pod, Zeroable};
-use glam::{Mat4, Vec4};
+use glam::Mat4;
 
 pub const MAX_VERTEX_POOL_VERTICES: usize = 1024 * 1024 * 32;
 
@@ -42,7 +42,7 @@ impl VertexPoolSlice {
         self.first_vertex + self.num_vertices
     }
 
-    fn last_index(&self) -> u32 {
+    pub fn last_index(&self) -> u32 {
         self.first_index + self.num_indices
     }
 }
@@ -87,6 +87,7 @@ impl VertexPool {
             mapped_at_creation: false,
             size: (std::mem::size_of::<PackedVertex>() * MAX_VERTEX_POOL_VERTICES) as u64,
             usage: wgpu::BufferUsages::BLAS_INPUT
+                | wgpu::BufferUsages::VERTEX
                 | wgpu::BufferUsages::STORAGE
                 | wgpu::BufferUsages::COPY_DST,
         });
@@ -96,6 +97,7 @@ impl VertexPool {
             mapped_at_creation: false,
             size: (std::mem::size_of::<u32>() * MAX_VERTEX_POOL_VERTICES * 3) as u64,
             usage: wgpu::BufferUsages::BLAS_INPUT
+                | wgpu::BufferUsages::INDEX
                 | wgpu::BufferUsages::STORAGE
                 | wgpu::BufferUsages::COPY_DST,
         });
