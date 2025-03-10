@@ -15,10 +15,15 @@ struct Constants {
     bounce: u32,
     seed: u32,
     sample: u32,
+    screen_width: u32,
+    _padding0: u32,
+    _padding1: u32,
+    _padding2: u32,
 }
 
 pub struct TracePassParameters<'a> {
     pub ray_count: u32,
+    pub screen_width: u32,
     pub bounce: u32,
     pub sample: u32,
     pub seed: u32,
@@ -27,7 +32,7 @@ pub struct TracePassParameters<'a> {
     pub payloads: &'a wgpu::Buffer,
     pub light_sample_reservoirs: &'a wgpu::Buffer,
     pub light_sample_ctxs: &'a wgpu::Buffer,
-    pub gbuffer: &'a wgpu::Buffer,
+    pub gbuffer: &'a wgpu::TextureView,
     pub scene_resources: &'a SceneResources,
 }
 
@@ -123,10 +128,10 @@ pub fn encode(
                             wgpu::BindGroupLayoutEntry {
                                 binding: 7,
                                 visibility: wgpu::ShaderStages::COMPUTE,
-                                ty: wgpu::BindingType::Buffer {
-                                    ty: wgpu::BufferBindingType::Storage { read_only: false },
-                                    has_dynamic_offset: false,
-                                    min_binding_size: None,
+                                ty: wgpu::BindingType::StorageTexture {
+                                    access: wgpu::StorageTextureAccess::ReadWrite,
+                                    format: wgpu::TextureFormat::Rgba32Float,
+                                    view_dimension: wgpu::TextureViewDimension::D2,
                                 },
                                 count: None,
                             },
@@ -151,6 +156,10 @@ pub fn encode(
             bounce: parameters.bounce,
             seed: parameters.seed,
             sample: parameters.sample,
+            screen_width: parameters.screen_width,
+            _padding0: 0,
+            _padding1: 0,
+            _padding2: 0,
         }),
         usage: wgpu::BufferUsages::UNIFORM,
     });
@@ -192,7 +201,7 @@ pub fn encode(
             },
             wgpu::BindGroupEntry {
                 binding: 7,
-                resource: parameters.gbuffer.as_entire_binding(),
+                resource: wgpu::BindingResource::TextureView(parameters.gbuffer),
             },
         ],
     });

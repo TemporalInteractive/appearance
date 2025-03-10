@@ -5,7 +5,7 @@ use appearance_wgpu::{
     wgpu::{self, util::DeviceExt},
 };
 use bytemuck::{Pod, Zeroable};
-use glam::Mat4;
+use glam::{Mat4, Vec3};
 
 use crate::scene_resources::SceneResources;
 
@@ -13,10 +13,13 @@ use crate::scene_resources::SceneResources;
 #[repr(C)]
 struct Constants {
     view_proj: Mat4,
+    view_position: Vec3,
+    _padding0: u32,
 }
 
 pub struct GbufferPassParameters<'a> {
     pub view_proj: Mat4,
+    pub view_position: Vec3,
     pub scene_resources: &'a SceneResources,
     pub gbuffer_view: &'a wgpu::TextureView,
     pub depth_texture: &'a wgpu::Texture,
@@ -135,6 +138,8 @@ pub fn encode(
         label: Some("appearance-path-tracer-gpu::gbuffer constants"),
         contents: bytemuck::bytes_of(&Constants {
             view_proj: parameters.view_proj,
+            view_position: parameters.view_position,
+            _padding0: 0,
         }),
         usage: wgpu::BufferUsages::UNIFORM,
     });

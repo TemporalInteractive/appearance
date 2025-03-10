@@ -1,22 +1,20 @@
 @include appearance-packing::shared/packing
 
 struct GBufferTexel {
+    normal_ws: vec3<f32>,
     depth_ws: f32,
-    normal_ws: PackedNormalizedXyz10,
-    _padding0: u32,
-    _padding1: u32,
-}
+};
 
-fn GBufferTexel::new(depth_ws: f32, normal_ws: vec3<f32>) -> GBufferTexel {
+fn GBufferTexel::new(texel: vec4<f32>) -> GBufferTexel {
     return GBufferTexel(
-        depth_ws,
-        PackedNormalizedXyz10::new(normal_ws, 0),
-        0,
-        0
+        texel.gba,
+        texel.r
     );
 }
 
-fn GBufferTexel::depth_cs(_self: GBufferTexel, z_near: f32, z_far: f32) -> f32 {
-    let z_linear: f32 = (_self.depth_ws - z_near) / z_far;
-    return (z_near * z_far) / (z_far - z_linear * (z_far - z_near));
+fn GBufferTexel::to_texel(_self: GBufferTexel) -> vec4<f32> {
+    return vec4<f32>(
+        _self.depth_ws,
+        _self.normal_ws
+    );
 }

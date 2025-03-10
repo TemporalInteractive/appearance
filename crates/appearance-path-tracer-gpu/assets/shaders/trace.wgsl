@@ -15,6 +15,10 @@ struct Constants {
     bounce: u32,
     seed: u32,
     sample: u32,
+    screen_width: u32,
+    _padding0: u32,
+    _padding1: u32,
+    _padding2: u32,
 }
 
 @group(0)
@@ -47,7 +51,7 @@ var<storage, read_write> light_sample_ctxs: array<LightSampleCtx>;
 
 @group(0)
 @binding(7)
-var<storage, read_write> gbuffer: array<GBufferTexel>;
+var gbuffer: texture_storage_2d<rgba32float, read_write>;
 
 @compute
 @workgroup_size(128)
@@ -180,12 +184,14 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
                 }
             }
 
+            // Read current gbuffer and write out all additional data
             if (constants.bounce == 0) {
-                // Write out all gbuffer data
-                gbuffer[id] = GBufferTexel::new(
-                    depth_ws,
-                    front_facing_shading_normal_ws
-                );
+                let texel_id = vec2<i32>(i32(id % constants.screen_width), i32(id / constants.screen_width));
+                var texel = GBufferTexel::new(textureLoad(gbuffer, texel_id));
+
+                texel.normal_ws = front_facing_shading_normal_ws;
+
+                textureStore(gbuffer, texel_id, GBufferTexel::to_texel(texel));
             }
 
             let disney_bsdf = DisneyBsdf::from_material(material);

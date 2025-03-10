@@ -1,5 +1,5 @@
-@include appearance-path-tracer-gpu::shared/ray
 @include appearance-render-loop::block
+@include appearance-path-tracer-gpu::shared/ray
 
 struct Constants {
     width: u32,

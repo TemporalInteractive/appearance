@@ -2,6 +2,7 @@
 
 struct VertexOutput {
     @location(0) normal: vec3<f32>,
+    @location(1) position_ws: vec4<f32>,
     @builtin(position) position: vec4<f32>,
 };
 
@@ -11,6 +12,8 @@ struct PushConstant {
 
 struct Constants {
     view_proj: mat4x4<f32>,
+    view_position: vec3<f32>,
+    _padding0: u32,
 }
 
 @group(0)
@@ -31,15 +34,15 @@ fn vs_main(
     let packed_normal = PackedNormalizedXyz10(_packed_normal);
     let packed_tangent = PackedNormalizedXyz10(_packed_tangent);
 
-    let ws_position: vec4<f32> = pc.model * vec4<f32>(position.xyz, 1.0);
-
     var result: VertexOutput;
-    result.position = constants.view_proj * ws_position;
+    result.position_ws = pc.model * vec4<f32>(position.xyz, 1.0);
+    result.position = constants.view_proj * result.position_ws;
     result.normal = PackedNormalizedXyz10::unpack(packed_normal, 0);
     return result;
 }
 
 @fragment
 fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
-    return vec4<f32>(vertex.position.w, vertex.normal);
+    let depth_ws: f32 = distance(constants.view_position, vertex.position_ws.xyz);
+    return vec4<f32>(depth_ws, vertex.normal);
 }

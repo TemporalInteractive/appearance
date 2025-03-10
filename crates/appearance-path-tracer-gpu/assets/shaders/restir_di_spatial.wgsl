@@ -57,7 +57,7 @@ var<storage, read> light_sample_ctxs: array<LightSampleCtx>;
 
 @group(0)
 @binding(8)
-var<storage, read> gbuffer: array<GBufferTexel>;
+var gbuffer: texture_storage_2d<rgba32float, read>;
 
 fn mirror(x: i32, max: i32) -> u32 {
     return u32(abs(((x + max) % (2 * max)) - max));
@@ -110,9 +110,9 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     var combined_sample_count: f32 = reservoir.sample_count;
     DiReservoir::update(&combined_reservoir, reservoir.selected_phat * reservoir.contribution_weight * reservoir.sample_count, &rng, reservoir.sample, reservoir.selected_phat);
 
-    let center_gbuffer_texel: GBufferTexel = gbuffer[flat_id];
-    let center_depth_cs: f32 = GBufferTexel::depth_cs(center_gbuffer_texel, 0.001, 10000.0);
-    let center_normal_ws: vec3<f32> = PackedNormalizedXyz10::unpack(center_gbuffer_texel.normal_ws, 0);
+    let center_gbuffer_texel: GBufferTexel = GBufferTexel::new(textureLoad(gbuffer, vec2<i32>(id)));
+    let center_depth_cs: f32 = center_gbuffer_texel.depth_ws;
+    let center_normal_ws: vec3<f32> = center_gbuffer_texel.normal_ws;
 
     for (var i: u32 = 0; i < NUM_SAMPLES; i += 1) {
         let center_id = vec2<i32>(i32(id.x), i32(id.y));
@@ -123,10 +123,10 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
         let neighbour_id = mirror_pixel(center_id + offset);
         let flat_neighbour_id: u32 = neighbour_id.y * constants.resolution.x + neighbour_id.x;
 
-        let neighbour_gbuffer_texel: GBufferTexel = gbuffer[flat_neighbour_id];
-        let neighbour_depth_cs: f32 = GBufferTexel::depth_cs(neighbour_gbuffer_texel, 0.001, 10000.0);
+        let neighbour_gbuffer_texel: GBufferTexel = GBufferTexel::new(textureLoad(gbuffer, vec2<i32>(neighbour_id)));
+        let neighbour_depth_cs: f32 = neighbour_gbuffer_texel.depth_ws;
         let valid_delta_depth: bool = (abs(center_depth_cs - neighbour_depth_cs) / center_depth_cs) < 0.1;
-        let neighbour_normal_ws: vec3<f32> = PackedNormalizedXyz10::unpack(neighbour_gbuffer_texel.normal_ws, 0);
+        let neighbour_normal_ws: vec3<f32> = neighbour_gbuffer_texel.normal_ws;
         let valid_delta_normal: bool = dot(center_normal_ws, neighbour_normal_ws) > 0.906; // 25 degrees
 
         let valid_neighbour_reservoir: bool = valid_delta_depth && valid_delta_normal;

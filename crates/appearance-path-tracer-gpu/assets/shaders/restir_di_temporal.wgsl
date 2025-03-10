@@ -12,10 +12,9 @@
 @include appearance-path-tracer-gpu::shared/nee
 
 struct Constants {
-    ray_count: u32,
+    resolution: vec2<u32>,
     spatial_pass_count: u32,
     _padding0: u32,
-    _padding1: u32,
 }
 
 @group(0)
@@ -48,27 +47,28 @@ var<storage, read> light_sample_ctxs: array<LightSampleCtx>;
 
 @group(0)
 @binding(7)
-var<storage, read> gbuffer: array<GBufferTexel>;
+var gbuffer: texture_storage_2d<rgba32float, read>;
 
 @group(0)
 @binding(8)
-var<storage, read> prev_gbuffer: array<GBufferTexel>;
+var prev_gbuffer: texture_storage_2d<rgba32float, read>;
 
 @compute
-@workgroup_size(128)
+@workgroup_size(16, 16)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     @builtin(num_workgroups) dispatch_size: vec3<u32>) {
-    let id: u32 = global_id.x;
-    if (id >= constants.ray_count) { return; }
+    let id: vec2<u32> = global_id.xy;
+    if (any(id >= constants.resolution)) { return; }
+    let flat_id: u32 = id.y * constants.resolution.x + id.x;
 
-    let ray: Ray = in_rays[id];
+    let ray: Ray = in_rays[flat_id];
     var origin: vec3<f32> = ray.origin;
     var direction: vec3<f32> = PackedNormalizedXyz10::unpack(ray.direction, 0);
 
-    var payload: Payload = payloads[id];
+    var payload: Payload = payloads[flat_id];
     if (payload.t < 0.0) { return; } // TODO: indirect dispatch with pids
 
-    let light_sample_ctx: LightSampleCtx = light_sample_ctxs[id];
+    let light_sample_ctx: LightSampleCtx = light_sample_ctxs[flat_id];
     
     var rng: u32 = payload.rng;
 
@@ -87,21 +87,21 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     let clearcoat_tangent_to_world: mat3x3<f32> = build_orthonormal_basis(front_facing_clearcoat_normal_ws);
     let clearcoat_world_to_tangent: mat3x3<f32> = transpose(clearcoat_tangent_to_world);
 
-    let reservoir: DiReservoir = PackedDiReservoir::unpack(reservoirs[id]);
+    let reservoir: DiReservoir = PackedDiReservoir::unpack(reservoirs[flat_id]);
 
-    let current_gbuffer_texel: GBufferTexel = gbuffer[id];
-    let prev_gbuffer_texel: GBufferTexel = prev_gbuffer[id]; // TODO: velocity mapping
-    let current_depth_cs: f32 = GBufferTexel::depth_cs(current_gbuffer_texel, 0.001, 10000.0);
-    let prev_depth_cs: f32 = GBufferTexel::depth_cs(prev_gbuffer_texel, 0.001, 10000.0);
+    let current_gbuffer_texel: GBufferTexel = GBufferTexel::new(textureLoad(gbuffer, vec2<i32>(id)));
+    let prev_gbuffer_texel: GBufferTexel = GBufferTexel::new(textureLoad(prev_gbuffer, vec2<i32>(id))); // TODO: velocity mapping
+    let current_depth_cs: f32 = current_gbuffer_texel.depth_ws;
+    let prev_depth_cs: f32 = prev_gbuffer_texel.depth_ws;
     let valid_delta_depth: bool = (abs(current_depth_cs - prev_depth_cs) / current_depth_cs) < 0.1;
-    let current_normal_ws: vec3<f32> = PackedNormalizedXyz10::unpack(current_gbuffer_texel.normal_ws, 0);
-    let prev_normal_ws: vec3<f32> = PackedNormalizedXyz10::unpack(prev_gbuffer_texel.normal_ws, 0);
+    let current_normal_ws: vec3<f32> = current_gbuffer_texel.normal_ws;
+    let prev_normal_ws: vec3<f32> = prev_gbuffer_texel.normal_ws;
     let valid_delta_normal: bool = dot(current_normal_ws, prev_normal_ws) > 0.906; // 25 degrees
 
     let valid_prev_reservoir: bool = valid_delta_depth && valid_delta_normal;
     if (valid_prev_reservoir) {
         // TODO: velocity mapping
-        var prev_reservoir: DiReservoir = PackedDiReservoir::unpack(prev_reservoirs[id]);
+        var prev_reservoir: DiReservoir = PackedDiReservoir::unpack(prev_reservoirs[flat_id]);
         prev_reservoir.sample_count = min(prev_reservoir.sample_count, 20.0 * reservoir.sample_count);
 
         let w_out_worldspace: vec3<f32> = -direction;
@@ -129,14 +129,14 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
             combined_reservoir.contribution_weight = (1.0 / combined_reservoir.selected_phat) * (1.0 / combined_reservoir.sample_count * combined_reservoir.weight_sum);
         }
 
-        reservoirs[id] = PackedDiReservoir::new(combined_reservoir);
+        reservoirs[flat_id] = PackedDiReservoir::new(combined_reservoir);
         if (constants.spatial_pass_count == 0) {
-            prev_reservoirs[id] = PackedDiReservoir::new(combined_reservoir);
+            prev_reservoirs[flat_id] = PackedDiReservoir::new(combined_reservoir);
         }
 
         payload.rng = rng;
-        payloads[id] = payload;
+        payloads[flat_id] = payload;
     } else if (constants.spatial_pass_count == 0) {
-        prev_reservoirs[id] = PackedDiReservoir::new(reservoir);
+        prev_reservoirs[flat_id] = PackedDiReservoir::new(reservoir);
     }
 }
