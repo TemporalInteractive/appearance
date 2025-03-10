@@ -284,7 +284,7 @@ impl SceneResources {
         for (asset_path, (model, entity_uuids)) in &self.models {
             for root_node in &model.root_nodes {
                 // Loop over all world instances of the model
-                for (i, entity_uuid) in entity_uuids.iter().enumerate() {
+                for entity_uuid in entity_uuids {
                     // If this instance doesn't have a transform anymore, it has been destroyed
                     if let Some(instance_transform) = self.model_instances.get(entity_uuid) {
                         Self::model_instance_iter_rec(

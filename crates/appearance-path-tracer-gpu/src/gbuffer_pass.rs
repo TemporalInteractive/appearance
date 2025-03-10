@@ -3,10 +3,9 @@ use appearance_wgpu::{
     include_shader_src,
     pipeline_database::PipelineDatabase,
     wgpu::{self, util::DeviceExt},
-    ComputePipelineDescriptorExtensions,
 };
 use bytemuck::{Pod, Zeroable};
-use glam::{Mat4, UVec2};
+use glam::Mat4;
 
 use crate::scene_resources::SceneResources;
 

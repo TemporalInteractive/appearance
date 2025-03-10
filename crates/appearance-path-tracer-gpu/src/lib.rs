@@ -106,7 +106,7 @@ impl SizedResources {
 
         let gbuffer_texture_views = std::array::from_fn(|i| {
             let texture = device.create_texture(&wgpu::TextureDescriptor {
-                label: None,
+                label: Some(&format!("appearance-path-tracer-gpu gbuffer {}", i)),
                 size: wgpu::Extent3d {
                     width: resolution.x,
                     height: resolution.y,
@@ -125,7 +125,7 @@ impl SizedResources {
             texture.create_view(&wgpu::TextureViewDescriptor::default())
         });
         let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: None,
+            label: Some("appearance-path-tracer-gpu depth"),
             size: wgpu::Extent3d {
                 width: resolution.x,
                 height: resolution.y,
