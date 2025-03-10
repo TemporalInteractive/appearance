@@ -222,6 +222,16 @@ impl RestirDiPass {
                                     },
                                     count: None,
                                 },
+                                wgpu::BindGroupLayoutEntry {
+                                    binding: 9,
+                                    visibility: wgpu::ShaderStages::COMPUTE,
+                                    ty: wgpu::BindingType::StorageTexture {
+                                        access: wgpu::StorageTextureAccess::ReadOnly,
+                                        format: wgpu::TextureFormat::Rgba32Float,
+                                        view_dimension: wgpu::TextureViewDimension::D2,
+                                    },
+                                    count: None,
+                                },
                             ],
                         }),
                         parameters.scene_resources.vertex_pool().bind_group_layout(),
@@ -287,6 +297,12 @@ impl RestirDiPass {
                 },
                 wgpu::BindGroupEntry {
                     binding: 8,
+                    resource: wgpu::BindingResource::TextureView(
+                        parameters.gbuffer.velocity_derivative(),
+                    ),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 9,
                     resource: wgpu::BindingResource::TextureView(
                         parameters.prev_gbuffer.depth_normal(),
                     ),

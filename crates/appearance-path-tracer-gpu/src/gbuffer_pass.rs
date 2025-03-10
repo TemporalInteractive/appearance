@@ -13,6 +13,7 @@ use crate::scene_resources::SceneResources;
 #[repr(C)]
 struct Constants {
     view_proj: Mat4,
+    prev_view_proj: Mat4,
     view: Mat4,
     view_position: Vec3,
     _padding0: u32,
@@ -85,6 +86,7 @@ impl Gbuffer {
 
 pub struct GbufferPassParameters<'a> {
     pub view_proj: Mat4,
+    pub prev_view_proj: Mat4,
     pub view: Mat4,
     pub view_position: Vec3,
     pub scene_resources: &'a SceneResources,
@@ -208,6 +210,7 @@ pub fn encode(
         label: Some("appearance-path-tracer-gpu::gbuffer constants"),
         contents: bytemuck::bytes_of(&Constants {
             view_proj: parameters.view_proj,
+            prev_view_proj: parameters.prev_view_proj,
             view: parameters.view,
             view_position: parameters.view_position,
             _padding0: 0,

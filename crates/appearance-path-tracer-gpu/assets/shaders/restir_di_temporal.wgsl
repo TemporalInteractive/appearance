@@ -51,6 +51,10 @@ var gbuffer: texture_storage_2d<rgba32float, read>;
 
 @group(0)
 @binding(8)
+var gbuffer_velocity: texture_storage_2d<rgba32float, read>;
+
+@group(0)
+@binding(9)
 var prev_gbuffer: texture_storage_2d<rgba32float, read>;
 
 @compute
@@ -88,20 +92,26 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     let clearcoat_world_to_tangent: mat3x3<f32> = transpose(clearcoat_tangent_to_world);
 
     let reservoir: DiReservoir = PackedDiReservoir::unpack(reservoirs[flat_id]);
-
+    
     let current_gbuffer_texel: GBufferTexel = GBufferTexel::new(textureLoad(gbuffer, vec2<i32>(id)));
-    let prev_gbuffer_texel: GBufferTexel = GBufferTexel::new(textureLoad(prev_gbuffer, vec2<i32>(id))); // TODO: velocity mapping
     let current_depth_cs: f32 = current_gbuffer_texel.depth_ws;
+    let current_normal_ws: vec3<f32> = current_gbuffer_texel.normal_ws;
+
+    let velocity: vec2<f32> = textureLoad(gbuffer_velocity, vec2<i32>(id)).xy;
+    let velocity_offset = vec2<i32>(vec2<f32>(constants.resolution) * velocity);
+    let prev_id_unclamped: vec2<i32> = vec2<i32>(id) - velocity_offset;
+    let prev_id = clamp(prev_id_unclamped, vec2<i32>(0), vec2<i32>(constants.resolution));
+    let prev_flat_id: u32 = u32(prev_id.y) * constants.resolution.x + u32(prev_id.x);
+    
+    let prev_gbuffer_texel: GBufferTexel = GBufferTexel::new(textureLoad(prev_gbuffer, vec2<i32>(prev_id)));
     let prev_depth_cs: f32 = prev_gbuffer_texel.depth_ws;
     let valid_delta_depth: bool = (abs(current_depth_cs - prev_depth_cs) / current_depth_cs) < 0.1;
-    let current_normal_ws: vec3<f32> = current_gbuffer_texel.normal_ws;
     let prev_normal_ws: vec3<f32> = prev_gbuffer_texel.normal_ws;
     let valid_delta_normal: bool = dot(current_normal_ws, prev_normal_ws) > 0.906; // 25 degrees
 
     let valid_prev_reservoir: bool = valid_delta_depth && valid_delta_normal;
     if (valid_prev_reservoir) {
-        // TODO: velocity mapping
-        var prev_reservoir: DiReservoir = PackedDiReservoir::unpack(prev_reservoirs[flat_id]);
+        var prev_reservoir: DiReservoir = PackedDiReservoir::unpack(prev_reservoirs[prev_flat_id]);
         prev_reservoir.sample_count = min(prev_reservoir.sample_count, 20.0 * reservoir.sample_count);
 
         let w_out_worldspace: vec3<f32> = -direction;

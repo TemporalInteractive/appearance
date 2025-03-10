@@ -85,7 +85,7 @@ impl SizedResources {
             usage: wgpu::BufferUsages::STORAGE,
         });
 
-        let gbuffer = std::array::from_fn(|i| Gbuffer::new(resolution, device));
+        let gbuffer = std::array::from_fn(|_| Gbuffer::new(resolution, device));
         let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("appearance-path-tracer-gpu depth"),
             size: wgpu::Extent3d {
@@ -222,6 +222,10 @@ impl PathTracerGpu {
         let view = self.camera.transform.get_matrix().inverse();
         let view_proj = self.camera.get_matrix() * view;
         let view_position = self.camera.transform.get_translation();
+        let prev_view_proj =
+            self.camera.prev_matrix() * self.camera.transform.prev_matrix().inverse();
+
+        println!("{:?} {:?}", view_proj, prev_view_proj);
 
         let mut command_encoder = ctx
             .device
@@ -236,6 +240,7 @@ impl PathTracerGpu {
         gbuffer_pass::encode(
             &GbufferPassParameters {
                 view_proj,
+                prev_view_proj,
                 view,
                 view_position,
                 scene_resources: &self.scene_resources,
@@ -290,7 +295,7 @@ impl PathTracerGpu {
                     self.sized_resources.restir_di_pass.encode(
                         &RestirDiPassParameters {
                             resolution: self.local_resolution,
-                            spatial_pass_count: 2,
+                            spatial_pass_count: 0,
                             spatial_pixel_radius: 30.0,
                             in_rays,
                             payloads: &self.sized_resources.payloads,
@@ -345,5 +350,6 @@ impl PathTracerGpu {
 
         self.frame_idx += 1;
         self.scene_resources.end_frame();
+        self.camera.next_frame();
     }
 }

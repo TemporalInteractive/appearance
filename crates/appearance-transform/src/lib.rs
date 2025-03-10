@@ -13,6 +13,7 @@ pub struct Transform {
     rotation: Quat,
     scale: Vec3,
     matrix: Mutex<(Mat4, bool)>,
+    prev_matrix: Mat4,
 
     has_changed_this_frame: AtomicBool,
 }
@@ -27,6 +28,7 @@ impl Clone for Transform {
             rotation: self.rotation,
             scale: self.scale,
             matrix: Mutex::new(*matrix),
+            prev_matrix: self.prev_matrix,
             has_changed_this_frame: AtomicBool::new(has_changed_this_frame),
         }
     }
@@ -39,6 +41,7 @@ impl Default for Transform {
             rotation: Quat::IDENTITY,
             scale: Vec3::ONE,
             matrix: Mutex::new((Mat4::IDENTITY, true)),
+            prev_matrix: Mat4::IDENTITY,
             has_changed_this_frame: AtomicBool::new(true),
         }
     }
@@ -58,40 +61,40 @@ impl From<Mat4> for Transform {
 
 impl Transform {
     pub fn new(translation: Vec3, rotation: Quat, scale: Vec3) -> Self {
+        let matrix = Mat4::from_scale_rotation_translation(scale, rotation, translation);
+
         Self {
             translation,
             rotation,
             scale,
-            matrix: Mutex::new((
-                Mat4::from_scale_rotation_translation(scale, rotation, translation),
-                false,
-            )),
+            matrix: Mutex::new((matrix, false)),
+            prev_matrix: matrix,
             has_changed_this_frame: AtomicBool::new(true),
         }
     }
 
     pub fn from_translation(translation: Vec3) -> Self {
+        let matrix = Mat4::from_scale_rotation_translation(Vec3::ONE, Quat::IDENTITY, translation);
+
         Self {
             translation,
             rotation: Quat::IDENTITY,
             scale: Vec3::ONE,
-            matrix: Mutex::new((
-                Mat4::from_scale_rotation_translation(Vec3::ONE, Quat::IDENTITY, translation),
-                false,
-            )),
+            matrix: Mutex::new((matrix, false)),
+            prev_matrix: matrix,
             has_changed_this_frame: AtomicBool::new(true),
         }
     }
 
     pub fn from_scale(scale: Vec3) -> Self {
+        let matrix = Mat4::from_scale_rotation_translation(scale, Quat::IDENTITY, Vec3::ZERO);
+
         Self {
             translation: Vec3::ZERO,
             rotation: Quat::IDENTITY,
             scale,
-            matrix: Mutex::new((
-                Mat4::from_scale_rotation_translation(scale, Quat::IDENTITY, Vec3::ZERO),
-                false,
-            )),
+            matrix: Mutex::new((matrix, false)),
+            prev_matrix: matrix,
             has_changed_this_frame: AtomicBool::new(true),
         }
     }
@@ -170,6 +173,14 @@ impl Transform {
         self.has_changed_this_frame.store(true, Ordering::Relaxed);
 
         (self.scale, self.rotation, self.translation) = matrix.to_scale_rotation_translation();
+    }
+
+    pub fn prev_matrix(&self) -> Mat4 {
+        self.prev_matrix
+    }
+
+    pub fn next_frame(&mut self) {
+        self.prev_matrix = self.get_matrix();
     }
 
     /// Returns if there were any transform changes since the last time this function was called

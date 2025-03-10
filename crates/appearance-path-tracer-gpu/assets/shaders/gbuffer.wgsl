@@ -3,7 +3,8 @@
 struct VertexOutput {
     @location(0) normal: vec3<f32>,
     @location(1) position_ws: vec4<f32>,
-    @location(2) prev_position_ws: vec4<f32>,
+    @location(2) position_cs: vec4<f32>,
+    @location(3) prev_position_cs: vec4<f32>,
     @builtin(position) position: vec4<f32>,
 };
 
@@ -14,6 +15,7 @@ struct PushConstant {
 
 struct Constants {
     view_proj: mat4x4<f32>,
+    prev_view_proj: mat4x4<f32>,
     view: mat4x4<f32>,
     view_position: vec3<f32>,
     _padding0: u32,
@@ -39,8 +41,9 @@ fn vs_main(
 
     var result: VertexOutput;
     result.position_ws = pc.model * vec4<f32>(position.xyz, 1.0);
-    result.prev_position_ws = pc.prev_model * vec4<f32>(position.xyz, 1.0);
     result.position = constants.view_proj * result.position_ws;
+    result.position_cs = result.position; // TODO: remove
+    result.prev_position_cs = constants.prev_view_proj * pc.prev_model * vec4<f32>(position.xyz, 1.0);
     result.normal = PackedNormalizedXyz10::unpack(packed_normal, 0);
     return result;
 }
@@ -55,12 +58,14 @@ fn fs_main(vertex: VertexOutput) -> FragmentOutput {
     let depth_ws: f32 = distance(constants.view_position, vertex.position_ws.xyz);
     let normal_ws: vec3<f32> = vertex.normal;
 
-    let prev_position_vs: vec3<f32> = (constants.view * vertex.prev_position_ws).xyz;
-    let position_vs: vec3<f32> = (constants.view * vertex.position_ws).xyz;
-    let velocity: vec3<f32> = prev_position_vs - position_vs;
+    var prev_position_ss: vec4<f32> = (vertex.prev_position_cs / vertex.prev_position_cs.w + 1.0) / 2.0;
+    prev_position_ss = vec4<f32>(prev_position_ss.x, 1.0 - prev_position_ss.y, prev_position_ss.zw);
+    var position_ss: vec4<f32> = (vertex.position_cs / vertex.position_cs.w + 1.0) / 2.0;
+    position_ss = vec4<f32>(position_ss.x, 1.0 - position_ss.y, position_ss.zw);
+    var velocity: vec2<f32> = (position_ss - prev_position_ss).xy;
 
     var result: FragmentOutput;
     result.depth_normal = vec4<f32>(depth_ws, vertex.normal);
-    result.velocity_derivative = vec4<f32>(velocity, 0.0);
+    result.velocity_derivative = vec4<f32>(velocity, 0.0, 0.0);
     return result;
 }
