@@ -5,7 +5,7 @@ use appearance_wgpu::{pipeline_database::PipelineDatabase, wgpu, Context};
 use appearance_world::visible_world_action::VisibleWorldActionType;
 use apply_di_pass::ApplyDiPassParameters;
 use film::Film;
-use gbuffer_pass::GbufferPassParameters;
+use gbuffer_pass::{Gbuffer, GbufferPassParameters};
 use glam::{UVec2, Vec3};
 use raygen_pass::RaygenPassParameters;
 use resolve_pass::ResolvePassParameters;
@@ -43,7 +43,7 @@ struct SizedResources {
     light_sample_reservoirs: wgpu::Buffer,
     light_sample_ctxs: wgpu::Buffer,
 
-    gbuffer_texture_views: [wgpu::TextureView; 2],
+    gbuffer: [Gbuffer; 2],
     depth_texture: wgpu::Texture,
 
     restir_di_pass: RestirDiPass,
@@ -85,26 +85,7 @@ impl SizedResources {
             usage: wgpu::BufferUsages::STORAGE,
         });
 
-        let gbuffer_texture_views = std::array::from_fn(|i| {
-            let texture = device.create_texture(&wgpu::TextureDescriptor {
-                label: Some(&format!("appearance-path-tracer-gpu gbuffer {}", i)),
-                size: wgpu::Extent3d {
-                    width: resolution.x,
-                    height: resolution.y,
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Rgba32Float,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING
-                    | wgpu::TextureUsages::STORAGE_BINDING
-                    | wgpu::TextureUsages::COPY_DST
-                    | wgpu::TextureUsages::RENDER_ATTACHMENT,
-                view_formats: &[],
-            });
-            texture.create_view(&wgpu::TextureViewDescriptor::default())
-        });
+        let gbuffer = std::array::from_fn(|i| Gbuffer::new(resolution, device));
         let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("appearance-path-tracer-gpu depth"),
             size: wgpu::Extent3d {
@@ -128,7 +109,7 @@ impl SizedResources {
             payloads,
             light_sample_reservoirs,
             light_sample_ctxs,
-            gbuffer_texture_views,
+            gbuffer,
             depth_texture,
             restir_di_pass,
         }
@@ -238,7 +219,8 @@ impl PathTracerGpu {
             .set_aspect_ratio(resolution.x as f32 / resolution.y as f32);
         let inv_view = self.camera.transform.get_matrix();
         let inv_proj = self.camera.get_matrix().inverse();
-        let view_proj = self.camera.get_matrix() * self.camera.transform.get_matrix().inverse();
+        let view = self.camera.transform.get_matrix().inverse();
+        let view_proj = self.camera.get_matrix() * view;
         let view_position = self.camera.transform.get_translation();
 
         let mut command_encoder = ctx
@@ -248,16 +230,16 @@ impl PathTracerGpu {
         self.scene_resources
             .rebuild_tlas(&mut command_encoder, &ctx.queue);
 
-        let gbuffer = &self.sized_resources.gbuffer_texture_views[(self.frame_idx as usize) % 2];
-        let prev_gbuffer =
-            &self.sized_resources.gbuffer_texture_views[(self.frame_idx as usize + 1) % 2];
+        let gbuffer = &self.sized_resources.gbuffer[(self.frame_idx as usize) % 2];
+        let prev_gbuffer = &self.sized_resources.gbuffer[(self.frame_idx as usize + 1) % 2];
 
         gbuffer_pass::encode(
             &GbufferPassParameters {
                 view_proj,
+                view,
                 view_position,
                 scene_resources: &self.scene_resources,
-                gbuffer_view: gbuffer,
+                gbuffer,
                 depth_texture: &self.sized_resources.depth_texture,
             },
             &ctx.device,

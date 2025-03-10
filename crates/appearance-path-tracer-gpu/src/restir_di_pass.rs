@@ -7,7 +7,7 @@ use appearance_wgpu::{
 use bytemuck::{Pod, Zeroable};
 use glam::{UVec2, Vec2, Vec3};
 
-use crate::scene_resources::SceneResources;
+use crate::{gbuffer_pass::Gbuffer, scene_resources::SceneResources};
 
 #[derive(Pod, Clone, Copy, Zeroable)]
 #[repr(C)]
@@ -65,8 +65,8 @@ pub struct RestirDiPassParameters<'a> {
     pub payloads: &'a wgpu::Buffer,
     pub light_sample_reservoirs: &'a wgpu::Buffer,
     pub light_sample_ctxs: &'a wgpu::Buffer,
-    pub gbuffer: &'a wgpu::TextureView,
-    pub prev_gbuffer: &'a wgpu::TextureView,
+    pub gbuffer: &'a Gbuffer,
+    pub prev_gbuffer: &'a Gbuffer,
     pub scene_resources: &'a SceneResources,
 }
 
@@ -283,11 +283,13 @@ impl RestirDiPass {
                 },
                 wgpu::BindGroupEntry {
                     binding: 7,
-                    resource: wgpu::BindingResource::TextureView(parameters.gbuffer),
+                    resource: wgpu::BindingResource::TextureView(parameters.gbuffer.depth_normal()),
                 },
                 wgpu::BindGroupEntry {
                     binding: 8,
-                    resource: wgpu::BindingResource::TextureView(parameters.prev_gbuffer),
+                    resource: wgpu::BindingResource::TextureView(
+                        parameters.prev_gbuffer.depth_normal(),
+                    ),
                 },
             ],
         });
@@ -512,7 +514,9 @@ impl RestirDiPass {
                     },
                     wgpu::BindGroupEntry {
                         binding: 8,
-                        resource: wgpu::BindingResource::TextureView(parameters.gbuffer),
+                        resource: wgpu::BindingResource::TextureView(
+                            parameters.gbuffer.depth_normal(),
+                        ),
                     },
                 ],
             });

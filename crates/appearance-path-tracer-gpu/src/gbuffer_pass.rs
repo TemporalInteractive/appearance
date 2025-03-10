@@ -5,7 +5,7 @@ use appearance_wgpu::{
     wgpu::{self, util::DeviceExt},
 };
 use bytemuck::{Pod, Zeroable};
-use glam::{Mat4, Vec3};
+use glam::{Mat4, UVec2, Vec3};
 
 use crate::scene_resources::SceneResources;
 
@@ -13,15 +13,82 @@ use crate::scene_resources::SceneResources;
 #[repr(C)]
 struct Constants {
     view_proj: Mat4,
+    view: Mat4,
     view_position: Vec3,
     _padding0: u32,
 }
 
+#[derive(Pod, Clone, Copy, Zeroable)]
+#[repr(C)]
+struct PushConstants {
+    model: Mat4,
+    prev_model: Mat4,
+}
+
+pub struct Gbuffer {
+    depth_normal: wgpu::TextureView,
+    velocity_derivative: wgpu::TextureView,
+}
+
+impl Gbuffer {
+    pub fn new(resolution: UVec2, device: &wgpu::Device) -> Self {
+        let depth_normal = device
+            .create_texture(&wgpu::TextureDescriptor {
+                label: Some("appearance-path-tracer-gpu::gbuffer depth_normal"),
+                size: wgpu::Extent3d {
+                    width: resolution.x,
+                    height: resolution.y,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba32Float,
+                usage: wgpu::TextureUsages::STORAGE_BINDING
+                    | wgpu::TextureUsages::RENDER_ATTACHMENT,
+                view_formats: &[],
+            })
+            .create_view(&wgpu::TextureViewDescriptor::default());
+
+        let velocity_derivative = device
+            .create_texture(&wgpu::TextureDescriptor {
+                label: Some("appearance-path-tracer-gpu::gbuffer velocity_derivative"),
+                size: wgpu::Extent3d {
+                    width: resolution.x,
+                    height: resolution.y,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba32Float,
+                usage: wgpu::TextureUsages::STORAGE_BINDING
+                    | wgpu::TextureUsages::RENDER_ATTACHMENT,
+                view_formats: &[],
+            })
+            .create_view(&wgpu::TextureViewDescriptor::default());
+
+        Self {
+            depth_normal,
+            velocity_derivative,
+        }
+    }
+
+    pub fn depth_normal(&self) -> &wgpu::TextureView {
+        &self.depth_normal
+    }
+
+    pub fn velocity_derivative(&self) -> &wgpu::TextureView {
+        &self.velocity_derivative
+    }
+}
+
 pub struct GbufferPassParameters<'a> {
     pub view_proj: Mat4,
+    pub view: Mat4,
     pub view_position: Vec3,
     pub scene_resources: &'a SceneResources,
-    pub gbuffer_view: &'a wgpu::TextureView,
+    pub gbuffer: &'a Gbuffer,
     pub depth_texture: &'a wgpu::Texture,
 }
 
@@ -94,7 +161,10 @@ pub fn encode(
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: Some("fs_main"),
-                targets: &[Some(wgpu::TextureFormat::Rgba32Float.into())],
+                targets: &[
+                    Some(wgpu::TextureFormat::Rgba32Float.into()),
+                    Some(wgpu::TextureFormat::Rgba32Float.into()),
+                ],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             }),
             primitive: wgpu::PrimitiveState {
@@ -128,7 +198,7 @@ pub fn encode(
                 )],
                 push_constant_ranges: &[wgpu::PushConstantRange {
                     stages: wgpu::ShaderStages::VERTEX,
-                    range: 0..std::mem::size_of::<Mat4>() as u32,
+                    range: 0..std::mem::size_of::<PushConstants>() as u32,
                 }],
             })
         },
@@ -138,6 +208,7 @@ pub fn encode(
         label: Some("appearance-path-tracer-gpu::gbuffer constants"),
         contents: bytemuck::bytes_of(&Constants {
             view_proj: parameters.view_proj,
+            view: parameters.view,
             view_position: parameters.view_position,
             _padding0: 0,
         }),
@@ -161,14 +232,24 @@ pub fn encode(
     {
         let mut rpass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("appearance-path-tracer-gpu::gbuffer"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: parameters.gbuffer_view,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
+            color_attachments: &[
+                Some(wgpu::RenderPassColorAttachment {
+                    view: &parameters.gbuffer.depth_normal,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                        store: wgpu::StoreOp::Store,
+                    },
+                }),
+                Some(wgpu::RenderPassColorAttachment {
+                    view: &parameters.gbuffer.velocity_derivative,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                        store: wgpu::StoreOp::Store,
+                    },
+                }),
+            ],
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                 view: &depth_view,
                 depth_ops: Some(wgpu::Operations {
@@ -200,13 +281,15 @@ pub fn encode(
             wgpu::IndexFormat::Uint32,
         );
 
-        parameters
-            .scene_resources
-            .model_instance_iter(|vertex_pool_alloc, transform| {
+        parameters.scene_resources.model_instance_iter(
+            |vertex_pool_alloc, transform, prev_transform| {
                 rpass.set_push_constants(
                     wgpu::ShaderStages::VERTEX,
                     0,
-                    bytemuck::bytes_of(&transform),
+                    bytemuck::bytes_of(&PushConstants {
+                        model: transform,
+                        prev_model: prev_transform,
+                    }),
                 );
 
                 let vertex_slice = &vertex_pool_alloc.slice;
@@ -215,6 +298,7 @@ pub fn encode(
                     vertex_slice.first_vertex() as i32,
                     0..1,
                 );
-            });
+            },
+        );
     }
 }
