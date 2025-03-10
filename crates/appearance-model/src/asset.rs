@@ -9,7 +9,11 @@ use gltf::material::AlphaMode;
 use image::DynamicImage;
 use uuid::Uuid;
 
-use crate::{material::Material, mesh::Mesh, Model, ModelNode};
+use crate::{
+    material::Material,
+    mesh::{generate_normals, generate_tangents, Mesh},
+    Model, ModelNode,
+};
 
 impl Asset for Model {
     fn load(_file_path: &str, data: &[u8]) -> Result<Self> {
@@ -336,7 +340,19 @@ fn process_node(
                 }
             }
 
-            let mut mesh = Mesh::new(
+            if mesh_vertex_normals.is_empty() {
+                mesh_vertex_normals = generate_normals(&mesh_vertex_positions, &mesh_indices);
+            }
+            if mesh_vertex_tangents.is_empty() {
+                mesh_vertex_tangents = generate_tangents(
+                    &mesh_vertex_positions,
+                    &mesh_vertex_normals,
+                    &mesh_vertex_tex_coords,
+                    &mesh_indices,
+                );
+            }
+
+            let mesh = Mesh::new(
                 mesh_vertex_positions,
                 mesh_vertex_normals,
                 mesh_vertex_tangents,
@@ -346,12 +362,6 @@ fn process_node(
                 opaque,
                 is_emissive,
             );
-            if !mesh.has_normals() {
-                mesh.generate_normals();
-            }
-            if !mesh.has_tangents() {
-                mesh.generate_tangents();
-            }
 
             meshes[mesh_idx] = Some(mesh);
         }

@@ -95,10 +95,11 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
             let i1: u32 = vertex_indices[vertex_pool_slice.first_index + intersection.primitive_index * 3 + 1];
             let i2: u32 = vertex_indices[vertex_pool_slice.first_index + intersection.primitive_index * 3 + 2];
 
-            let tex_coord0: vec2<f32> = vertex_tex_coords[vertex_pool_slice.first_vertex + i0];
-            let tex_coord1: vec2<f32> = vertex_tex_coords[vertex_pool_slice.first_vertex + i1];
-            let tex_coord2: vec2<f32> = vertex_tex_coords[vertex_pool_slice.first_vertex + i2];
-            let tex_coord: vec2<f32> = tex_coord0 * barycentrics.x + tex_coord1 * barycentrics.y + tex_coord2 * barycentrics.z;
+            let v0: Vertex = PackedVertex::unpack(vertices[vertex_pool_slice.first_vertex + i0]);
+            let v1: Vertex = PackedVertex::unpack(vertices[vertex_pool_slice.first_vertex + i1]);
+            let v2: Vertex = PackedVertex::unpack(vertices[vertex_pool_slice.first_vertex + i2]);
+
+            let tex_coord: vec2<f32> = v0.tex_coord * barycentrics.x + v1.tex_coord * barycentrics.y + v2.tex_coord * barycentrics.z;
 
             let material_idx: u32 = vertex_pool_slice.material_idx + triangle_material_indices[vertex_pool_slice.first_index / 3 + intersection.primitive_index];
             let material_descriptor: MaterialDescriptor = material_descriptors[material_idx];
@@ -120,12 +121,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
             }
 
             // Load tangent, bitangent and normal in local space
-            let tbn: mat3x3<f32> = VertexPoolBindings::load_tbn(
-                vertex_pool_slice.first_vertex + i0,
-                vertex_pool_slice.first_vertex + i1,
-                vertex_pool_slice.first_vertex + i2,
-                barycentrics
-            );
+            let tbn: mat3x3<f32> = VertexPoolBindings::load_tbn(v0, v1, v2, barycentrics);
 
             // Calculate local to world matrix, inversed and transposed
             let local_to_world_inv = mat4x4<f32>(

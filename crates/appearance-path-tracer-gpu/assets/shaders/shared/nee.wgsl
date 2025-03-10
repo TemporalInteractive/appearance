@@ -40,15 +40,13 @@ fn Nee::sample_emissive_triangle(r0: f32, r1: f32, r23: vec2<f32>, sample_point:
 
             let barycentrics = vec3<f32>(1.0 - r23.x - r23.y, r23);
 
-            let tex_coord0: vec2<f32> = vertex_tex_coords[vertex_pool_slice.first_vertex + i0];
-            let tex_coord1: vec2<f32> = vertex_tex_coords[vertex_pool_slice.first_vertex + i1];
-            let tex_coord2: vec2<f32> = vertex_tex_coords[vertex_pool_slice.first_vertex + i2];
-            let tex_coord: vec2<f32> = tex_coord0 * barycentrics.x + tex_coord1 * barycentrics.y + tex_coord2 * barycentrics.z;
+            let v0: Vertex = PackedVertex::unpack(vertices[vertex_pool_slice.first_vertex + i0]);
+            let v1: Vertex = PackedVertex::unpack(vertices[vertex_pool_slice.first_vertex + i1]);
+            let v2: Vertex = PackedVertex::unpack(vertices[vertex_pool_slice.first_vertex + i2]);
 
-            let position0: vec3<f32> = vertex_positions[vertex_pool_slice.first_vertex + i0].xyz;
-            let position1: vec3<f32> = vertex_positions[vertex_pool_slice.first_vertex + i1].xyz;
-            let position2: vec3<f32> = vertex_positions[vertex_pool_slice.first_vertex + i2].xyz;
-            var triangle = Triangle::new(position0, position1, position2);
+            let tex_coord: vec2<f32> = v0.tex_coord * barycentrics.x + v1.tex_coord * barycentrics.y + v2.tex_coord * barycentrics.z;
+
+            var triangle = Triangle::new(v0.position, v1.position, v2.position);
             triangle = Triangle::transform(triangle, emissive_triangle_instance.transform);
             let point: vec3<f32> = triangle.p0 * barycentrics.x + triangle.p1 * barycentrics.y + triangle.p2 * barycentrics.z;
 

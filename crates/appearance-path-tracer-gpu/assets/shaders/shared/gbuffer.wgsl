@@ -1,4 +1,4 @@
-@include ::packing
+@include appearance-packing::shared/packing
 
 struct GBufferTexel {
     depth_ws: f32,
