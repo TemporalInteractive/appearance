@@ -208,7 +208,7 @@ pub fn encode(
                 let vertex_slice = &vertex_pool_alloc.slice;
                 rpass.draw_indexed(
                     vertex_slice.first_index()..vertex_slice.last_index(),
-                    0,
+                    vertex_slice.first_vertex() as i32,
                     0..1,
                 );
             });
