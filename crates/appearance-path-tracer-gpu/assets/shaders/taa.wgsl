@@ -118,8 +118,16 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
 
     reconstructed /= max(weightSum, 1e-5);
 
+    var prev_point_ss: vec2<f32>;
+    var prev_id: u32;
+    if (GBuffer::reproject(current_gbuffer_texel.position_ws, constants.resolution, &prev_point_ss)) {
+        let prev_id_2d = vec2<u32>(floor(prev_point_ss));
+        prev_id = prev_id_2d.y * constants.resolution.x + prev_id_2d.x;
+    } else {
+        prev_id = flat_id;
+    }
 
-    let prev_gbuffer_texel: GBufferTexel = prev_gbuffer[flat_id];
+    let prev_gbuffer_texel: GBufferTexel = prev_gbuffer[prev_id];
     let current_depth_cs: f32 = GBufferTexel::depth_cs(current_gbuffer_texel, 0.001, 10000.0);
     let prev_depth_cs: f32 = GBufferTexel::depth_cs(prev_gbuffer_texel, 0.001, 10000.0);
     let valid_delta_depth: bool = (abs(current_depth_cs - prev_depth_cs) / current_depth_cs) < 0.1;
@@ -129,7 +137,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
 
     let valid_history: bool = valid_delta_depth && valid_delta_normal;
     if (true) {
-        var history: vec3<f32> = PackedRgb9e5::unpack(prev_demodulated_radiance[flat_id]);
+        var history: vec3<f32> = PackedRgb9e5::unpack(prev_demodulated_radiance[prev_id]);
         
         let mean: vec3<f32> = firstMoment / sampleCount;
         var stdev: vec3<f32> = abs(secondMoment - (firstMoment * firstMoment) / sampleCount);

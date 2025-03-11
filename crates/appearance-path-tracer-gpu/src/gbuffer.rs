@@ -1,7 +1,8 @@
 use appearance_camera::{frustum::FrustumSide, Camera};
+use appearance_packing::{PackedNormalizedXyz10, PackedRgb9e5};
 use appearance_wgpu::wgpu::{self, util::DeviceExt};
 use bytemuck::{Pod, Zeroable};
-use glam::{UVec2, Vec4};
+use glam::{UVec2, Vec3, Vec4};
 
 #[derive(Pod, Clone, Copy, Zeroable, Default)]
 #[repr(C)]
@@ -20,10 +21,12 @@ struct GBufferConstants {
 
 #[repr(C)]
 pub struct GBufferTexel {
+    position_ws: Vec3,
     depth_ws: f32,
-    normal_ws: u32,
-    albedo: u32,
+    normal_ws: PackedNormalizedXyz10,
+    albedo: PackedRgb9e5,
     _padding0: u32,
+    _padding1: u32,
 }
 
 pub struct GBuffer {

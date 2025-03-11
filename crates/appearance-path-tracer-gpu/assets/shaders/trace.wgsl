@@ -74,6 +74,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     var throughput: vec3<f32> = PackedRgb9e5::unpack(payload.throughput);
     var rng: u32 = payload.rng;
 
+    var gbuffer_position_ws: vec3<f32>;
     var gbuffer_depth_ws: f32;
     var gbuffer_normal_ws: vec3<f32>;
     var gbuffer_albedo: vec3<f32>;
@@ -212,6 +213,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
             );
 
             if (constants.bounce == 0) {
+                gbuffer_position_ws = hit_point_ws;
                 gbuffer_depth_ws = depth_ws;
                 gbuffer_normal_ws = front_facing_shading_normal_ws;
                 gbuffer_albedo = disney_bsdf.color;
@@ -250,6 +252,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     // Write out all gbuffer data
     if (constants.bounce == 0) {
         gbuffer[id] = GBufferTexel::new(
+            gbuffer_position_ws,
             gbuffer_depth_ws,
             gbuffer_normal_ws,
             gbuffer_albedo
