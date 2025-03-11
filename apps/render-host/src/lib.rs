@@ -82,6 +82,7 @@ impl RenderLoop for HostRenderLoop {
             max_sampled_textures_per_shader_stage: 1024 * 32,
             max_binding_array_elements_per_shader_stage: 1024 * 32,
             max_push_constant_size: 128,
+            max_bind_groups: 8,
             ..wgpu::Limits::default()
         }
     }

@@ -6,6 +6,7 @@
 @include appearance-path-tracer-gpu::shared/vertex_pool_bindings
 @include appearance-path-tracer-gpu::shared/material/material_pool_bindings
 @include appearance-path-tracer-gpu::shared/sky_bindings
+@include appearance-path-tracer-gpu::shared/gbuffer_bindings
 
 @include appearance-path-tracer-gpu::shared/nee
 @include appearance-path-tracer-gpu::shared/trace_helpers
@@ -44,10 +45,6 @@ var<storage, read_write> light_sample_reservoirs: array<PackedDiReservoir>;
 @group(0)
 @binding(6)
 var<storage, read_write> light_sample_ctxs: array<LightSampleCtx>;
-
-@group(0)
-@binding(7)
-var<storage, read_write> gbuffer: array<GBufferTexel>;
 
 @compute
 @workgroup_size(128)

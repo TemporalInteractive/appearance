@@ -5,6 +5,8 @@ use appearance_transform::{Transform, RIGHT, UP};
 use glam::{Mat4, Quat, Vec3};
 use winit::keyboard::KeyCode;
 
+pub mod frustum;
+
 #[derive(Debug)]
 pub struct Camera {
     pub transform: Transform,
@@ -13,6 +15,7 @@ pub struct Camera {
     near: f32,
     far: f32,
     matrix: Mutex<(Mat4, bool)>,
+    prev_matrix: Mat4,
 }
 
 #[derive(Debug)]
@@ -34,6 +37,7 @@ impl Clone for Camera {
             near: self.near,
             far: self.far,
             matrix: Mutex::new(*matrix),
+            prev_matrix: self.prev_matrix,
         }
     }
 }
@@ -47,6 +51,7 @@ impl Default for Camera {
             near: 0.1,
             far: 300.0,
             matrix: Mutex::new((Mat4::IDENTITY, true)),
+            prev_matrix: Mat4::IDENTITY,
         }
     }
 }
@@ -127,6 +132,15 @@ impl Camera {
         }
 
         matrix.0
+    }
+
+    pub fn get_prev_matrix(&self) -> Mat4 {
+        self.prev_matrix
+    }
+
+    pub fn end_frame(&mut self) {
+        self.prev_matrix = self.get_matrix();
+        self.transform.end_frame();
     }
 }
 

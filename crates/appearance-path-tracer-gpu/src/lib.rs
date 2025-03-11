@@ -5,7 +5,7 @@ use appearance_wgpu::{pipeline_database::PipelineDatabase, wgpu, Context};
 use appearance_world::visible_world_action::VisibleWorldActionType;
 use apply_di_pass::ApplyDiPassParameters;
 use film::Film;
-use gbuffer_pass::GbufferPassParameters;
+use gbuffer::GBuffer;
 use glam::{UVec2, Vec3};
 use raygen_pass::RaygenPassParameters;
 use resolve_pass::ResolvePassParameters;
@@ -15,7 +15,7 @@ use trace_pass::TracePassParameters;
 
 mod apply_di_pass;
 mod film;
-mod gbuffer_pass;
+mod gbuffer;
 mod raygen_pass;
 mod resolve_pass;
 mod restir_di_pass;
@@ -36,24 +36,13 @@ struct Payload {
     t: f32,
 }
 
-#[repr(C)]
-struct GBufferTexel {
-    depth_ws: f32,
-    normal_ws: u32,
-    _padding0: u32,
-    _padding1: u32,
-}
-
 struct SizedResources {
     film: Film,
     rays: [wgpu::Buffer; 2],
     payloads: wgpu::Buffer,
     light_sample_reservoirs: wgpu::Buffer,
     light_sample_ctxs: wgpu::Buffer,
-    gbuffer: [wgpu::Buffer; 2],
-
-    gbuffer_texture_views: [wgpu::TextureView; 2],
-    depth_texture: wgpu::Texture,
+    gbuffer: GBuffer,
 
     restir_di_pass: RestirDiPass,
 }
@@ -94,50 +83,7 @@ impl SizedResources {
             usage: wgpu::BufferUsages::STORAGE,
         });
 
-        let gbuffer = std::array::from_fn(|i| {
-            device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some(&format!("appearance-path-tracer-gpu gbuffer {}", i)),
-                size: (std::mem::size_of::<GBufferTexel>() as u32 * resolution.x * resolution.y)
-                    as u64,
-                mapped_at_creation: false,
-                usage: wgpu::BufferUsages::STORAGE,
-            })
-        });
-
-        let gbuffer_texture_views = std::array::from_fn(|i| {
-            let texture = device.create_texture(&wgpu::TextureDescriptor {
-                label: Some(&format!("appearance-path-tracer-gpu gbuffer {}", i)),
-                size: wgpu::Extent3d {
-                    width: resolution.x,
-                    height: resolution.y,
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Rgba32Float,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING
-                    | wgpu::TextureUsages::STORAGE_BINDING
-                    | wgpu::TextureUsages::COPY_DST
-                    | wgpu::TextureUsages::RENDER_ATTACHMENT,
-                view_formats: &[],
-            });
-            texture.create_view(&wgpu::TextureViewDescriptor::default())
-        });
-        let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("appearance-path-tracer-gpu depth"),
-            size: wgpu::Extent3d {
-                width: resolution.x,
-                height: resolution.y,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Depth32Float,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            view_formats: &[],
-        });
+        let gbuffer = GBuffer::new(resolution, device);
 
         let restir_di_pass = RestirDiPass::new(resolution, device);
 
@@ -148,8 +94,6 @@ impl SizedResources {
             light_sample_reservoirs,
             light_sample_ctxs,
             gbuffer,
-            gbuffer_texture_views,
-            depth_texture,
             restir_di_pass,
         }
     }
@@ -258,7 +202,6 @@ impl PathTracerGpu {
             .set_aspect_ratio(resolution.x as f32 / resolution.y as f32);
         let inv_view = self.camera.transform.get_matrix();
         let inv_proj = self.camera.get_matrix().inverse();
-        let view_proj = self.camera.transform.get_matrix().inverse() * self.camera.get_matrix();
 
         let mut command_encoder = ctx
             .device
@@ -266,19 +209,6 @@ impl PathTracerGpu {
 
         self.scene_resources
             .rebuild_tlas(&mut command_encoder, &ctx.queue);
-
-        gbuffer_pass::encode(
-            &GbufferPassParameters {
-                view_proj,
-                scene_resources: &self.scene_resources,
-                gbuffer_view: &self.sized_resources.gbuffer_texture_views
-                    [(self.frame_idx as usize) % 2],
-                depth_texture: &self.sized_resources.depth_texture,
-            },
-            &ctx.device,
-            &mut command_encoder,
-            pipeline_database,
-        );
 
         for sample in 0..self.config.sample_count {
             raygen_pass::encode(
@@ -296,8 +226,6 @@ impl PathTracerGpu {
             for i in 0..self.config.max_bounces {
                 let in_rays = &self.sized_resources.rays[(i as usize) % 2];
                 let out_rays = &self.sized_resources.rays[(i as usize + 1) % 2];
-                let gbuffer = &self.sized_resources.gbuffer[(self.frame_idx as usize) % 2];
-                let prev_gbuffer = &self.sized_resources.gbuffer[(self.frame_idx as usize + 1) % 2];
 
                 let seed = self.frame_idx * self.config.sample_count + sample;
 
@@ -312,7 +240,7 @@ impl PathTracerGpu {
                         payloads: &self.sized_resources.payloads,
                         light_sample_reservoirs: &self.sized_resources.light_sample_reservoirs,
                         light_sample_ctxs: &self.sized_resources.light_sample_ctxs,
-                        gbuffer,
+                        gbuffer: &self.sized_resources.gbuffer,
                         scene_resources: &self.scene_resources,
                     },
                     &ctx.device,
@@ -330,8 +258,7 @@ impl PathTracerGpu {
                             payloads: &self.sized_resources.payloads,
                             light_sample_reservoirs: &self.sized_resources.light_sample_reservoirs,
                             light_sample_ctxs: &self.sized_resources.light_sample_ctxs,
-                            gbuffer,
-                            prev_gbuffer,
+                            gbuffer: &self.sized_resources.gbuffer,
                             scene_resources: &self.scene_resources,
                         },
                         &ctx.device,
@@ -379,5 +306,7 @@ impl PathTracerGpu {
 
         self.frame_idx += 1;
         self.scene_resources.end_frame();
+        self.sized_resources.gbuffer.end_frame(&self.camera);
+        self.camera.end_frame();
     }
 }

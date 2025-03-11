@@ -20,3 +20,14 @@ fn GBufferTexel::depth_cs(_self: GBufferTexel, z_near: f32, z_far: f32) -> f32 {
     let z_linear: f32 = (_self.depth_ws - z_near) / z_far;
     return (z_near * z_far) / (z_far - z_linear * (z_far - z_near));
 }
+
+struct Frustum {
+    left: vec4<f32>,
+    right: vec4<f32>,
+    top: vec4<f32>,
+    bottom: vec4<f32>,
+}
+
+fn Frustum::point_ws_to_ss(_self: Frustum, ws: vec3<f32>, ss: ptr<function, vec2<f32>>) -> bool {
+    return false;
+}
