@@ -21,6 +21,7 @@ pub struct ApplyDiPassParameters<'a> {
     pub ray_count: u32,
     pub in_rays: &'a wgpu::Buffer,
     pub payloads: &'a wgpu::Buffer,
+    pub radiance: &'a wgpu::Buffer,
     pub light_sample_reservoirs: &'a wgpu::Buffer,
     pub light_sample_ctxs: &'a wgpu::Buffer,
     pub scene_resources: &'a SceneResources,
@@ -105,6 +106,16 @@ pub fn encode(
                                 },
                                 count: None,
                             },
+                            wgpu::BindGroupLayoutEntry {
+                                binding: 6,
+                                visibility: wgpu::ShaderStages::COMPUTE,
+                                ty: wgpu::BindingType::Buffer {
+                                    ty: wgpu::BufferBindingType::Storage { read_only: false },
+                                    has_dynamic_offset: false,
+                                    min_binding_size: None,
+                                },
+                                count: None,
+                            },
                         ],
                     }),
                     parameters.scene_resources.vertex_pool().bind_group_layout(),
@@ -160,6 +171,10 @@ pub fn encode(
             wgpu::BindGroupEntry {
                 binding: 5,
                 resource: parameters.light_sample_ctxs.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 6,
+                resource: parameters.radiance.as_entire_binding(),
             },
         ],
     });

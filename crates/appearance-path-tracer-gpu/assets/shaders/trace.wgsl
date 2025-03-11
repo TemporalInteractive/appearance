@@ -46,6 +46,10 @@ var<storage, read_write> light_sample_reservoirs: array<PackedDiReservoir>;
 @binding(6)
 var<storage, read_write> light_sample_ctxs: array<LightSampleCtx>;
 
+@group(0)
+@binding(7)
+var<storage, read_write> radiance: array<PackedRgb9e5>;
+
 @compute
 @workgroup_size(128)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
@@ -59,9 +63,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
 
     var payload: Payload = payloads[id];
     if (constants.bounce == 0) {
-        if (constants.sample == 0) {
-            payload.accumulated = PackedRgb9e5::new(vec3<f32>(0.0));
-        }
         payload.throughput = PackedRgb9e5::new(vec3<f32>(1.0));
         payload.rng = pcg_hash(id ^ xor_shift_u32(constants.seed));
         payload.t = 0.0;
@@ -69,9 +70,13 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
 
     if (payload.t < 0.0) { return; } // TODO: indirect dispatch with pids
 
-    var accumulated: vec3<f32> = PackedRgb9e5::unpack(payload.accumulated);
+    var accumulated: vec3<f32> = PackedRgb9e5::unpack(radiance[id]);
     var throughput: vec3<f32> = PackedRgb9e5::unpack(payload.throughput);
     var rng: u32 = payload.rng;
+
+    var gbuffer_depth_ws: f32;
+    var gbuffer_normal_ws: vec3<f32>;
+    var gbuffer_albedo: vec3<f32>;
 
     var depth_ws: f32 = 0.0;
     for (var step: u32 = 0; step < MAX_NON_OPAQUE_DEPTH; step += 1) {
@@ -177,14 +182,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
                 }
             }
 
-            if (constants.bounce == 0) {
-                // Write out all gbuffer data
-                gbuffer[id] = GBufferTexel::new(
-                    depth_ws,
-                    front_facing_shading_normal_ws
-                );
-            }
-
             let disney_bsdf = DisneyBsdf::from_material(material);
 
             let di_reservoir: DiReservoir = Nee::sample_ris(hit_point_ws, w_out_worldspace, front_facing_shading_normal_ws,
@@ -214,6 +211,12 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
                 &w_in_worldspace, &pdf, &specular
             );
 
+            if (constants.bounce == 0) {
+                gbuffer_depth_ws = depth_ws;
+                gbuffer_normal_ws = front_facing_shading_normal_ws;
+                gbuffer_albedo = disney_bsdf.color;
+            }
+
             let sample_valid: bool = pdf > 1e-6;
             if (sample_valid) {
                 let cos_in: f32 = abs(dot(front_facing_shading_normal_ws, w_in_worldspace));
@@ -228,6 +231,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
                 payload.t = -1.0;
             }
         } else {
+            gbuffer_albedo = vec3<f32>(1.0);
+
             let color = Sky::sky(direction, true);
             accumulated += throughput * color;
             payload.t = -1.0;
@@ -236,8 +241,18 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
         break;
     }
     
-    payload.accumulated = PackedRgb9e5::new(accumulated);
+    radiance[id] = PackedRgb9e5::new(accumulated);
+
     payload.throughput = PackedRgb9e5::new(throughput);
     payload.rng = rng;
     payloads[id] = payload;
+
+    // Write out all gbuffer data
+    if (constants.bounce == 0) {
+        gbuffer[id] = GBufferTexel::new(
+            gbuffer_depth_ws,
+            gbuffer_normal_ws,
+            gbuffer_albedo
+        );
+    }
 }

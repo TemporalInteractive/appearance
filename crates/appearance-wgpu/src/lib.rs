@@ -330,3 +330,27 @@ pub fn empty_texture_view(device: &wgpu::Device) -> &wgpu::TextureView {
         })
     })
 }
+
+static EMPTY_BIND_GROUP_LAYOUT: std::sync::OnceLock<wgpu::BindGroupLayout> =
+    std::sync::OnceLock::new();
+
+pub fn empty_bind_group_layout(device: &wgpu::Device) -> &wgpu::BindGroupLayout {
+    EMPTY_BIND_GROUP_LAYOUT.get_or_init(|| {
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[],
+        })
+    })
+}
+
+static EMPTY_BIND_GROUP: std::sync::OnceLock<wgpu::BindGroup> = std::sync::OnceLock::new();
+
+pub fn empty_bind_group(device: &wgpu::Device) -> &wgpu::BindGroup {
+    EMPTY_BIND_GROUP.get_or_init(|| {
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: None,
+            layout: empty_bind_group_layout(device),
+            entries: &[],
+        })
+    })
+}

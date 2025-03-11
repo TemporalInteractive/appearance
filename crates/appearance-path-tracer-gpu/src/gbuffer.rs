@@ -22,8 +22,8 @@ struct GBufferConstants {
 pub struct GBufferTexel {
     depth_ws: f32,
     normal_ws: u32,
+    albedo: u32,
     _padding0: u32,
-    _padding1: u32,
 }
 
 pub struct GBuffer {

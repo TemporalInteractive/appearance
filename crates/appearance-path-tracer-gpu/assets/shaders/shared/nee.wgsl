@@ -82,8 +82,6 @@ fn Nee::sample_uniform(r0: f32, r1: f32, r2: f32, r34: vec2<f32>, sample_point: 
         sun_pick_probability = 1.0;
     }
 
-    sun_pick_probability = 0.0; // TODO: temp
-
     if (r0 < sun_pick_probability) {
         return Nee::sample_sun(r34, sun_pick_probability, pdf);
     } else {
@@ -94,7 +92,7 @@ fn Nee::sample_uniform(r0: f32, r1: f32, r2: f32, r34: vec2<f32>, sample_point: 
 fn Nee::sample_ris(hit_point_ws: vec3<f32>, w_out_worldspace: vec3<f32>, front_facing_shading_normal_ws: vec3<f32>,
      tangent_to_world: mat3x3<f32>, world_to_tangent: mat3x3<f32>, clearcoat_tangent_to_world: mat3x3<f32>, clearcoat_world_to_tangent: mat3x3<f32>,
      disney_bsdf: DisneyBsdf, rng: ptr<function, u32>, scene: acceleration_structure) -> DiReservoir {
-    const NUM_SAMPLES: u32 = 1;
+    const NUM_SAMPLES: u32 = 4;
 
     var di_reservoir = DiReservoir::new();
 
