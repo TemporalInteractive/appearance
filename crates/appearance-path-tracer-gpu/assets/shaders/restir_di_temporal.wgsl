@@ -81,8 +81,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
 
     let reservoir: DiReservoir = PackedDiReservoir::unpack(reservoirs[id]);
 
-    var valid_prev_reservoir: bool = true;
-
     var prev_point_ss: vec2<f32>;
     var prev_id: u32;
     if (GBuffer::reproject(hit_point_ws, constants.resolution, &prev_point_ss)) {
@@ -101,8 +99,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     let prev_normal_ws: vec3<f32> = PackedNormalizedXyz10::unpack(prev_gbuffer_texel.normal_ws, 0);
     let valid_delta_normal: bool = dot(current_normal_ws, prev_normal_ws) > 0.906; // 25 degrees
 
-    valid_prev_reservoir = valid_prev_reservoir && (valid_delta_depth && valid_delta_normal);
-    
+    var valid_prev_reservoir: bool = valid_delta_depth && valid_delta_normal;
     if (valid_prev_reservoir) {
         var prev_reservoir: DiReservoir = PackedDiReservoir::unpack(prev_reservoirs[prev_id]);
         prev_reservoir.sample_count = min(prev_reservoir.sample_count, 20.0 * reservoir.sample_count);
