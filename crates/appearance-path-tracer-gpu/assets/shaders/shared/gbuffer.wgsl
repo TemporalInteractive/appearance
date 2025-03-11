@@ -21,13 +21,37 @@ fn GBufferTexel::depth_cs(_self: GBufferTexel, z_near: f32, z_far: f32) -> f32 {
     return (z_near * z_far) / (z_far - z_linear * (z_far - z_near));
 }
 
-struct Frustum {
-    left: vec4<f32>,
-    right: vec4<f32>,
-    top: vec4<f32>,
-    bottom: vec4<f32>,
+struct Plane {
+    p: vec4<f32>,
 }
 
-fn Frustum::point_ws_to_ss(_self: Frustum, ws: vec3<f32>, ss: ptr<function, vec2<f32>>) -> bool {
-    return false;
+fn Plane::distance(_self: Plane, point: vec3<f32>) -> f32 {
+    return dot(_self.p.xyz, point) - _self.p.w;
+}
+
+struct Frustum {
+    left: Plane,
+    right: Plane,
+    top: Plane,
+    bottom: Plane,
+}
+
+// Source: https://jacco.ompf2.com/2024/01/18/reprojection-in-a-ray-tracer/
+fn Frustum::point_ws_to_ss(_self: Frustum, ws: vec3<f32>, resolution: vec2<u32>, ss: ptr<function, vec2<f32>>) -> bool {
+    let d_left: f32 = Plane::distance(_self.left, ws);
+    let d_right: f32 = Plane::distance(_self.right, ws);
+    let ss_x: f32 = (1.0 - d_left / (d_left + d_right)) * f32(resolution.x);
+    if (ss_x < 0.0 || ss_x > f32(resolution.x - 1)) {
+        return false;
+    }
+
+    let d_top: f32 = Plane::distance(_self.top, ws);
+    let d_bottom: f32 = Plane::distance(_self.bottom, ws);
+    let ss_y: f32 = (f32(resolution.y) * d_top) / (d_top + d_bottom);
+    if (ss_y < 0.0 || ss_y > f32(resolution.y - 1)) {
+        return false;
+    }
+
+    *ss = vec2<f32>(ss_x, ss_y);
+    return true;
 }

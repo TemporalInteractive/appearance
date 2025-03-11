@@ -6,7 +6,7 @@ use appearance_world::visible_world_action::VisibleWorldActionType;
 use apply_di_pass::ApplyDiPassParameters;
 use film::Film;
 use gbuffer::GBuffer;
-use glam::{UVec2, Vec3};
+use glam::{Mat4, UVec2, Vec3};
 use raygen_pass::RaygenPassParameters;
 use resolve_pass::ResolvePassParameters;
 use restir_di_pass::{LightSampleCtx, PackedDiReservoir, RestirDiPass, RestirDiPassParameters};
@@ -153,12 +153,17 @@ impl PathTracerGpu {
     pub fn handle_visible_world_action(&mut self, action: &VisibleWorldActionType, ctx: &Context) {
         match action {
             VisibleWorldActionType::CameraUpdate(data) => {
+                let (_, rotation, translation) =
+                    data.transform_matrix_bytes.to_scale_rotation_translation();
+
                 self.camera.set_near(data.near);
                 self.camera.set_far(data.far);
                 self.camera.set_fov(data.fov);
-                self.camera
-                    .transform
-                    .set_matrix(data.transform_matrix_bytes);
+                self.camera.transform.set_rotation(rotation);
+                self.camera.transform.set_translation(translation);
+                // self.camera
+                //     .transform
+                //     .set_matrix(data.transform_matrix_bytes);
             }
             _ => self.scene_resources.handle_visible_world_action(
                 action,
@@ -200,7 +205,7 @@ impl PathTracerGpu {
 
         self.camera
             .set_aspect_ratio(resolution.x as f32 / resolution.y as f32);
-        let inv_view = self.camera.transform.get_matrix();
+        let inv_view = self.camera.transform.get_view_matrix().inverse();
         let inv_proj = self.camera.get_matrix().inverse();
 
         let mut command_encoder = ctx
@@ -252,7 +257,7 @@ impl PathTracerGpu {
                     self.sized_resources.restir_di_pass.encode(
                         &RestirDiPassParameters {
                             resolution: self.local_resolution,
-                            spatial_pass_count: 2,
+                            spatial_pass_count: 0,
                             spatial_pixel_radius: 30.0,
                             in_rays,
                             payloads: &self.sized_resources.payloads,

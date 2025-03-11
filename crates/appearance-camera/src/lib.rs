@@ -2,6 +2,7 @@ use std::sync::Mutex;
 
 use appearance_input::InputHandler;
 use appearance_transform::{Transform, RIGHT, UP};
+use frustum::Frustum;
 use glam::{Mat4, Quat, Vec3};
 use winit::keyboard::KeyCode;
 
@@ -136,6 +137,30 @@ impl Camera {
 
     pub fn get_prev_matrix(&self) -> Mat4 {
         self.prev_matrix
+    }
+
+    pub fn build_prev_frustum(&self) -> Frustum {
+        const NEAR_PLANE: f32 = 0.01;
+
+        let m = self.transform.get_prev_matrix().to_cols_array();
+        let x = Vec3::new(m[0], m[4], m[8]);
+        let y = Vec3::new(m[1], m[5], m[9]);
+        let z = Vec3::new(m[2], m[6], m[10]);
+
+        let origin = self.transform.get_translation();
+
+        // Compute near-plane dimensions based on the FOV
+        let half_fov_rad = self.fov.to_radians() * 0.5;
+        let near_height = (half_fov_rad.tan()) * NEAR_PLANE;
+        let near_width = near_height * self.aspect_ratio;
+
+        // Compute frustum near-plane corners
+        let forward_near = z * NEAR_PLANE; // Move forward by near_plane distance
+        let top_left = origin + forward_near + (y * near_height) - (x * near_width);
+        let top_right = origin + forward_near + (y * near_height) + (x * near_width);
+        let bottom_left = origin + forward_near - (y * near_height) - (x * near_width);
+
+        Frustum::new(origin, top_left, top_right, bottom_left)
     }
 
     pub fn end_frame(&mut self) {

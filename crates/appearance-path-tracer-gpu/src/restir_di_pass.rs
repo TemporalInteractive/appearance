@@ -12,10 +12,9 @@ use crate::{gbuffer::GBuffer, scene_resources::SceneResources};
 #[derive(Pod, Clone, Copy, Zeroable)]
 #[repr(C)]
 struct TemporalConstants {
+    resolution: UVec2,
     ray_count: u32,
     spatial_pass_count: u32,
-    _padding0: u32,
-    _padding1: u32,
 }
 
 #[derive(Pod, Clone, Copy, Zeroable)]
@@ -221,10 +220,9 @@ impl RestirDiPass {
         let constants = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("appearance-path-tracer-gpu::restir_di_temporal constants"),
             contents: bytemuck::bytes_of(&TemporalConstants {
+                resolution: parameters.resolution,
                 ray_count,
                 spatial_pass_count: parameters.spatial_pass_count,
-                _padding0: 0,
-                _padding1: 0,
             }),
             usage: wgpu::BufferUsages::UNIFORM,
         });

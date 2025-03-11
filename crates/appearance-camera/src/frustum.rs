@@ -1,4 +1,4 @@
-use glam::{Mat4, Vec3, Vec4, Vec4Swizzles};
+use glam::{Vec3, Vec4, Vec4Swizzles};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Plane(Vec4);
@@ -25,25 +25,24 @@ pub enum FrustumSide {
     Right,
     Bottom,
     Top,
-    Near,
-    Far,
 }
 
 pub struct Frustum {
-    planes: [Plane; 6],
+    planes: [Plane; 4],
 }
 
 impl Frustum {
-    pub fn new(projection: &Mat4) -> Self {
-        let m = projection.transpose();
+    pub fn new(origin: Vec3, top_left: Vec3, top_right: Vec3, bottom_left: Vec3) -> Self {
+        let left = (top_left - bottom_left).cross(top_left - origin);
+        let right = (top_right - origin).cross(top_left - bottom_left);
+        let top = (top_right - top_left).cross(top_left - origin);
+        let bottom = (bottom_left - origin).cross(top_right - top_left);
 
         let planes = [
-            Plane::new(m.col(3) + m.col(0)),
-            Plane::new(m.col(3) - m.col(0)),
-            Plane::new(m.col(3) + m.col(1)),
-            Plane::new(m.col(3) - m.col(1)),
-            Plane::new(m.col(3) + m.col(2)),
-            Plane::new(m.col(3) - m.col(2)),
+            Plane::new(Vec4::from((left, left.dot(origin)))),
+            Plane::new(Vec4::from((right, right.dot(origin)))),
+            Plane::new(Vec4::from((top, top.dot(origin)))),
+            Plane::new(Vec4::from((bottom, bottom.dot(origin)))),
         ];
 
         Self { planes }

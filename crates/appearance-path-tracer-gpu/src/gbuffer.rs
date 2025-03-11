@@ -128,9 +128,7 @@ impl GBuffer {
     pub fn end_frame(&mut self, camera: &Camera) {
         self.frame_idx += 1;
 
-        let prev_view_proj =
-            camera.transform.get_prev_matrix().inverse() * camera.get_prev_matrix();
-        let prev_camera_frustum = appearance_camera::frustum::Frustum::new(&prev_view_proj);
+        let prev_camera_frustum = camera.build_prev_frustum();
         self.prev_camera_frustum = Frustum {
             left: prev_camera_frustum.get_plane(FrustumSide::Left).into(),
             right: prev_camera_frustum.get_plane(FrustumSide::Right).into(),
