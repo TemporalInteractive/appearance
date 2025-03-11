@@ -161,9 +161,6 @@ impl PathTracerGpu {
                 self.camera.set_fov(data.fov);
                 self.camera.transform.set_rotation(rotation);
                 self.camera.transform.set_translation(translation);
-                // self.camera
-                //     .transform
-                //     .set_matrix(data.transform_matrix_bytes);
             }
             _ => self.scene_resources.handle_visible_world_action(
                 action,
