@@ -46,6 +46,28 @@ var<storage, read_write> prev_reservoirs: array<PackedDiReservoir>;
 @binding(6)
 var<storage, read> light_sample_ctxs: array<LightSampleCtx>;
 
+fn sample_bilinear(tx: f32, ty: f32, c00: vec2<u32>, c10: vec2<u32>, c01: vec2<u32>, c11: vec2<u32>, rng: ptr<function, u32>, pdf: ptr<function, f32>) -> vec2<u32> {
+    let c00_pdf: f32 = (1.0 - tx) * (1.0 - ty);
+    let c10_pdf: f32 = tx * (1.0 - ty);
+    let c01_pdf: f32 = (1.0 - tx) * ty;
+    let c11_pdf: f32 = tx * ty;
+
+    let r: f32 = random_uniform_float(rng);
+    if (r < c00_pdf) {
+        *pdf = c00_pdf;
+        return c00;
+    } else if (r < c00_pdf + c10_pdf) {
+        *pdf = c10_pdf;
+        return c10;
+    } else if (r < c00_pdf + c10_pdf + c01_pdf) {
+        *pdf = c01_pdf;
+        return c01;
+    } else {
+        *pdf = c11_pdf;
+        return c11;
+    }
+}
+
 @compute
 @workgroup_size(128)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
@@ -86,7 +108,19 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     var prev_point_ss: vec2<f32>;
     var prev_id: u32;
     if (GBuffer::reproject(hit_point_ws, constants.resolution, &prev_point_ss)) {
-        let prev_id_2d = vec2<u32>(floor(prev_point_ss));
+        let tx: f32 = fract(prev_point_ss.x - random_uniform_float(&rng) * 0.5);
+        let ty: f32 = fract(prev_point_ss.y - random_uniform_float(&rng) * 0.5);
+
+        let c00 = vec2<u32>(u32(floor(prev_point_ss.x)), u32(floor(prev_point_ss.y)));
+        let c10 = vec2<u32>(u32(ceil(prev_point_ss.x)), u32(floor(prev_point_ss.y)));
+        let c01 = vec2<u32>(u32(floor(prev_point_ss.x)), u32(ceil(prev_point_ss.y)));
+        let c11 = vec2<u32>(u32(ceil(prev_point_ss.x)), u32(ceil(prev_point_ss.y)));
+        var pdf: f32;
+        let prev_id_2d: vec2<u32> = sample_bilinear(tx, ty, c00, c10, c01, c11, &rng, &pdf);
+
+        
+        //let prev_id_2d = vec2<u32>(u32(floor(prev_point_ss.x)), u32(ceil(prev_point_ss.y)));
+        //let prev_id_2d = vec2<u32>(floor(prev_point_ss));
         prev_id = prev_id_2d.y * constants.resolution.x + prev_id_2d.x;
 
         let current_gbuffer_texel: GBufferTexel = gbuffer[id];
@@ -137,10 +171,10 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
         if (constants.spatial_pass_count == 0) {
             prev_reservoirs[id] = PackedDiReservoir::new(combined_reservoir);
         }
-
-        payload.rng = rng;
-        payloads[id] = payload;
     } else if (constants.spatial_pass_count == 0) {
         prev_reservoirs[id] = PackedDiReservoir::new(reservoir);
     }
+
+    payload.rng = rng;
+    payloads[id] = payload;
 }
