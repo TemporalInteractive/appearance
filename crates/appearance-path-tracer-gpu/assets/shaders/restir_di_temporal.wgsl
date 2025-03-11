@@ -46,28 +46,6 @@ var<storage, read_write> prev_reservoirs: array<PackedDiReservoir>;
 @binding(6)
 var<storage, read> light_sample_ctxs: array<LightSampleCtx>;
 
-fn sample_bilinear(tx: f32, ty: f32, c00: vec2<u32>, c10: vec2<u32>, c01: vec2<u32>, c11: vec2<u32>, rng: ptr<function, u32>, pdf: ptr<function, f32>) -> vec2<u32> {
-    let c00_pdf: f32 = (1.0 - tx) * (1.0 - ty);
-    let c10_pdf: f32 = tx * (1.0 - ty);
-    let c01_pdf: f32 = (1.0 - tx) * ty;
-    let c11_pdf: f32 = tx * ty;
-
-    let r: f32 = random_uniform_float(rng);
-    if (r < c00_pdf) {
-        *pdf = c00_pdf;
-        return c00;
-    } else if (r < c00_pdf + c10_pdf) {
-        *pdf = c10_pdf;
-        return c10;
-    } else if (r < c00_pdf + c10_pdf + c01_pdf) {
-        *pdf = c01_pdf;
-        return c01;
-    } else {
-        *pdf = c11_pdf;
-        return c11;
-    }
-}
-
 @compute
 @workgroup_size(128)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
@@ -108,23 +86,11 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     var prev_point_ss: vec2<f32>;
     var prev_id: u32;
     if (GBuffer::reproject(hit_point_ws, constants.resolution, &prev_point_ss)) {
-        let tx: f32 = fract(prev_point_ss.x - random_uniform_float(&rng) * 0.5);
-        let ty: f32 = fract(prev_point_ss.y - random_uniform_float(&rng) * 0.5);
-
-        let c00 = vec2<u32>(u32(floor(prev_point_ss.x)), u32(floor(prev_point_ss.y)));
-        let c10 = vec2<u32>(u32(ceil(prev_point_ss.x)), u32(floor(prev_point_ss.y)));
-        let c01 = vec2<u32>(u32(floor(prev_point_ss.x)), u32(ceil(prev_point_ss.y)));
-        let c11 = vec2<u32>(u32(ceil(prev_point_ss.x)), u32(ceil(prev_point_ss.y)));
-        var pdf: f32;
-        let prev_id_2d: vec2<u32> = sample_bilinear(tx, ty, c00, c10, c01, c11, &rng, &pdf);
-
-        
-        //let prev_id_2d = vec2<u32>(u32(floor(prev_point_ss.x)), u32(ceil(prev_point_ss.y)));
-        //let prev_id_2d = vec2<u32>(floor(prev_point_ss));
+        let prev_id_2d = vec2<u32>(floor(prev_point_ss));
         prev_id = prev_id_2d.y * constants.resolution.x + prev_id_2d.x;
 
         let current_gbuffer_texel: GBufferTexel = gbuffer[id];
-        let prev_gbuffer_texel: GBufferTexel = prev_gbuffer[prev_id]; // TODO: velocity mapping
+        let prev_gbuffer_texel: GBufferTexel = prev_gbuffer[prev_id];
         let current_depth_cs: f32 = GBufferTexel::depth_cs(current_gbuffer_texel, 0.001, 10000.0);
         let prev_depth_cs: f32 = GBufferTexel::depth_cs(prev_gbuffer_texel, 0.001, 10000.0);
         let valid_delta_depth: bool = (abs(current_depth_cs - prev_depth_cs) / current_depth_cs) < 0.1;
@@ -138,7 +104,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     }
     
     if (valid_prev_reservoir) {
-        // TODO: velocity mapping
         var prev_reservoir: DiReservoir = PackedDiReservoir::unpack(prev_reservoirs[prev_id]);
         prev_reservoir.sample_count = min(prev_reservoir.sample_count, 20.0 * reservoir.sample_count);
 

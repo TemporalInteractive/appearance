@@ -6,7 +6,7 @@ use appearance_world::visible_world_action::VisibleWorldActionType;
 use apply_di_pass::ApplyDiPassParameters;
 use film::Film;
 use gbuffer::GBuffer;
-use glam::{Mat4, UVec2, Vec3};
+use glam::{UVec2, Vec3};
 use raygen_pass::RaygenPassParameters;
 use resolve_pass::ResolvePassParameters;
 use restir_di_pass::{LightSampleCtx, PackedDiReservoir, RestirDiPass, RestirDiPassParameters};
@@ -257,7 +257,7 @@ impl PathTracerGpu {
                     self.sized_resources.restir_di_pass.encode(
                         &RestirDiPassParameters {
                             resolution: self.local_resolution,
-                            spatial_pass_count: 0,
+                            spatial_pass_count: 2,
                             spatial_pixel_radius: 30.0,
                             in_rays,
                             payloads: &self.sized_resources.payloads,
