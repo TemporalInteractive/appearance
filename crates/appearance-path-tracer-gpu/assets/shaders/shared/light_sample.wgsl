@@ -1,5 +1,5 @@
 @include ::triangle
-@include ::packing
+@include appearance-packing::shared/packing
 
 // Used for sampling lights in the world, can both sample emissive triangles or the sun, indicated by triangle_area = 0
 struct LightSample {

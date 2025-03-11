@@ -5,6 +5,7 @@ use appearance_wgpu::{pipeline_database::PipelineDatabase, wgpu, Context};
 use appearance_world::visible_world_action::VisibleWorldActionType;
 use apply_di_pass::ApplyDiPassParameters;
 use film::Film;
+use gbuffer::GBuffer;
 use glam::{UVec2, Vec3};
 use raygen_pass::RaygenPassParameters;
 use resolve_pass::ResolvePassParameters;
@@ -14,6 +15,7 @@ use trace_pass::TracePassParameters;
 
 mod apply_di_pass;
 mod film;
+mod gbuffer;
 mod raygen_pass;
 mod resolve_pass;
 mod restir_di_pass;
@@ -34,21 +36,13 @@ struct Payload {
     t: f32,
 }
 
-#[repr(C)]
-struct GBufferTexel {
-    depth_ws: f32,
-    normal_ws: u32,
-    _padding0: u32,
-    _padding1: u32,
-}
-
 struct SizedResources {
     film: Film,
     rays: [wgpu::Buffer; 2],
     payloads: wgpu::Buffer,
     light_sample_reservoirs: wgpu::Buffer,
     light_sample_ctxs: wgpu::Buffer,
-    gbuffer: [wgpu::Buffer; 2],
+    gbuffer: GBuffer,
 
     restir_di_pass: RestirDiPass,
 }
@@ -89,15 +83,7 @@ impl SizedResources {
             usage: wgpu::BufferUsages::STORAGE,
         });
 
-        let gbuffer = std::array::from_fn(|i| {
-            device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some(&format!("appearance-path-tracer-gpu gbuffer {}", i)),
-                size: (std::mem::size_of::<GBufferTexel>() as u32 * resolution.x * resolution.y)
-                    as u64,
-                mapped_at_creation: false,
-                usage: wgpu::BufferUsages::STORAGE,
-            })
-        });
+        let gbuffer = GBuffer::new(resolution, device);
 
         let restir_di_pass = RestirDiPass::new(resolution, device);
 
@@ -167,12 +153,14 @@ impl PathTracerGpu {
     pub fn handle_visible_world_action(&mut self, action: &VisibleWorldActionType, ctx: &Context) {
         match action {
             VisibleWorldActionType::CameraUpdate(data) => {
+                let (_, rotation, translation) =
+                    data.transform_matrix_bytes.to_scale_rotation_translation();
+
                 self.camera.set_near(data.near);
                 self.camera.set_far(data.far);
                 self.camera.set_fov(data.fov);
-                self.camera
-                    .transform
-                    .set_matrix(data.transform_matrix_bytes);
+                self.camera.transform.set_rotation(rotation);
+                self.camera.transform.set_translation(translation);
             }
             _ => self.scene_resources.handle_visible_world_action(
                 action,
@@ -214,7 +202,7 @@ impl PathTracerGpu {
 
         self.camera
             .set_aspect_ratio(resolution.x as f32 / resolution.y as f32);
-        let inv_view = self.camera.transform.get_matrix();
+        let inv_view = self.camera.transform.get_view_matrix().inverse();
         let inv_proj = self.camera.get_matrix().inverse();
 
         let mut command_encoder = ctx
@@ -240,8 +228,6 @@ impl PathTracerGpu {
             for i in 0..self.config.max_bounces {
                 let in_rays = &self.sized_resources.rays[(i as usize) % 2];
                 let out_rays = &self.sized_resources.rays[(i as usize + 1) % 2];
-                let gbuffer = &self.sized_resources.gbuffer[(self.frame_idx as usize) % 2];
-                let prev_gbuffer = &self.sized_resources.gbuffer[(self.frame_idx as usize + 1) % 2];
 
                 let seed = self.frame_idx * self.config.sample_count + sample;
 
@@ -256,7 +242,7 @@ impl PathTracerGpu {
                         payloads: &self.sized_resources.payloads,
                         light_sample_reservoirs: &self.sized_resources.light_sample_reservoirs,
                         light_sample_ctxs: &self.sized_resources.light_sample_ctxs,
-                        gbuffer,
+                        gbuffer: &self.sized_resources.gbuffer,
                         scene_resources: &self.scene_resources,
                     },
                     &ctx.device,
@@ -274,8 +260,7 @@ impl PathTracerGpu {
                             payloads: &self.sized_resources.payloads,
                             light_sample_reservoirs: &self.sized_resources.light_sample_reservoirs,
                             light_sample_ctxs: &self.sized_resources.light_sample_ctxs,
-                            gbuffer,
-                            prev_gbuffer,
+                            gbuffer: &self.sized_resources.gbuffer,
                             scene_resources: &self.scene_resources,
                         },
                         &ctx.device,
@@ -323,5 +308,7 @@ impl PathTracerGpu {
 
         self.frame_idx += 1;
         self.scene_resources.end_frame();
+        self.sized_resources.gbuffer.end_frame(&self.camera);
+        self.camera.end_frame();
     }
 }

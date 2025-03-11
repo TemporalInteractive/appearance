@@ -1,8 +1,7 @@
 use std::iter;
 
-use appearance_model::{Model, ModelNode};
+use appearance_model::{mesh::PackedVertex, Model, ModelNode};
 use appearance_wgpu::wgpu;
-use glam::Vec4;
 
 use super::{
     material_pool::MaterialPool,
@@ -30,7 +29,6 @@ impl SceneModel {
         let mut is_emissive = vec![];
         let mut vertex_pool_allocs = vec![];
 
-        // TODO: make this into an offset, supply per triangle / primitive material indices
         let material_idx = material_pool.material_count();
         for material in &model.materials {
             material_pool.alloc_material(material, device, queue);
@@ -38,26 +36,13 @@ impl SceneModel {
 
         for mesh in &model.meshes {
             let vertex_pool_alloc = vertex_pool.alloc(
-                mesh.vertex_positions.len() as u32,
+                mesh.packed_vertices.len() as u32,
                 mesh.indices.len() as u32,
                 material_idx as u32,
             );
-            let vertex_positions: Vec<Vec4> = mesh
-                .vertex_positions
-                .iter()
-                .map(|x| Vec4::from((*x, 0.0)))
-                .collect();
-            let vertex_normals: Vec<Vec4> = mesh
-                .vertex_normals
-                .iter()
-                .map(|x| Vec4::from((*x, 0.0)))
-                .collect();
             vertex_pool.write_vertex_data(
                 &VertexPoolWriteData {
-                    vertex_positions: &vertex_positions,
-                    vertex_normals: &vertex_normals,
-                    vertex_tangents: &mesh.vertex_tangents,
-                    vertex_tex_coords: &mesh.vertex_tex_coords,
+                    packed_vertices: &mesh.packed_vertices,
                     indices: &mesh.indices,
                     triangle_material_indices: &mesh.triangle_material_indices,
                 },
@@ -67,7 +52,7 @@ impl SceneModel {
 
             let size_desc = wgpu::BlasTriangleGeometrySizeDescriptor {
                 vertex_format: wgpu::VertexFormat::Float32x3,
-                vertex_count: mesh.vertex_positions.len() as u32,
+                vertex_count: mesh.packed_vertices.len() as u32,
                 index_format: Some(wgpu::IndexFormat::Uint32),
                 index_count: Some(mesh.indices.len() as u32),
                 flags: wgpu::AccelerationStructureGeometryFlags::OPAQUE,
@@ -86,9 +71,9 @@ impl SceneModel {
 
             let triangle_geometry = wgpu::BlasTriangleGeometry {
                 size: &size_desc,
-                vertex_buffer: vertex_pool.vertex_position_buffer(),
+                vertex_buffer: vertex_pool.vertex_buffer(),
                 first_vertex: vertex_pool_alloc.slice.first_vertex(),
-                vertex_stride: std::mem::size_of::<Vec4>() as u64,
+                vertex_stride: std::mem::size_of::<PackedVertex>() as u64,
                 index_buffer: Some(vertex_pool.index_buffer()),
                 first_index: Some(vertex_pool_alloc.slice.first_index()),
                 transform_buffer: None,

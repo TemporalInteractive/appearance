@@ -1,11 +1,20 @@
-use glam::{Vec2, Vec3, Vec4};
+use appearance_packing::PackedNormalizedXyz10;
+use bytemuck::{Pod, Zeroable};
+use glam::{Vec2, Vec3, Vec3Swizzles, Vec4, Vec4Swizzles};
+
+#[derive(Pod, Clone, Copy, Zeroable)]
+#[repr(C)]
+pub struct PackedVertex {
+    pub position: Vec3,
+    pub normal: PackedNormalizedXyz10,
+    pub tex_coord: Vec2,
+    pub tangent: PackedNormalizedXyz10,
+    pub tangent_handiness: f32,
+}
 
 #[derive(Clone)]
 pub struct Mesh {
-    pub vertex_positions: Vec<Vec3>,
-    pub vertex_normals: Vec<Vec3>,
-    pub vertex_tangents: Vec<Vec4>,
-    pub vertex_tex_coords: Vec<Vec2>,
+    pub packed_vertices: Vec<PackedVertex>,
     pub triangle_material_indices: Vec<u32>,
     pub indices: Vec<u32>,
     pub opaque: bool,
@@ -25,105 +34,127 @@ impl Mesh {
     ) -> Self {
         debug_assert_eq!(triangle_material_indices.len(), indices.len() / 3);
 
+        let mut packed_vertices = Vec::with_capacity(vertex_positions.len());
+        for i in 0..vertex_positions.len() {
+            packed_vertices.push(PackedVertex {
+                position: vertex_positions[i],
+                normal: PackedNormalizedXyz10::new(vertex_normals[i]),
+                tex_coord: vertex_tex_coords[i],
+                tangent: PackedNormalizedXyz10::new(vertex_tangents[i].xyz()),
+                tangent_handiness: vertex_tangents[i].w,
+            });
+        }
+
         Mesh {
-            vertex_positions,
-            vertex_normals,
-            vertex_tangents,
-            vertex_tex_coords,
+            packed_vertices,
             triangle_material_indices,
             indices,
             opaque,
             is_emissive,
         }
     }
-
-    pub fn has_normals(&self) -> bool {
-        !self.vertex_normals.is_empty()
-    }
-
-    pub fn has_tangents(&self) -> bool {
-        !self.vertex_tangents.is_empty()
-    }
-
-    pub fn generate_normals(&mut self) {
-        appearance_profiling::profile_function!();
-
-        for normal in &mut self.vertex_normals {
-            *normal = Vec3::ZERO;
-        }
-        self.vertex_normals
-            .resize(self.vertex_positions.len(), Vec3::ZERO);
-
-        for i in 0..(self.indices.len() / 3) {
-            let p0 = self.vertex_positions[self.indices[i * 3] as usize];
-            let p1 = self.vertex_positions[self.indices[i * 3 + 1] as usize];
-            let p2 = self.vertex_positions[self.indices[i * 3 + 2] as usize];
-            let n = (p1 - p0).cross(p2 - p0).normalize();
-
-            self.vertex_normals[self.indices[i * 3] as usize] += n;
-            self.vertex_normals[self.indices[i * 3 + 1] as usize] += n;
-            self.vertex_normals[self.indices[i * 3 + 2] as usize] += n;
-        }
-
-        for normal in &mut self.vertex_normals {
-            *normal = normal.normalize();
-        }
-    }
-
-    pub fn generate_tangents(&mut self) {
-        appearance_profiling::profile_function!();
-
-        if self.vertex_tex_coords.is_empty() {
-            return;
-        }
-
-        self.vertex_tangents
-            .resize(self.vertex_positions.len(), Vec4::ZERO);
-        mikktspace::generate_tangents(self);
-    }
 }
 
-impl mikktspace::Geometry for Mesh {
-    fn num_faces(&self) -> usize {
-        self.indices.len() / 3
+pub fn generate_normals(positions: &[Vec3], indices: &[u32]) -> Vec<Vec3> {
+    appearance_profiling::profile_function!();
+
+    let mut vertex_normals = vec![Vec3::ZERO; positions.len()];
+
+    for i in 0..(indices.len() / 3) {
+        let p0 = positions[indices[i * 3] as usize];
+        let p1 = positions[indices[i * 3 + 1] as usize];
+        let p2 = positions[indices[i * 3 + 2] as usize];
+        let n = (p1 - p0).cross(p2 - p0).normalize();
+
+        vertex_normals[indices[i * 3] as usize] += n;
+        vertex_normals[indices[i * 3 + 1] as usize] += n;
+        vertex_normals[indices[i * 3 + 2] as usize] += n;
     }
 
-    fn num_vertices_of_face(&self, _face: usize) -> usize {
-        3
+    for normal in &mut vertex_normals {
+        *normal = normal.normalize();
     }
 
-    fn position(&self, face: usize, vert: usize) -> [f32; 3] {
-        let i = self.indices[face * 3 + vert] as usize;
-        self.vertex_positions[i].into()
+    vertex_normals
+}
+
+pub fn generate_tangents(
+    positions: &[Vec3],
+    normals: &[Vec3],
+    tex_coords: &[Vec2],
+    indices: &[u32],
+) -> Vec<Vec4> {
+    appearance_profiling::profile_function!();
+
+    // Source: 2001. http://www.terathon.com/code/tangent.html
+    let mut tan1 = vec![Vec3::default(); positions.len()];
+    let mut tan2 = vec![Vec3::default(); positions.len()];
+
+    for i in (0..indices.len()).step_by(3) {
+        let i1 = indices[i] as usize;
+        let i2 = indices[i + 1] as usize;
+        let i3 = indices[i + 2] as usize;
+
+        let v1 = positions[i1].xyz();
+        let v2 = positions[i2].xyz();
+        let v3 = positions[i3].xyz();
+
+        let w1 = tex_coords[i1];
+        let w2 = tex_coords[i2];
+        let w3 = tex_coords[i3];
+
+        let x1 = v2.x - v1.x;
+        let x2 = v3.x - v1.x;
+        let y1 = v2.y - v1.y;
+        let y2 = v3.y - v1.y;
+        let z1 = v2.z - v1.z;
+        let z2 = v3.z - v1.z;
+
+        let s1 = w2.x - w1.x;
+        let s2 = w3.x - w1.x;
+        let t1 = w2.y - w1.y;
+        let t2 = w3.y - w1.y;
+
+        let rdiv = s1 * t2 - s2 * t1;
+        let r = if rdiv == 0.0 { 0.0 } else { 1.0 / rdiv };
+
+        let sdir = Vec3::new(
+            (t2 * x1 - t1 * x2) * r,
+            (t2 * y1 - t1 * y2) * r,
+            (t2 * z1 - t1 * z2) * r,
+        );
+
+        let tdir = Vec3::new(
+            (s1 * x2 - s2 * x1) * r,
+            (s1 * y2 - s2 * y1) * r,
+            (s1 * z2 - s2 * z1) * r,
+        );
+
+        tan1[i1] += sdir;
+        tan1[i2] += sdir;
+        tan1[i3] += sdir;
+
+        tan2[i1] += tdir;
+        tan2[i2] += tdir;
+        tan2[i3] += tdir;
     }
 
-    fn normal(&self, face: usize, vert: usize) -> [f32; 3] {
-        let i = self.indices[face * 3 + vert] as usize;
-        self.vertex_normals[i].into()
-    }
+    let mut vertex_tangents = vec![Vec4::ZERO; positions.len()];
 
-    fn tex_coord(&self, face: usize, vert: usize) -> [f32; 2] {
-        let i = self.indices[face * 3 + vert] as usize;
-        self.vertex_tex_coords[i].into()
-    }
+    for i in 0..positions.len() {
+        let n = normals[i];
+        let t = tan1[i];
 
-    fn set_tangent(
-        &mut self,
-        tangent: [f32; 3],
-        _bi_tangent: [f32; 3],
-        _f_mag_s: f32,
-        _f_mag_t: f32,
-        bi_tangent_preserves_orientation: bool,
-        face: usize,
-        vert: usize,
-    ) {
-        let sign = if bi_tangent_preserves_orientation {
-            1.0
-        } else {
+        let xyz = (t - (n * n.dot(t))).normalize();
+
+        let w = if n.cross(t).dot(tan2[i]) < 0.0 {
             -1.0
+        } else {
+            1.0
         };
 
-        let i = self.indices[face * 3 + vert] as usize;
-        self.vertex_tangents[i] = Vec4::new(tangent[0], tangent[1], tangent[2], sign);
+        vertex_tangents[i] = Vec4::new(xyz.x, xyz.y, xyz.z, w);
     }
+
+    vertex_tangents
 }

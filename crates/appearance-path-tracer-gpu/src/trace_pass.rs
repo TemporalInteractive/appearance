@@ -6,7 +6,7 @@ use appearance_wgpu::{
 };
 use bytemuck::{Pod, Zeroable};
 
-use crate::scene_resources::SceneResources;
+use crate::{gbuffer::GBuffer, scene_resources::SceneResources};
 
 #[derive(Pod, Clone, Copy, Zeroable)]
 #[repr(C)]
@@ -27,7 +27,7 @@ pub struct TracePassParameters<'a> {
     pub payloads: &'a wgpu::Buffer,
     pub light_sample_reservoirs: &'a wgpu::Buffer,
     pub light_sample_ctxs: &'a wgpu::Buffer,
-    pub gbuffer: &'a wgpu::Buffer,
+    pub gbuffer: &'a GBuffer,
     pub scene_resources: &'a SceneResources,
 }
 
@@ -120,16 +120,6 @@ pub fn encode(
                                 },
                                 count: None,
                             },
-                            wgpu::BindGroupLayoutEntry {
-                                binding: 7,
-                                visibility: wgpu::ShaderStages::COMPUTE,
-                                ty: wgpu::BindingType::Buffer {
-                                    ty: wgpu::BufferBindingType::Storage { read_only: false },
-                                    has_dynamic_offset: false,
-                                    min_binding_size: None,
-                                },
-                                count: None,
-                            },
                         ],
                     }),
                     parameters.scene_resources.vertex_pool().bind_group_layout(),
@@ -138,6 +128,7 @@ pub fn encode(
                         .material_pool()
                         .bind_group_layout(),
                     parameters.scene_resources.sky().bind_group_layout(),
+                    parameters.gbuffer.bind_group_layout(),
                 ],
                 push_constant_ranges: &[],
             })
@@ -190,10 +181,6 @@ pub fn encode(
                 binding: 6,
                 resource: parameters.light_sample_ctxs.as_entire_binding(),
             },
-            wgpu::BindGroupEntry {
-                binding: 7,
-                resource: parameters.gbuffer.as_entire_binding(),
-            },
         ],
     });
 
@@ -214,6 +201,7 @@ pub fn encode(
             );
             cpass.set_bind_group(2, material_pool_bind_group, &[]);
             cpass.set_bind_group(3, &parameters.scene_resources.sky().bind_group(device), &[]);
+            cpass.set_bind_group(4, &parameters.gbuffer.bind_group(device), &[]);
             cpass.insert_debug_marker("appearance-path-tracer-gpu::trace");
             cpass.dispatch_workgroups(parameters.ray_count.div_ceil(128), 1, 1);
         },

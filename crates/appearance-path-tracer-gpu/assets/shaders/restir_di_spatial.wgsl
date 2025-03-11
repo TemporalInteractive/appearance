@@ -8,6 +8,7 @@
 @include appearance-path-tracer-gpu::shared/vertex_pool_bindings
 @include appearance-path-tracer-gpu::shared/material/material_pool_bindings
 @include appearance-path-tracer-gpu::shared/sky_bindings
+@include appearance-path-tracer-gpu::shared/gbuffer_bindings
 
 @include appearance-path-tracer-gpu::shared/nee
 
@@ -54,10 +55,6 @@ var<storage, read_write> prev_reservoirs: array<PackedDiReservoir>;
 @group(0)
 @binding(7)
 var<storage, read> light_sample_ctxs: array<LightSampleCtx>;
-
-@group(0)
-@binding(8)
-var<storage, read> gbuffer: array<GBufferTexel>;
 
 fn mirror(x: i32, max: i32) -> u32 {
     return u32(abs(((x + max) % (2 * max)) - max));

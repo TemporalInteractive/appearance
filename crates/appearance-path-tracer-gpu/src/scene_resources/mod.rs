@@ -13,7 +13,7 @@ use uuid::Uuid;
 use vertex_pool::VertexPool;
 
 mod material_pool;
-mod scene_model;
+pub mod scene_model;
 mod sky;
 mod vertex_pool;
 
