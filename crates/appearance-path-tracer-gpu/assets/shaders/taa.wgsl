@@ -127,15 +127,17 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     var history: vec3<f32>;
     var prev_point_ss: vec2<f32>;
     if (GBuffer::reproject(current_gbuffer_texel.position_ws, constants.resolution, &prev_point_ss)) {
-        let prev_id_2d = vec2<u32>(floor(prev_point_ss) - 1);
+        //let prev_id_2d = vec2<u32>(floor(prev_point_ss) - 1);
 
-        let prev_id00: u32 = min(prev_id_2d.y + 0, constants.resolution.y - 1) * constants.resolution.x + min(prev_id_2d.x + 0, constants.resolution.x - 1);
+        prev_point_ss -= 0.5;
+
+        let prev_id00: u32 = min(u32(floor(prev_point_ss.y)), constants.resolution.y - 1) * constants.resolution.x + min(u32(floor(prev_point_ss.x)), constants.resolution.x - 1);
         let history00: vec3<f32> = PackedRgb9e5::unpack(prev_demodulated_radiance[prev_id00]);
-        let prev_id10: u32 = min(prev_id_2d.y + 1, constants.resolution.y - 1) * constants.resolution.x + min(prev_id_2d.x + 0, constants.resolution.x - 1);
+        let prev_id10: u32 = min(u32(ceil(prev_point_ss.y)), constants.resolution.y - 1) * constants.resolution.x + min(u32(floor(prev_point_ss.x)), constants.resolution.x - 1);
         let history10: vec3<f32> = PackedRgb9e5::unpack(prev_demodulated_radiance[prev_id10]);
-        let prev_id01: u32 = min(prev_id_2d.y + 0, constants.resolution.y - 1) * constants.resolution.x + min(prev_id_2d.x + 1, constants.resolution.x - 1);
+        let prev_id01: u32 = min(u32(floor(prev_point_ss.y)), constants.resolution.y - 1) * constants.resolution.x + min(u32(ceil(prev_point_ss.x)), constants.resolution.x - 1);
         let history01: vec3<f32> = PackedRgb9e5::unpack(prev_demodulated_radiance[prev_id01]);
-        let prev_id11: u32 = min(prev_id_2d.y + 1, constants.resolution.y - 1) * constants.resolution.x + min(prev_id_2d.x + 1, constants.resolution.x - 1);
+        let prev_id11: u32 = min(u32(ceil(prev_point_ss.y)), constants.resolution.y - 1) * constants.resolution.x + min(u32(ceil(prev_point_ss.x)), constants.resolution.x - 1);
         let history11: vec3<f32> = PackedRgb9e5::unpack(prev_demodulated_radiance[prev_id11]);
 
         history = bilinear(fract(prev_point_ss.x), fract(prev_point_ss.y), history00, history10, history01, history11);
