@@ -24,9 +24,9 @@ struct SpatialConstants {
     spatial_pass_count: u32,
     spatial_pass_idx: u32,
     pixel_radius: f32,
+    seed: u32,
+    spatial_idx: u32,
     _padding0: u32,
-    _padding1: u32,
-    _padding2: u32,
 }
 
 #[repr(C)]
@@ -59,6 +59,7 @@ pub struct PackedDiReservoir {
 
 pub struct RestirDiPassParameters<'a> {
     pub resolution: UVec2,
+    pub seed: u32,
     pub spatial_pass_count: u32,
     pub spatial_pixel_radius: f32,
     pub in_rays: &'a wgpu::Buffer,
@@ -414,9 +415,9 @@ impl RestirDiPass {
                     spatial_pass_count: parameters.spatial_pass_count,
                     spatial_pass_idx: i,
                     pixel_radius: parameters.spatial_pixel_radius,
+                    seed: parameters.seed,
+                    spatial_idx: i,
                     _padding0: 0,
-                    _padding1: 0,
-                    _padding2: 0,
                 }),
                 usage: wgpu::BufferUsages::UNIFORM,
             });
