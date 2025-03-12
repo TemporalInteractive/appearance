@@ -133,6 +133,11 @@ impl RenderLoop for HostRenderLoop {
         //     Transform::new(Vec3::new(3.0, 0.0, 0.0), Quat::IDENTITY, Vec3::splat(1.0)),
         //     |builder| builder.with(ModelComponent::new("::SponzaOrbs.glb")),
         // );
+        let _ = world.create_entity(
+            "NeonSignDragon",
+            Transform::new(Vec3::new(3.0, 0.0, 0.0), Quat::IDENTITY, Vec3::splat(1.0)),
+            |builder| builder.with(ModelComponent::new("::SponzaNeon.glb")),
+        );
         // let toy_car_entity = world.create_entity(
         //     "ToyCar",
         //     Transform::new(Vec3::new(3.0, 0.5, 0.0), Quat::IDENTITY, Vec3::splat(45.0)),
