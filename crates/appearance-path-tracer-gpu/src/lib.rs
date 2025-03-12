@@ -137,7 +137,7 @@ pub struct PathTracerGpuConfig {
 impl Default for PathTracerGpuConfig {
     fn default() -> Self {
         Self {
-            max_bounces: 5,
+            max_bounces: 3,
             sample_count: 1,
         }
     }
@@ -287,24 +287,24 @@ impl PathTracerGpu {
                     pipeline_database,
                 );
 
-                if i == 0 {
-                    self.sized_resources.restir_di_pass.encode(
-                        &RestirDiPassParameters {
-                            resolution: self.local_resolution,
-                            spatial_pass_count: 2,
-                            spatial_pixel_radius: 30.0,
-                            in_rays,
-                            payloads: &self.sized_resources.payloads,
-                            light_sample_reservoirs: &self.sized_resources.light_sample_reservoirs,
-                            light_sample_ctxs: &self.sized_resources.light_sample_ctxs,
-                            gbuffer: &self.sized_resources.gbuffer,
-                            scene_resources: &self.scene_resources,
-                        },
-                        &ctx.device,
-                        &mut command_encoder,
-                        pipeline_database,
-                    );
-                }
+                // if i == 0 {
+                //     self.sized_resources.restir_di_pass.encode(
+                //         &RestirDiPassParameters {
+                //             resolution: self.local_resolution,
+                //             spatial_pass_count: 2,
+                //             spatial_pixel_radius: 30.0,
+                //             in_rays,
+                //             payloads: &self.sized_resources.payloads,
+                //             light_sample_reservoirs: &self.sized_resources.light_sample_reservoirs,
+                //             light_sample_ctxs: &self.sized_resources.light_sample_ctxs,
+                //             gbuffer: &self.sized_resources.gbuffer,
+                //             scene_resources: &self.scene_resources,
+                //         },
+                //         &ctx.device,
+                //         &mut command_encoder,
+                //         pipeline_database,
+                //     );
+                // }
 
                 apply_di_pass::encode(
                     &ApplyDiPassParameters {
