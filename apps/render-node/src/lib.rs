@@ -21,6 +21,10 @@ struct Args {
     /// Node port to receive events
     #[arg(long, default_value_t = 34235)]
     node_port: u16,
+
+    /// Forcefully disable gpu validation
+    #[arg(long, default_value_t = false)]
+    no_gpu_validation: bool,
 }
 
 pub fn internal_main() -> Result<()> {
@@ -29,7 +33,11 @@ pub fn internal_main() -> Result<()> {
     let args = Args::parse();
     let addr = SocketAddr::from_str(&format!("{}:{}", args.host_ip, args.host_port)).unwrap();
 
-    let node = Node::new(DistributedRenderer::new(), addr, args.node_port)?;
+    let node = Node::new(
+        DistributedRenderer::new(args.no_gpu_validation),
+        addr,
+        args.node_port,
+    )?;
     node.run();
 
     Ok(())
