@@ -22,12 +22,12 @@ pub struct TracePassParameters<'a> {
     pub bounce: u32,
     pub sample: u32,
     pub seed: u32,
-    pub in_rays: &'a wgpu::Buffer,
-    pub out_rays: &'a wgpu::Buffer,
+    pub rays: &'a wgpu::Buffer,
     pub payloads: &'a wgpu::Buffer,
     pub radiance: &'a wgpu::Buffer,
     pub light_sample_reservoirs: &'a wgpu::Buffer,
     pub light_sample_ctxs: &'a wgpu::Buffer,
+    pub gi_reservoirs: &'a wgpu::Buffer,
     pub gbuffer: &'a GBuffer,
     pub scene_resources: &'a SceneResources,
 }
@@ -70,16 +70,6 @@ pub fn encode(
                                 visibility: wgpu::ShaderStages::COMPUTE,
                                 ty: wgpu::BindingType::Buffer {
                                     ty: wgpu::BufferBindingType::Storage { read_only: true },
-                                    has_dynamic_offset: false,
-                                    min_binding_size: None,
-                                },
-                                count: None,
-                            },
-                            wgpu::BindGroupLayoutEntry {
-                                binding: 2,
-                                visibility: wgpu::ShaderStages::COMPUTE,
-                                ty: wgpu::BindingType::Buffer {
-                                    ty: wgpu::BufferBindingType::Storage { read_only: false },
                                     has_dynamic_offset: false,
                                     min_binding_size: None,
                                 },
@@ -131,6 +121,16 @@ pub fn encode(
                                 },
                                 count: None,
                             },
+                            wgpu::BindGroupLayoutEntry {
+                                binding: 8,
+                                visibility: wgpu::ShaderStages::COMPUTE,
+                                ty: wgpu::BindingType::Buffer {
+                                    ty: wgpu::BufferBindingType::Storage { read_only: false },
+                                    has_dynamic_offset: false,
+                                    min_binding_size: None,
+                                },
+                                count: None,
+                            },
                         ],
                     }),
                     parameters.scene_resources.vertex_pool().bind_group_layout(),
@@ -168,11 +168,7 @@ pub fn encode(
             },
             wgpu::BindGroupEntry {
                 binding: 1,
-                resource: parameters.in_rays.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 2,
-                resource: parameters.out_rays.as_entire_binding(),
+                resource: parameters.rays.as_entire_binding(),
             },
             wgpu::BindGroupEntry {
                 binding: 3,
@@ -194,6 +190,10 @@ pub fn encode(
             },
             wgpu::BindGroupEntry {
                 binding: 7,
+                resource: parameters.gi_reservoirs.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 8,
                 resource: parameters.radiance.as_entire_binding(),
             },
         ],

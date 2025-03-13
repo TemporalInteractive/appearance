@@ -19,7 +19,7 @@ struct Constants {
 
 pub struct ApplyDiPassParameters<'a> {
     pub ray_count: u32,
-    pub in_rays: &'a wgpu::Buffer,
+    pub rays: &'a wgpu::Buffer,
     pub payloads: &'a wgpu::Buffer,
     pub radiance: &'a wgpu::Buffer,
     pub light_sample_reservoirs: &'a wgpu::Buffer,
@@ -152,7 +152,7 @@ pub fn encode(
             },
             wgpu::BindGroupEntry {
                 binding: 1,
-                resource: parameters.in_rays.as_entire_binding(),
+                resource: parameters.rays.as_entire_binding(),
             },
             wgpu::BindGroupEntry {
                 binding: 2,

@@ -3,15 +3,15 @@
 @include appearance-path-tracer-gpu::shared/ray
 @include appearance-path-tracer-gpu::shared/gbuffer
 @include appearance-path-tracer-gpu::shared/material/disney_bsdf
-@include appearance-path-tracer-gpu::shared/restir_di/di_reservoir
+@include appearance-path-tracer-gpu::shared/restir/di_reservoir
 
 @include appearance-path-tracer-gpu::shared/vertex_pool_bindings
 @include appearance-path-tracer-gpu::shared/material/material_pool_bindings
 @include appearance-path-tracer-gpu::shared/sky_bindings
 @include appearance-path-tracer-gpu::shared/gbuffer_bindings
 
-@include appearance-path-tracer-gpu::shared/nee
-@include appearance-path-tracer-gpu::shared/trace_helpers
+@include appearance-path-tracer-gpu::helpers/nee
+@include appearance-path-tracer-gpu::helpers/trace
 
 struct Constants {
     resolution: vec2<u32>,
@@ -111,7 +111,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
 
     if (valid_prev_reservoir) {
         var prev_reservoir: DiReservoir = PackedDiReservoir::unpack(prev_reservoirs[prev_id]);
-        prev_reservoir.sample_count = min(prev_reservoir.sample_count, 20.0 * reservoir.sample_count);
+        prev_reservoir.sample_count = min(prev_reservoir.sample_count, 30.0);
 
         let w_out_worldspace: vec3<f32> = -direction;
         let w_in_worldspace: vec3<f32> = normalize(prev_reservoir.sample.point - hit_point_ws);

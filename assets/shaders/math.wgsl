@@ -17,6 +17,22 @@ const RIGHT: vec3<f32> = vec3<f32>(1.0, 0.0, 0.0);
 const UP: vec3<f32> = vec3<f32>(0.0, 1.0, 0.0);
 const FORWARD: vec3<f32> = vec3<f32>(0.0, 0.0, 1.0);
 
+fn safe_div(x: f32, y: f32) -> f32 {
+    if (y > 0.0) {
+        return x / y;
+    } else {
+        return 0.0;
+    }
+}
+
+fn safe_div3(x: vec3<f32>, y: vec3<f32>) -> vec3<f32> {
+    return vec3<f32>(
+        safe_div(x.x, y.x),
+        safe_div(x.y, y.y),
+        safe_div(x.z, y.z)
+    );
+}
+
 fn safe_sqrt(x: f32) -> f32 {
     return sqrt(max(0.0, x));
 }

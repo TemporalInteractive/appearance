@@ -63,7 +63,7 @@ pub struct HostRenderLoop {
     camera_controller: CameraController,
     world: World,
     duck_entity: Option<specs::Entity>,
-    //toy_car_entity: specs::Entity,
+    toy_car_entity: specs::Entity,
 }
 
 impl RenderLoop for HostRenderLoop {
@@ -142,11 +142,11 @@ impl RenderLoop for HostRenderLoop {
             Transform::new(Vec3::new(3.0, 0.0, 0.0), Quat::IDENTITY, Vec3::splat(1.0)),
             |builder| builder.with(ModelComponent::new("::SponzaNeon.glb")),
         );
-        // let toy_car_entity = world.create_entity(
-        //     "ToyCar",
-        //     Transform::new(Vec3::new(3.0, 0.5, 0.0), Quat::IDENTITY, Vec3::splat(45.0)),
-        //     |builder| builder.with(ModelComponent::new("::ToyCar.glb")),
-        // );
+        let toy_car_entity = world.create_entity(
+            "ToyCar",
+            Transform::new(Vec3::new(3.0, 0.5, 0.0), Quat::IDENTITY, Vec3::splat(45.0)),
+            |builder| builder.with(ModelComponent::new("::ToyCarNonEmissive.glb")),
+        );
         // let _ = world.create_entity(
         //     "Chess",
         //     Transform::new(Vec3::new(-2.0, 0.5, 0.0), Quat::IDENTITY, Vec3::splat(3.0)),
@@ -203,7 +203,7 @@ impl RenderLoop for HostRenderLoop {
             camera_controller: CameraController::new(),
             world,
             duck_entity: Some(duck_entity),
-            //toy_car_entity,
+            toy_car_entity,
         }
     }
 
@@ -267,13 +267,13 @@ impl RenderLoop for HostRenderLoop {
             duck_transform.transform.translate(RIGHT * delta_time * 0.5);
         }
 
-        // {
-        //     let mut transforms_mut = self.world.entities_mut::<TransformComponent>();
-        //     let transform = transforms_mut.get_mut(self.toy_car_entity).unwrap();
-        //     transform
-        //         .transform
-        //         .rotate(Quat::from_axis_angle(UP, delta_time * 0.3));
-        // }
+        {
+            let mut transforms_mut = self.world.entities_mut::<TransformComponent>();
+            let transform = transforms_mut.get_mut(self.toy_car_entity).unwrap();
+            transform
+                .transform
+                .rotate(Quat::from_axis_angle(UP, delta_time * 0.3));
+        }
 
         if self.input_handler.key(KeyCode::KeyX) {
             if let Some(duck_entity) = self.duck_entity.take() {

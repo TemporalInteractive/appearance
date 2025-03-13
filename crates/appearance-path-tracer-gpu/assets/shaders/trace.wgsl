@@ -8,8 +8,9 @@
 @include appearance-path-tracer-gpu::shared/sky_bindings
 @include appearance-path-tracer-gpu::shared/gbuffer_bindings
 
-@include appearance-path-tracer-gpu::shared/nee
-@include appearance-path-tracer-gpu::shared/trace_helpers
+@include appearance-path-tracer-gpu::helpers/nee
+@include appearance-path-tracer-gpu::helpers/trace
+@include appearance-path-tracer-gpu::helpers/inline_path_tracer
 
 struct Constants {
     ray_count: u32,
@@ -26,9 +27,9 @@ var<uniform> constants: Constants;
 @binding(1)
 var<storage, read> in_rays: array<Ray>;
 
-@group(0)
-@binding(2)
-var<storage, read_write> out_rays: array<Ray>;
+// @group(0)
+// @binding(2)
+// var<storage, read_write> out_rays: array<Ray>;
 
 @group(0)
 @binding(3)
@@ -48,6 +49,10 @@ var<storage, read_write> light_sample_ctxs: array<LightSampleCtx>;
 
 @group(0)
 @binding(7)
+var<storage, read_write> gi_reservoirs: array<PackedGiReservoir>;
+
+@group(0)
+@binding(8)
 var<storage, read_write> radiance: array<PackedRgb9e5>;
 
 @compute
@@ -185,6 +190,13 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
 
             let disney_bsdf = DisneyBsdf::from_material(material);
 
+            if (constants.bounce == 0) {
+                gbuffer_position_ws = hit_point_ws;
+                gbuffer_depth_ws = depth_ws;
+                gbuffer_normal_ws = front_facing_shading_normal_ws;
+                gbuffer_albedo = material.color + material.emission;
+            }
+
             let di_reservoir: DiReservoir = Nee::sample_ris(hit_point_ws, w_out_worldspace, front_facing_shading_normal_ws,
                 tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
                 disney_bsdf, &rng, scene);
@@ -202,36 +214,40 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
                 }
             }
 
-            var w_in_worldspace: vec3<f32>;
-            var pdf: f32;
-            var specular: bool;
-            let reflectance: vec3<f32> = DisneyBsdf::sample(disney_bsdf,
-                front_facing_shading_normal_ws, tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
-                w_out_worldspace, intersection.t, back_face,
-                random_uniform_float(&rng), random_uniform_float(&rng), random_uniform_float(&rng),
-                &w_in_worldspace, &pdf, &specular
-            );
+            var gi_reservoir: GiReservoir = InlinePathTracer::sample_ris(hit_point_ws, w_out_worldspace, front_facing_shading_normal_ws,
+                tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
+                disney_bsdf, throughput, intersection.t, back_face, &rng, scene);
+            gi_reservoirs[id] = PackedGiReservoir::new(gi_reservoir);
 
-            if (constants.bounce == 0) {
-                gbuffer_position_ws = hit_point_ws;
-                gbuffer_depth_ws = depth_ws;
-                gbuffer_normal_ws = front_facing_shading_normal_ws;
-                gbuffer_albedo = disney_bsdf.color;
-            }
+            payload.t = depth_ws;
 
-            let sample_valid: bool = pdf > 1e-6;
-            if (sample_valid) {
-                let cos_in: f32 = abs(dot(front_facing_shading_normal_ws, w_in_worldspace));
-                let contribution: vec3<f32> = (1.0 / pdf) * reflectance * cos_in;
-                throughput *= contribution;
+            // var w_in_worldspace: vec3<f32>;
+            // var pdf: f32;
+            // var specular: bool;
+            // let reflectance: vec3<f32> = DisneyBsdf::sample(disney_bsdf,
+            //     front_facing_shading_normal_ws, tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
+            //     w_out_worldspace, intersection.t, back_face,
+            //     random_uniform_float(&rng), random_uniform_float(&rng), random_uniform_float(&rng),
+            //     &w_in_worldspace, &pdf, &specular
+            // );
+
+            // let sample_valid: bool = pdf > 1e-6;
+            // if (sample_valid) {
+            //     let cos_in: f32 = abs(dot(front_facing_shading_normal_ws, w_in_worldspace));
+            //     let contribution: vec3<f32> = (1.0 / pdf) * reflectance * cos_in;
+            //     throughput *= contribution;
+
+            //     // let gi_origin: vec3<f32> = hit_point_ws + w_in_worldspace * 0.0001;
+            //     // let gi_direction: vec3<f32> = w_in_worldspace;
+            //     // accumulated += InlinePathTracer::trace(gi_origin, gi_direction, 1, &throughput, &rng, scene);
             
-                let out_ray = Ray::new(hit_point_ws + w_in_worldspace * 0.0001, w_in_worldspace);
-                out_rays[id] = out_ray;
+            //     let out_ray = Ray::new(hit_point_ws + w_in_worldspace * 0.0001, w_in_worldspace);
+            //     out_rays[id] = out_ray;
 
-                payload.t = intersection.t;
-            } else {
-                payload.t = -1.0;
-            }
+            //     payload.t = depth_ws;
+            // } else {
+            //     payload.t = -1.0;
+            // }
         } else {
             gbuffer_albedo = vec3<f32>(1.0);
 

@@ -5,6 +5,7 @@ use appearance_packing::PackedRgb9e5;
 use appearance_wgpu::{pipeline_database::PipelineDatabase, wgpu, Context};
 use appearance_world::visible_world_action::VisibleWorldActionType;
 use apply_di_pass::ApplyDiPassParameters;
+use apply_gi_pass::ApplyGiPassParameters;
 use demodulate_radiance::DemodulateRadiancePassParameters;
 use film::Film;
 use firefly_filter_pass::FireflyFilterPassParameters;
@@ -13,11 +14,13 @@ use glam::{UVec2, Vec3};
 use raygen_pass::RaygenPassParameters;
 use resolve_pass::ResolvePassParameters;
 use restir_di_pass::{LightSampleCtx, PackedDiReservoir, RestirDiPass, RestirDiPassParameters};
+use restir_gi_pass::{PackedGiReservoir, RestirGiPass, RestirGiPassParameters};
 use scene_resources::SceneResources;
 use taa_pass::TaaPassParameters;
 use trace_pass::TracePassParameters;
 
 mod apply_di_pass;
+mod apply_gi_pass;
 mod demodulate_radiance;
 mod film;
 mod firefly_filter_pass;
@@ -25,6 +28,7 @@ mod gbuffer;
 mod raygen_pass;
 mod resolve_pass;
 mod restir_di_pass;
+mod restir_gi_pass;
 mod scene_resources;
 mod taa_pass;
 mod trace_pass;
@@ -45,28 +49,28 @@ struct Payload {
 
 struct SizedResources {
     film: Film,
-    rays: [wgpu::Buffer; 2],
+    rays: wgpu::Buffer,
     payloads: wgpu::Buffer,
     radiance: wgpu::Buffer,
     demodulated_radiance: [wgpu::Buffer; 2],
     light_sample_reservoirs: wgpu::Buffer,
     light_sample_ctxs: wgpu::Buffer,
+    gi_reservoirs: wgpu::Buffer,
     gbuffer: GBuffer,
 
     restir_di_pass: RestirDiPass,
+    restir_gi_pass: RestirGiPass,
 }
 
 impl SizedResources {
     fn new(resolution: UVec2, device: &wgpu::Device) -> Self {
         let film = Film::new(resolution, device);
 
-        let rays = std::array::from_fn(|i| {
-            device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some(&format!("appearance-path-tracer-gpu rays {}", i)),
-                size: (std::mem::size_of::<Ray>() as u32 * resolution.x * resolution.y) as u64,
-                mapped_at_creation: false,
-                usage: wgpu::BufferUsages::STORAGE,
-            })
+        let rays = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("appearance-path-tracer-gpu rays"),
+            size: (std::mem::size_of::<Ray>() as u32 * resolution.x * resolution.y) as u64,
+            mapped_at_creation: false,
+            usage: wgpu::BufferUsages::STORAGE,
         });
 
         let payloads = device.create_buffer(&wgpu::BufferDescriptor {
@@ -112,9 +116,18 @@ impl SizedResources {
             usage: wgpu::BufferUsages::STORAGE,
         });
 
+        let gi_reservoirs = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("appearance-path-tracer-gpu gi_reservoirs"),
+            size: (std::mem::size_of::<PackedGiReservoir>() as u32 * resolution.x * resolution.y)
+                as u64,
+            mapped_at_creation: false,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        });
+
         let gbuffer = GBuffer::new(resolution, device);
 
         let restir_di_pass = RestirDiPass::new(resolution, device);
+        let restir_gi_pass = RestirGiPass::new(resolution, device);
 
         Self {
             film,
@@ -124,9 +137,16 @@ impl SizedResources {
             demodulated_radiance,
             light_sample_reservoirs,
             light_sample_ctxs,
+            gi_reservoirs,
             gbuffer,
             restir_di_pass,
+            restir_gi_pass,
         }
+    }
+
+    fn end_frame(&mut self, camera: &Camera) {
+        self.gbuffer.end_frame(camera);
+        self.restir_gi_pass.end_frame();
     }
 }
 
@@ -134,6 +154,11 @@ impl SizedResources {
 pub struct PathTracerGpuConfig {
     max_bounces: u32,
     sample_count: u32,
+
+    restir_di: bool,
+    restir_gi: bool,
+    firefly_filter: bool,
+    taa: bool,
 }
 
 impl Default for PathTracerGpuConfig {
@@ -141,6 +166,10 @@ impl Default for PathTracerGpuConfig {
         Self {
             max_bounces: 2,
             sample_count: 1,
+            restir_di: true,
+            restir_gi: true,
+            firefly_filter: false,
+            taa: false,
         }
     }
 }
@@ -256,7 +285,7 @@ impl PathTracerGpu {
                     inv_view,
                     inv_proj,
                     resolution: self.local_resolution,
-                    rays: &self.sized_resources.rays[0],
+                    rays: &self.sized_resources.rays,
                 },
                 &ctx.device,
                 &mut command_encoder,
@@ -264,9 +293,6 @@ impl PathTracerGpu {
             );
 
             for i in 0..self.config.max_bounces {
-                let in_rays = &self.sized_resources.rays[(i as usize) % 2];
-                let out_rays = &self.sized_resources.rays[(i as usize + 1) % 2];
-
                 let seed = self.frame_idx * self.config.sample_count + sample;
 
                 trace_pass::encode(
@@ -275,12 +301,12 @@ impl PathTracerGpu {
                         bounce: i,
                         seed,
                         sample,
-                        in_rays,
-                        out_rays,
+                        rays: &self.sized_resources.rays,
                         payloads: &self.sized_resources.payloads,
                         radiance: &self.sized_resources.radiance,
                         light_sample_reservoirs: &self.sized_resources.light_sample_reservoirs,
                         light_sample_ctxs: &self.sized_resources.light_sample_ctxs,
+                        gi_reservoirs: &self.sized_resources.gi_reservoirs,
                         gbuffer: &self.sized_resources.gbuffer,
                         scene_resources: &self.scene_resources,
                     },
@@ -290,33 +316,72 @@ impl PathTracerGpu {
                 );
 
                 if i == 0 {
-                    self.sized_resources.restir_di_pass.encode(
-                        &RestirDiPassParameters {
-                            resolution: self.local_resolution,
-                            seed: self.frame_idx,
-                            spatial_pass_count: 2,
-                            spatial_pixel_radius: 30.0,
-                            unbiased: false,
-                            in_rays,
-                            payloads: &self.sized_resources.payloads,
-                            light_sample_reservoirs: &self.sized_resources.light_sample_reservoirs,
-                            light_sample_ctxs: &self.sized_resources.light_sample_ctxs,
-                            gbuffer: &self.sized_resources.gbuffer,
-                            scene_resources: &self.scene_resources,
-                        },
-                        &ctx.device,
-                        &mut command_encoder,
-                        pipeline_database,
-                    );
+                    if self.config.restir_di {
+                        self.sized_resources.restir_di_pass.encode(
+                            &RestirDiPassParameters {
+                                resolution: self.local_resolution,
+                                seed: self.frame_idx,
+                                spatial_pass_count: 2,
+                                spatial_pixel_radius: 30.0,
+                                unbiased: false,
+                                rays: &self.sized_resources.rays,
+                                payloads: &self.sized_resources.payloads,
+                                light_sample_reservoirs: &self
+                                    .sized_resources
+                                    .light_sample_reservoirs,
+                                light_sample_ctxs: &self.sized_resources.light_sample_ctxs,
+                                gbuffer: &self.sized_resources.gbuffer,
+                                scene_resources: &self.scene_resources,
+                            },
+                            &ctx.device,
+                            &mut command_encoder,
+                            pipeline_database,
+                        );
+                    }
+
+                    if self.config.restir_gi {
+                        self.sized_resources.restir_gi_pass.encode(
+                            &RestirGiPassParameters {
+                                resolution: self.local_resolution,
+                                seed: self.frame_idx,
+                                spatial_pass_count: 0, // TODO: Why does spatial reuse become super dark?
+                                spatial_pixel_radius: 30.0,
+                                unbiased: false,
+                                rays: &self.sized_resources.rays,
+                                payloads: &self.sized_resources.payloads,
+                                reservoirs: &self.sized_resources.gi_reservoirs,
+                                light_sample_ctxs: &self.sized_resources.light_sample_ctxs,
+                                gbuffer: &self.sized_resources.gbuffer,
+                                scene_resources: &self.scene_resources,
+                            },
+                            &ctx.device,
+                            &mut command_encoder,
+                            pipeline_database,
+                        );
+                    }
                 }
 
                 apply_di_pass::encode(
                     &ApplyDiPassParameters {
                         ray_count: self.local_resolution.x * self.local_resolution.y,
-                        in_rays,
+                        rays: &self.sized_resources.rays,
                         payloads: &self.sized_resources.payloads,
                         radiance: &self.sized_resources.radiance,
                         light_sample_reservoirs: &self.sized_resources.light_sample_reservoirs,
+                        light_sample_ctxs: &self.sized_resources.light_sample_ctxs,
+                        scene_resources: &self.scene_resources,
+                    },
+                    &ctx.device,
+                    &mut command_encoder,
+                    pipeline_database,
+                );
+
+                apply_gi_pass::encode(
+                    &ApplyGiPassParameters {
+                        ray_count: self.local_resolution.x * self.local_resolution.y,
+                        rays: &self.sized_resources.rays,
+                        payloads: &self.sized_resources.payloads,
+                        gi_reservoirs: &self.sized_resources.gi_reservoirs,
                         light_sample_ctxs: &self.sized_resources.light_sample_ctxs,
                         scene_resources: &self.scene_resources,
                     },
@@ -340,18 +405,20 @@ impl PathTracerGpu {
             pipeline_database,
         );
 
-        firefly_filter_pass::encode(
-            &FireflyFilterPassParameters {
-                resolution: self.local_resolution,
-                demodulated_radiance,
-                gbuffer: &self.sized_resources.gbuffer,
-            },
-            &ctx.device,
-            &mut command_encoder,
-            pipeline_database,
-        );
+        if self.config.firefly_filter {
+            firefly_filter_pass::encode(
+                &FireflyFilterPassParameters {
+                    resolution: self.local_resolution,
+                    demodulated_radiance,
+                    gbuffer: &self.sized_resources.gbuffer,
+                },
+                &ctx.device,
+                &mut command_encoder,
+                pipeline_database,
+            );
+        }
 
-        if self.frame_idx > 0 && false {
+        if self.config.taa && self.frame_idx > 0 {
             taa_pass::encode(
                 &TaaPassParameters {
                     resolution: self.local_resolution,
@@ -403,7 +470,7 @@ impl PathTracerGpu {
 
         self.frame_idx += 1;
         self.scene_resources.end_frame();
-        self.sized_resources.gbuffer.end_frame(&self.camera);
+        self.sized_resources.end_frame(&self.camera);
         self.camera.end_frame();
     }
 }

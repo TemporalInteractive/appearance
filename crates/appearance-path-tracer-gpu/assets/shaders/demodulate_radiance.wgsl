@@ -33,9 +33,9 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
 
     var radiance: vec3<f32> = PackedRgb9e5::unpack(radiance[flat_id]);
     if (constants.remodulate > 0) {
-        radiance *= albedo + 0.0001;
+        radiance *= albedo;
     } else {
-        radiance /= albedo + 0.0001;
+        radiance = safe_div3(radiance, albedo);
     }
 
     demodulated_radiance[flat_id] = PackedRgb9e5::new(radiance);
