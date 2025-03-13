@@ -1,9 +1,11 @@
 #![allow(clippy::needless_range_loop)]
 
 use appearance_camera::Camera;
+use appearance_packing::PackedRgb9e5;
 use appearance_wgpu::{pipeline_database::PipelineDatabase, wgpu, Context};
 use appearance_world::visible_world_action::VisibleWorldActionType;
 use apply_di_pass::ApplyDiPassParameters;
+use demodulate_radiance::DemodulateRadiancePassParameters;
 use film::Film;
 use gbuffer::GBuffer;
 use glam::{UVec2, Vec3};
@@ -11,15 +13,18 @@ use raygen_pass::RaygenPassParameters;
 use resolve_pass::ResolvePassParameters;
 use restir_di_pass::{LightSampleCtx, PackedDiReservoir, RestirDiPass, RestirDiPassParameters};
 use scene_resources::SceneResources;
+use taa_pass::TaaPassParameters;
 use trace_pass::TracePassParameters;
 
 mod apply_di_pass;
+mod demodulate_radiance;
 mod film;
 mod gbuffer;
 mod raygen_pass;
 mod resolve_pass;
 mod restir_di_pass;
 mod scene_resources;
+mod taa_pass;
 mod trace_pass;
 
 #[repr(C)]
@@ -30,16 +35,18 @@ struct Ray {
 
 #[repr(C)]
 struct Payload {
-    accumulated: u32,
     throughput: u32,
     rng: u32,
     t: f32,
+    _padding0: u32,
 }
 
 struct SizedResources {
     film: Film,
     rays: [wgpu::Buffer; 2],
     payloads: wgpu::Buffer,
+    radiance: wgpu::Buffer,
+    demodulated_radiance: [wgpu::Buffer; 2],
     light_sample_reservoirs: wgpu::Buffer,
     light_sample_ctxs: wgpu::Buffer,
     gbuffer: GBuffer,
@@ -67,6 +74,26 @@ impl SizedResources {
             usage: wgpu::BufferUsages::STORAGE,
         });
 
+        let radiance = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("appearance-path-tracer-gpu radiance"),
+            size: (std::mem::size_of::<PackedRgb9e5>() as u32 * resolution.x * resolution.y) as u64,
+            mapped_at_creation: false,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let demodulated_radiance = std::array::from_fn(|i| {
+            device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some(&format!(
+                    "appearance-path-tracer-gpu demodulated_radiance {}",
+                    i
+                )),
+                size: (std::mem::size_of::<PackedRgb9e5>() as u32 * resolution.x * resolution.y)
+                    as u64,
+                mapped_at_creation: false,
+                usage: wgpu::BufferUsages::STORAGE,
+            })
+        });
+
         let light_sample_reservoirs = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("appearance-path-tracer-gpu light_sample_reservoirs"),
             size: (std::mem::size_of::<PackedDiReservoir>() as u32 * resolution.x * resolution.y)
@@ -91,6 +118,8 @@ impl SizedResources {
             film,
             rays,
             payloads,
+            radiance,
+            demodulated_radiance,
             light_sample_reservoirs,
             light_sample_ctxs,
             gbuffer,
@@ -108,7 +137,7 @@ pub struct PathTracerGpuConfig {
 impl Default for PathTracerGpuConfig {
     fn default() -> Self {
         Self {
-            max_bounces: 5,
+            max_bounces: 2,
             sample_count: 1,
         }
     }
@@ -212,6 +241,13 @@ impl PathTracerGpu {
         self.scene_resources
             .rebuild_tlas(&mut command_encoder, &ctx.queue);
 
+        let demodulated_radiance =
+            &self.sized_resources.demodulated_radiance[(self.frame_idx as usize) % 2];
+        let prev_demodulated_radiance =
+            &self.sized_resources.demodulated_radiance[(self.frame_idx as usize + 1) % 2];
+
+        command_encoder.clear_buffer(&self.sized_resources.radiance, 0, None);
+
         for sample in 0..self.config.sample_count {
             raygen_pass::encode(
                 &RaygenPassParameters {
@@ -240,6 +276,7 @@ impl PathTracerGpu {
                         in_rays,
                         out_rays,
                         payloads: &self.sized_resources.payloads,
+                        radiance: &self.sized_resources.radiance,
                         light_sample_reservoirs: &self.sized_resources.light_sample_reservoirs,
                         light_sample_ctxs: &self.sized_resources.light_sample_ctxs,
                         gbuffer: &self.sized_resources.gbuffer,
@@ -254,6 +291,7 @@ impl PathTracerGpu {
                     self.sized_resources.restir_di_pass.encode(
                         &RestirDiPassParameters {
                             resolution: self.local_resolution,
+                            seed: self.frame_idx,
                             spatial_pass_count: 2,
                             spatial_pixel_radius: 30.0,
                             in_rays,
@@ -274,6 +312,7 @@ impl PathTracerGpu {
                         ray_count: self.local_resolution.x * self.local_resolution.y,
                         in_rays,
                         payloads: &self.sized_resources.payloads,
+                        radiance: &self.sized_resources.radiance,
                         light_sample_reservoirs: &self.sized_resources.light_sample_reservoirs,
                         light_sample_ctxs: &self.sized_resources.light_sample_ctxs,
                         scene_resources: &self.scene_resources,
@@ -285,11 +324,53 @@ impl PathTracerGpu {
             }
         }
 
+        if self.frame_idx > 0 && false {
+            demodulate_radiance::encode(
+                &DemodulateRadiancePassParameters {
+                    resolution: self.local_resolution,
+                    remodulate: false,
+                    in_radiance: &self.sized_resources.radiance,
+                    out_radiance: demodulated_radiance,
+                    gbuffer: &self.sized_resources.gbuffer,
+                },
+                &ctx.device,
+                &mut command_encoder,
+                pipeline_database,
+            );
+
+            taa_pass::encode(
+                &TaaPassParameters {
+                    resolution: self.local_resolution,
+                    history_influence: 0.8,
+                    demodulated_radiance,
+                    prev_demodulated_radiance,
+                    gbuffer: &self.sized_resources.gbuffer,
+                },
+                &ctx.device,
+                &mut command_encoder,
+                pipeline_database,
+            );
+
+            demodulate_radiance::encode(
+                &DemodulateRadiancePassParameters {
+                    resolution: self.local_resolution,
+                    remodulate: true,
+                    in_radiance: demodulated_radiance,
+                    out_radiance: &self.sized_resources.radiance,
+                    gbuffer: &self.sized_resources.gbuffer,
+                },
+                &ctx.device,
+                &mut command_encoder,
+                pipeline_database,
+            );
+        }
+
         resolve_pass::encode(
             &ResolvePassParameters {
                 resolution: self.local_resolution,
                 sample_count: self.config.sample_count,
-                payloads: &self.sized_resources.payloads,
+                radiance: &self.sized_resources.radiance,
+                gbuffer: &self.sized_resources.gbuffer,
                 target_view: self.sized_resources.film.texture_view(),
             },
             &ctx.device,

@@ -52,3 +52,17 @@ fn xor_shift_u32(state: u32) -> u32 {
     s ^= s << 5;
     return s;
 }
+
+// Combine hash, taken from Kajiya
+fn hash_combine(x: u32, y: u32) -> u32 {
+    const M: u32 = 1664525;
+    const C: u32 = 1013904223u;
+    var seed: u32 = (x * M + y + C) * M;
+
+    // Tempering (from Matsumoto)
+    seed ^= (seed >> 11u);
+    seed ^= (seed << 7u) & 0x9d2c5680u;
+    seed ^= (seed << 15u) & 0xefc60000u;
+    seed ^= (seed >> 18u);
+    return seed;
+}

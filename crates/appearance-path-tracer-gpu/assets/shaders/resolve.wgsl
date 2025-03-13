@@ -1,5 +1,7 @@
-@include appearance-path-tracer-gpu::shared/ray
 @include appearance-render-loop::block
+@include appearance-path-tracer-gpu::shared/ray
+
+@include appearance-path-tracer-gpu::shared/gbuffer_bindings
 
 struct Constants {
     width: u32,
@@ -14,7 +16,7 @@ var<uniform> constants: Constants;
 
 @group(0)
 @binding(1)
-var<storage, read> payloads: array<Payload>;
+var<storage, read> radiance: array<PackedRgb9e5>;
 
 @group(0)
 @binding(2)
@@ -39,8 +41,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     if (id.x >= constants.width || id.y >= constants.height) { return; }
     var i: u32 = id.y * constants.width + id.x;
 
-    var payload: Payload = payloads[i];
-    var accumulated: vec3<f32> = PackedRgb9e5::unpack(payload.accumulated);
+    var accumulated: vec3<f32> = PackedRgb9e5::unpack(radiance[i]);
 
     accumulated /= f32(constants.sample_count);
     accumulated = hdr_to_sdr(accumulated);

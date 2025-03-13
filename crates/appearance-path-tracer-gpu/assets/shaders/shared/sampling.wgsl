@@ -59,3 +59,16 @@ fn perturb_direction_vector(uv: vec2<f32>, direction: vec3<f32>, angle: f32) -> 
 
     return bitangent * x + tangent * y + direction * z;
 }
+
+// https://www.iryoku.com/next-generation-post-processing-in-call-of-duty-advanced-warfare/
+fn interleaved_gradient_noise(pos: vec2<f32>) -> f32 {
+    return fract(52.9829189 * fract(0.06711056 * pos.x + 0.00583715 * pos.y));
+}
+
+// https://blog.demofox.org/2022/01/01/interleaved-gradient-noise-a-different-kind-of-low-discrepancy-sequence/
+fn interleaved_gradient_noise_animated(pos: vec2<u32>, frame: u32) -> f32 {
+    let id: u32 = frame % 64;
+    let x: f32 = f32(pos.x) + 5.588238 * f32(id);
+    let y: f32 = f32(pos.y) + 5.588238 * f32(id);
+    return interleaved_gradient_noise(vec2(x, y));
+}

@@ -11,6 +11,7 @@ const U32_MAX: u32 = 4294967295u;
 const U16_MAX: u32 = 65535u;
 
 const GOLDEN_RATIO: f32 = 1.6180339887498948482;
+const GOLDEN_ANGLE: f32 = 2.39996322972865332;
 
 const RIGHT: vec3<f32> = vec3<f32>(1.0, 0.0, 0.0);
 const UP: vec3<f32> = vec3<f32>(0.0, 1.0, 0.0);

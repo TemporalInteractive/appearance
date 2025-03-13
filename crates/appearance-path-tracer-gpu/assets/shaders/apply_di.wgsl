@@ -41,6 +41,10 @@ var<storage, read> light_sample_reservoirs: array<PackedDiReservoir>;
 @binding(5)
 var<storage, read> light_sample_ctxs: array<LightSampleCtx>;
 
+@group(0)
+@binding(6)
+var<storage, read_write> radiance: array<PackedRgb9e5>;
+
 @compute
 @workgroup_size(128)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
@@ -61,7 +65,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
 
     let light_sample_ctx: LightSampleCtx = light_sample_ctxs[id];
 
-    var accumulated: vec3<f32> = PackedRgb9e5::unpack(payload.accumulated);
+    var accumulated: vec3<f32> = PackedRgb9e5::unpack(radiance[id]);
     // Current payload throughput already has the next gi bounce reflection incorporated, take "previous" throughput from the light sample ctx
     let throughput: vec3<f32> = PackedRgb9e5::unpack(light_sample_ctx.throughput);
     var rng: u32 = payload.rng;
@@ -100,7 +104,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
         };
     }
 
-    payload.accumulated = PackedRgb9e5::new(accumulated);
+    radiance[id] = PackedRgb9e5::new(accumulated);
+
     payload.rng = rng;
     payloads[id] = payload;
 }
