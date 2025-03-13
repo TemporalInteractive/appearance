@@ -185,6 +185,13 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
 
             let disney_bsdf = DisneyBsdf::from_material(material);
 
+            if (constants.bounce == 0) {
+                gbuffer_position_ws = hit_point_ws;
+                gbuffer_depth_ws = depth_ws;
+                gbuffer_normal_ws = front_facing_shading_normal_ws;
+                gbuffer_albedo = disney_bsdf.color;
+            }
+
             let di_reservoir: DiReservoir = Nee::sample_ris(hit_point_ws, w_out_worldspace, front_facing_shading_normal_ws,
                 tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
                 disney_bsdf, &rng, scene);
@@ -211,13 +218,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
                 random_uniform_float(&rng), random_uniform_float(&rng), random_uniform_float(&rng),
                 &w_in_worldspace, &pdf, &specular
             );
-
-            if (constants.bounce == 0) {
-                gbuffer_position_ws = hit_point_ws;
-                gbuffer_depth_ws = depth_ws;
-                gbuffer_normal_ws = front_facing_shading_normal_ws;
-                gbuffer_albedo = disney_bsdf.color;
-            }
 
             let sample_valid: bool = pdf > 1e-6;
             if (sample_valid) {
