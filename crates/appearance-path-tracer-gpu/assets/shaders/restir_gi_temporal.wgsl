@@ -42,14 +42,22 @@ var scene: acceleration_structure;
 
 @group(0)
 @binding(4)
-var<storage, read_write> reservoirs: array<PackedGiReservoir>;
+var<storage, read> reservoirs_in: array<PackedGiReservoir>;
 
 @group(0)
 @binding(5)
-var<storage, read_write> prev_reservoirs: array<PackedGiReservoir>;
+var<storage, read_write> reservoirs_out: array<PackedGiReservoir>;
 
 @group(0)
 @binding(6)
+var<storage, read> prev_reservoirs_in: array<PackedGiReservoir>;
+
+@group(0)
+@binding(7)
+var<storage, read_write> prev_reservoirs_out: array<PackedGiReservoir>;
+
+@group(0)
+@binding(8)
 var<storage, read> light_sample_ctxs: array<LightSampleCtx>;
 
 @compute
@@ -86,33 +94,33 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     let clearcoat_tangent_to_world: mat3x3<f32> = build_orthonormal_basis(front_facing_clearcoat_normal_ws);
     let clearcoat_world_to_tangent: mat3x3<f32> = transpose(clearcoat_tangent_to_world);
 
-    let reservoir: GiReservoir = PackedGiReservoir::unpack(reservoirs[id]);
+    let reservoir: GiReservoir = PackedGiReservoir::unpack(reservoirs_in[id]);
 
     var prev_point_ss: vec2<f32>;
     var prev_id: u32;
     if (GBuffer::reproject(hit_point_ws, constants.resolution, &prev_point_ss)) {
         let prev_id_2d = vec2<u32>(floor(prev_point_ss));
-        prev_id = id;//prev_id_2d.y * constants.resolution.x + prev_id_2d.x; TODO: fix this
+        prev_id = prev_id_2d.y * constants.resolution.x + prev_id_2d.x;
     } else {
         prev_id = id;
     }
 
     var valid_prev_reservoir: bool = true;
+    let current_gbuffer_texel: GBufferTexel = gbuffer[id];
+    let prev_gbuffer_texel: GBufferTexel = prev_gbuffer[prev_id];
+    let prev_normal_ws: vec3<f32> = PackedNormalizedXyz10::unpack(prev_gbuffer_texel.normal_ws, 0);
     if (constants.unbiased == 0) {
-        let current_gbuffer_texel: GBufferTexel = gbuffer[id];
-        let prev_gbuffer_texel: GBufferTexel = prev_gbuffer[prev_id];
         let current_depth_cs: f32 = GBufferTexel::depth_cs(current_gbuffer_texel, 0.001, 10000.0);
         let prev_depth_cs: f32 = GBufferTexel::depth_cs(prev_gbuffer_texel, 0.001, 10000.0);
         let valid_delta_depth: bool = (abs(current_depth_cs - prev_depth_cs) / current_depth_cs) < 0.1;
         let current_normal_ws: vec3<f32> = PackedNormalizedXyz10::unpack(current_gbuffer_texel.normal_ws, 0);
-        let prev_normal_ws: vec3<f32> = PackedNormalizedXyz10::unpack(prev_gbuffer_texel.normal_ws, 0);
         let valid_delta_normal: bool = dot(current_normal_ws, prev_normal_ws) > 0.906; // 25 degrees
 
         valid_prev_reservoir = valid_delta_depth && valid_delta_normal;
     }
 
     if (valid_prev_reservoir) {
-        var prev_reservoir: GiReservoir = PackedGiReservoir::unpack(prev_reservoirs[prev_id]);
+        var prev_reservoir: GiReservoir = PackedGiReservoir::unpack(prev_reservoirs_in[prev_id]);
         prev_reservoir.sample_count = min(prev_reservoir.sample_count, 20.0 * reservoir.sample_count);
 
         let w_out_worldspace: vec3<f32> = -direction;
@@ -122,7 +130,9 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
         let reflectance: vec3<f32> = DisneyBsdf::evaluate(disney_bsdf, front_facing_shading_normal_ws,
             tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
             w_out_worldspace, w_in_worldspace, &shading_pdf);
-        let cos_in: f32 = abs(dot(w_in_worldspace, front_facing_shading_normal_ws));
+        var cos_in: f32 = abs(dot(w_in_worldspace, front_facing_shading_normal_ws));
+        //cos_in *= jacobianDiffuse(current_gbuffer_texel.position_ws, prev_gbuffer_texel.position_ws, prev_normal_ws, w_in_worldspace, payload.t);
+
         let local_throughput: vec3<f32> = cos_in * reflectance;
         let gi_origin: vec3<f32> = hit_point_ws + w_in_worldspace * 0.0001;
         let gi_direction: vec3<f32> = w_in_worldspace;
@@ -138,12 +148,12 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
             combined_reservoir.contribution_weight = (1.0 / combined_reservoir.selected_phat) * (1.0 / combined_reservoir.sample_count * combined_reservoir.weight_sum);
         }
 
-        reservoirs[id] = PackedGiReservoir::new(combined_reservoir);
-        if (constants.spatial_pass_count == 0) {
-            prev_reservoirs[id] = PackedGiReservoir::new(combined_reservoir);
+        reservoirs_out[id] = PackedGiReservoir::new(combined_reservoir);
+        if (constants.spatial_pass_count == 0 || true) {
+            prev_reservoirs_out[id] = PackedGiReservoir::new(combined_reservoir);
         }
-    } else if (constants.spatial_pass_count == 0) {
-        prev_reservoirs[id] = PackedGiReservoir::new(reservoir);
+    } else if (constants.spatial_pass_count == 0 || true) {
+        prev_reservoirs_out[id] = PackedGiReservoir::new(reservoir);
     }
 
     payload.rng = rng;

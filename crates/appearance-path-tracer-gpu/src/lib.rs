@@ -143,6 +143,11 @@ impl SizedResources {
             restir_gi_pass,
         }
     }
+
+    fn end_frame(&mut self, camera: &Camera) {
+        self.gbuffer.end_frame(camera);
+        self.restir_gi_pass.end_frame();
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -339,7 +344,7 @@ impl PathTracerGpu {
                             &RestirGiPassParameters {
                                 resolution: self.local_resolution,
                                 seed: self.frame_idx,
-                                spatial_pass_count: 2,
+                                spatial_pass_count: 0, // TODO: Why does spatial reuse become super dark?
                                 spatial_pixel_radius: 30.0,
                                 unbiased: false,
                                 rays: &self.sized_resources.rays,
@@ -465,7 +470,7 @@ impl PathTracerGpu {
 
         self.frame_idx += 1;
         self.scene_resources.end_frame();
-        self.sized_resources.gbuffer.end_frame(&self.camera);
+        self.sized_resources.end_frame(&self.camera);
         self.camera.end_frame();
     }
 }

@@ -49,44 +49,13 @@ var<storage, read> in_reservoirs: array<PackedGiReservoir>;
 @binding(5)
 var<storage, read_write> out_reservoirs: array<PackedGiReservoir>;
 
-@group(0)
-@binding(6)
-var<storage, read_write> prev_reservoirs: array<PackedGiReservoir>;
+// @group(0)
+// @binding(6)
+// var<storage, read_write> prev_reservoirs: array<PackedGiReservoir>;
 
 @group(0)
 @binding(7)
 var<storage, read> light_sample_ctxs: array<LightSampleCtx>;
-
-// https://dl.acm.org/doi/pdf/10.1145/2766997 at section 5 under "Jacobians"
-// Calculate geometric ratio from base path X (this is the pixel you are sampling from) to the
-// neighbor Y that wants to reuse X.
-// https://d1qx31qr3h6wln.cloudfront.net/publications/ReSTIR%20GI.pdf
-// Jacobian is in form of 1 / X to make handling zero easier.
-fn _jacobianDiffuse(surfaceNormal: vec3<f32>, incidentDirX: vec3<f32>, incidentDirY: vec3<f32>,
-                    squaredDistX: f32, squaredDistY: f32) -> f32 {
-    const kJacobianRejection: f32 = 1e-2;
-
-    let cosThetaX: f32 = abs(dot(surfaceNormal, incidentDirX));
-    let cosThetaY: f32 = abs(dot(surfaceNormal, incidentDirY));
-
-    let jacobian: f32 = (cosThetaY * squaredDistX) / (cosThetaX * squaredDistY);
-
-    if (jacobian < kJacobianRejection || cosThetaY <= 0) {
-        return 0.0;
-    }
-
-    return jacobian;
-}
-
-fn jacobianDiffuse(targetOrigin: vec3<f32>, sampleOrigin: vec3<f32>, sampleHitNormal: vec3<f32>, sampleDirection: vec3<f32>, hitT: f32) -> f32 {
-    let sampleHitPos: vec3<f32> = sampleOrigin + sampleDirection * hitT;
-    let relativeSamplePosFromTarget: vec3<f32> = sampleHitPos - targetOrigin;
-    let targetDirection: vec3<f32> = normalize(relativeSamplePosFromTarget);
-    let sampleDistSquared: f32 = hitT * hitT;
-    let targetDistSquared: f32 = dot(relativeSamplePosFromTarget, relativeSamplePosFromTarget);
-
-    return _jacobianDiffuse(sampleHitNormal, -sampleDirection, -targetDirection, sampleDistSquared, targetDistSquared);
-}
 
 fn mirror(x: i32, max: i32) -> u32 {
     return u32(abs(((x + max) % (2 * max)) - max));
@@ -168,6 +137,10 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
         let neighbour_id = mirror_pixel(center_id + offset);
         let flat_neighbour_id: u32 = neighbour_id.y * constants.resolution.x + neighbour_id.x;
 
+        if (flat_neighbour_id == flat_id) {
+            continue;
+        }
+
         var valid_neighbour_reservoir: bool = true;
         let neighbour_gbuffer_texel: GBufferTexel = gbuffer[flat_neighbour_id];
         let neighbour_normal_ws: vec3<f32> = PackedNormalizedXyz10::unpack(neighbour_gbuffer_texel.normal_ws, 0);
@@ -193,15 +166,15 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
             //cos_in *= jacobianDiffuse(center_gbuffer_texel.position_ws, neighbour_gbuffer_texel.position_ws, neighbour_normal_ws, w_in_worldspace, payload.t);
 
             if (cos_in > 0.0) {
-            let local_throughput: vec3<f32> = cos_in * reflectance;
-            let gi_origin: vec3<f32> = hit_point_ws + w_in_worldspace * 0.0001;
-            let gi_direction: vec3<f32> = w_in_worldspace;
-            var throughput_result: vec3<f32> = throughput;
-            let contribution: vec3<f32> = throughput * local_throughput * InlinePathTracer::trace(gi_origin, gi_direction, RESTIR_GI_PHAT_MAX_BOUNCES, &throughput_result, &rng, scene);
-            neighbour_reservoir.selected_phat = linear_to_luma(contribution);
+                let local_throughput: vec3<f32> = cos_in * reflectance;
+                let gi_origin: vec3<f32> = hit_point_ws + w_in_worldspace * 0.0001;
+                let gi_direction: vec3<f32> = w_in_worldspace;
+                var throughput_result: vec3<f32> = throughput;
+                let contribution: vec3<f32> = throughput * local_throughput * InlinePathTracer::trace(gi_origin, gi_direction, RESTIR_GI_PHAT_MAX_BOUNCES, &throughput_result, &rng, scene);
+                neighbour_reservoir.selected_phat = linear_to_luma(contribution);
 
-            GiReservoir::update(&combined_reservoir, neighbour_reservoir.selected_phat * neighbour_reservoir.contribution_weight * neighbour_reservoir.sample_count, &rng, neighbour_reservoir.w_in_worldspace, neighbour_reservoir.selected_phat);
-            combined_sample_count += neighbour_reservoir.sample_count;
+                GiReservoir::update(&combined_reservoir, neighbour_reservoir.selected_phat * neighbour_reservoir.contribution_weight * neighbour_reservoir.sample_count, &rng, neighbour_reservoir.w_in_worldspace, neighbour_reservoir.selected_phat);
+                combined_sample_count += neighbour_reservoir.sample_count;
             }
         }
     }
@@ -212,9 +185,9 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     }
 
     out_reservoirs[flat_id] = PackedGiReservoir::new(combined_reservoir);
-    if (constants.spatial_pass_idx == constants.spatial_pass_count - 1) {
-        prev_reservoirs[flat_id] = PackedGiReservoir::new(combined_reservoir);
-    }
+    // if (constants.spatial_pass_idx == constants.spatial_pass_count - 1) {
+    //     prev_reservoirs[flat_id] = PackedGiReservoir::new(combined_reservoir);
+    // }
 
     payload.rng = rng;
     payloads[flat_id] = payload;

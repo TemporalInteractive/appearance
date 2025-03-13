@@ -61,18 +61,25 @@ pub struct RestirGiPassParameters<'a> {
 }
 
 pub struct RestirGiPass {
-    prev_reservoirs: wgpu::Buffer,
+    prev_reservoirs: [wgpu::Buffer; 2],
     intermediate_reservoirs: wgpu::Buffer,
+    frame_idx: u32,
 }
 
 impl RestirGiPass {
     pub fn new(resolution: UVec2, device: &wgpu::Device) -> Self {
-        let prev_reservoirs = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("appearance-path-tracer-gpu::restir_gi_pass prev_reservoirs"),
-            size: (std::mem::size_of::<PackedGiReservoir>() as u32 * resolution.x * resolution.y)
-                as u64,
-            mapped_at_creation: false,
-            usage: wgpu::BufferUsages::STORAGE,
+        let prev_reservoirs = std::array::from_fn(|i| {
+            device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some(&format!(
+                    "appearance-path-tracer-gpu::restir_gi_pass prev_reservoirs {}",
+                    i,
+                )),
+                size: (std::mem::size_of::<PackedGiReservoir>() as u32
+                    * resolution.x
+                    * resolution.y) as u64,
+                mapped_at_creation: false,
+                usage: wgpu::BufferUsages::STORAGE,
+            })
         });
 
         let intermediate_reservoirs = device.create_buffer(&wgpu::BufferDescriptor {
@@ -86,6 +93,7 @@ impl RestirGiPass {
         Self {
             prev_reservoirs,
             intermediate_reservoirs,
+            frame_idx: 0,
         }
     }
 
@@ -97,7 +105,9 @@ impl RestirGiPass {
         pipeline_database: &mut PipelineDatabase,
     ) {
         self.encode_temporal(parameters, device, command_encoder, pipeline_database);
-        self.encode_spatial(parameters, device, command_encoder, pipeline_database);
+        if parameters.spatial_pass_count > 0 {
+            self.encode_spatial(parameters, device, command_encoder, pipeline_database);
+        }
     }
 
     fn encode_temporal(
@@ -166,7 +176,7 @@ impl RestirGiPass {
                                     binding: 4,
                                     visibility: wgpu::ShaderStages::COMPUTE,
                                     ty: wgpu::BindingType::Buffer {
-                                        ty: wgpu::BufferBindingType::Storage { read_only: false },
+                                        ty: wgpu::BufferBindingType::Storage { read_only: true },
                                         has_dynamic_offset: false,
                                         min_binding_size: None,
                                     },
@@ -184,6 +194,26 @@ impl RestirGiPass {
                                 },
                                 wgpu::BindGroupLayoutEntry {
                                     binding: 6,
+                                    visibility: wgpu::ShaderStages::COMPUTE,
+                                    ty: wgpu::BindingType::Buffer {
+                                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                                        has_dynamic_offset: false,
+                                        min_binding_size: None,
+                                    },
+                                    count: None,
+                                },
+                                wgpu::BindGroupLayoutEntry {
+                                    binding: 7,
+                                    visibility: wgpu::ShaderStages::COMPUTE,
+                                    ty: wgpu::BindingType::Buffer {
+                                        ty: wgpu::BufferBindingType::Storage { read_only: false },
+                                        has_dynamic_offset: false,
+                                        min_binding_size: None,
+                                    },
+                                    count: None,
+                                },
+                                wgpu::BindGroupLayoutEntry {
+                                    binding: 8,
                                     visibility: wgpu::ShaderStages::COMPUTE,
                                     ty: wgpu::BindingType::Buffer {
                                         ty: wgpu::BufferBindingType::Storage { read_only: true },
@@ -222,6 +252,12 @@ impl RestirGiPass {
             usage: wgpu::BufferUsages::UNIFORM,
         });
 
+        let reservoirs_in = parameters.reservoirs;
+        let reservoirs_out = &self.intermediate_reservoirs;
+
+        let prev_reservoirs_in = &self.prev_reservoirs[(self.frame_idx as usize) % 2];
+        let prev_reservoirs_out = &self.prev_reservoirs[(self.frame_idx as usize + 1) % 2];
+
         let bind_group_layout = pipeline.get_bind_group_layout(0);
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
@@ -247,14 +283,22 @@ impl RestirGiPass {
                 },
                 wgpu::BindGroupEntry {
                     binding: 4,
-                    resource: parameters.reservoirs.as_entire_binding(),
+                    resource: reservoirs_in.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 5,
-                    resource: self.prev_reservoirs.as_entire_binding(),
+                    resource: reservoirs_out.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 6,
+                    resource: prev_reservoirs_in.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 7,
+                    resource: prev_reservoirs_out.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 8,
                     resource: parameters.light_sample_ctxs.as_entire_binding(),
                 },
             ],
@@ -282,6 +326,16 @@ impl RestirGiPass {
                 cpass.dispatch_workgroups(ray_count.div_ceil(128), 1, 1);
             },
         );
+
+        if parameters.spatial_pass_count == 0 {
+            command_encoder.copy_buffer_to_buffer(
+                &self.intermediate_reservoirs,
+                0,
+                parameters.reservoirs,
+                0,
+                self.intermediate_reservoirs.size(),
+            );
+        }
     }
 
     fn encode_spatial(
@@ -366,16 +420,16 @@ impl RestirGiPass {
                                     },
                                     count: None,
                                 },
-                                wgpu::BindGroupLayoutEntry {
-                                    binding: 6,
-                                    visibility: wgpu::ShaderStages::COMPUTE,
-                                    ty: wgpu::BindingType::Buffer {
-                                        ty: wgpu::BufferBindingType::Storage { read_only: false },
-                                        has_dynamic_offset: false,
-                                        min_binding_size: None,
-                                    },
-                                    count: None,
-                                },
+                                // wgpu::BindGroupLayoutEntry {
+                                //     binding: 6,
+                                //     visibility: wgpu::ShaderStages::COMPUTE,
+                                //     ty: wgpu::BindingType::Buffer {
+                                //         ty: wgpu::BufferBindingType::Storage { read_only: false },
+                                //         has_dynamic_offset: false,
+                                //         min_binding_size: None,
+                                //     },
+                                //     count: None,
+                                // },
                                 wgpu::BindGroupLayoutEntry {
                                     binding: 7,
                                     visibility: wgpu::ShaderStages::COMPUTE,
@@ -416,12 +470,12 @@ impl RestirGiPass {
                 usage: wgpu::BufferUsages::UNIFORM,
             });
 
-            let in_reservoir_buffer = if i % 2 == 0 {
+            let in_reservoir_buffer = if i % 2 != 0 {
                 parameters.reservoirs
             } else {
                 &self.intermediate_reservoirs
             };
-            let out_reservoir_buffer = if i % 2 != 0 {
+            let out_reservoir_buffer = if i % 2 == 0 {
                 parameters.reservoirs
             } else {
                 &self.intermediate_reservoirs
@@ -458,10 +512,10 @@ impl RestirGiPass {
                         binding: 5,
                         resource: out_reservoir_buffer.as_entire_binding(),
                     },
-                    wgpu::BindGroupEntry {
-                        binding: 6,
-                        resource: self.prev_reservoirs.as_entire_binding(),
-                    },
+                    // wgpu::BindGroupEntry {
+                    //     binding: 6,
+                    //     resource: self.prev_reservoirs.as_entire_binding(),
+                    // },
                     wgpu::BindGroupEntry {
                         binding: 7,
                         resource: parameters.light_sample_ctxs.as_entire_binding(),
@@ -502,7 +556,7 @@ impl RestirGiPass {
             );
         }
 
-        if parameters.spatial_pass_count % 2 != 0 {
+        if parameters.spatial_pass_count % 2 == 0 {
             command_encoder.copy_buffer_to_buffer(
                 &self.intermediate_reservoirs,
                 0,
@@ -511,5 +565,9 @@ impl RestirGiPass {
                 self.intermediate_reservoirs.size(),
             );
         }
+    }
+
+    pub fn end_frame(&mut self) {
+        self.frame_idx += 1;
     }
 }
