@@ -13,6 +13,7 @@ use glam::{UVec2, Vec3};
 use raygen_pass::RaygenPassParameters;
 use resolve_pass::ResolvePassParameters;
 use restir_di_pass::{LightSampleCtx, PackedDiReservoir, RestirDiPass, RestirDiPassParameters};
+use restir_gi_pass::{PackedGiReservoir, RestirGiPass, RestirGiPassParameters};
 use scene_resources::SceneResources;
 use taa_pass::TaaPassParameters;
 use trace_pass::TracePassParameters;
@@ -25,6 +26,7 @@ mod gbuffer;
 mod raygen_pass;
 mod resolve_pass;
 mod restir_di_pass;
+mod restir_gi_pass;
 mod scene_resources;
 mod taa_pass;
 mod trace_pass;
@@ -51,9 +53,11 @@ struct SizedResources {
     demodulated_radiance: [wgpu::Buffer; 2],
     light_sample_reservoirs: wgpu::Buffer,
     light_sample_ctxs: wgpu::Buffer,
+    gi_reservoirs: wgpu::Buffer,
     gbuffer: GBuffer,
 
     restir_di_pass: RestirDiPass,
+    restir_gi_pass: RestirGiPass,
 }
 
 impl SizedResources {
@@ -112,9 +116,18 @@ impl SizedResources {
             usage: wgpu::BufferUsages::STORAGE,
         });
 
+        let gi_reservoirs = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("appearance-path-tracer-gpu gi_reservoirs"),
+            size: (std::mem::size_of::<PackedGiReservoir>() as u32 * resolution.x * resolution.y)
+                as u64,
+            mapped_at_creation: false,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        });
+
         let gbuffer = GBuffer::new(resolution, device);
 
         let restir_di_pass = RestirDiPass::new(resolution, device);
+        let restir_gi_pass = RestirGiPass::new(resolution, device);
 
         Self {
             film,
@@ -124,8 +137,10 @@ impl SizedResources {
             demodulated_radiance,
             light_sample_reservoirs,
             light_sample_ctxs,
+            gi_reservoirs,
             gbuffer,
             restir_di_pass,
+            restir_gi_pass,
         }
     }
 }
@@ -134,6 +149,11 @@ impl SizedResources {
 pub struct PathTracerGpuConfig {
     max_bounces: u32,
     sample_count: u32,
+
+    restir_di: bool,
+    restir_gi: bool,
+    firefly_filter: bool,
+    taa: bool,
 }
 
 impl Default for PathTracerGpuConfig {
@@ -141,6 +161,10 @@ impl Default for PathTracerGpuConfig {
         Self {
             max_bounces: 1,
             sample_count: 1,
+            restir_di: false,
+            restir_gi: false,
+            firefly_filter: false,
+            taa: false,
         }
     }
 }
@@ -289,25 +313,49 @@ impl PathTracerGpu {
                     pipeline_database,
                 );
 
-                if i == 0 && false {
-                    self.sized_resources.restir_di_pass.encode(
-                        &RestirDiPassParameters {
-                            resolution: self.local_resolution,
-                            seed: self.frame_idx,
-                            spatial_pass_count: 2,
-                            spatial_pixel_radius: 30.0,
-                            unbiased: false,
-                            in_rays,
-                            payloads: &self.sized_resources.payloads,
-                            light_sample_reservoirs: &self.sized_resources.light_sample_reservoirs,
-                            light_sample_ctxs: &self.sized_resources.light_sample_ctxs,
-                            gbuffer: &self.sized_resources.gbuffer,
-                            scene_resources: &self.scene_resources,
-                        },
-                        &ctx.device,
-                        &mut command_encoder,
-                        pipeline_database,
-                    );
+                if i == 0 {
+                    if self.config.restir_di {
+                        self.sized_resources.restir_di_pass.encode(
+                            &RestirDiPassParameters {
+                                resolution: self.local_resolution,
+                                seed: self.frame_idx,
+                                spatial_pass_count: 2,
+                                spatial_pixel_radius: 30.0,
+                                unbiased: false,
+                                in_rays,
+                                payloads: &self.sized_resources.payloads,
+                                light_sample_reservoirs: &self
+                                    .sized_resources
+                                    .light_sample_reservoirs,
+                                light_sample_ctxs: &self.sized_resources.light_sample_ctxs,
+                                gbuffer: &self.sized_resources.gbuffer,
+                                scene_resources: &self.scene_resources,
+                            },
+                            &ctx.device,
+                            &mut command_encoder,
+                            pipeline_database,
+                        );
+                    }
+
+                    if self.config.restir_gi {
+                        self.sized_resources.restir_gi_pass.encode(
+                            &RestirGiPassParameters {
+                                resolution: self.local_resolution,
+                                seed: self.frame_idx,
+                                spatial_pass_count: 0, // TODO
+                                spatial_pixel_radius: 30.0,
+                                unbiased: false,
+                                in_rays,
+                                payloads: &self.sized_resources.payloads,
+                                reservoirs: &self.sized_resources.gi_reservoirs,
+                                gbuffer: &self.sized_resources.gbuffer,
+                                scene_resources: &self.scene_resources,
+                            },
+                            &ctx.device,
+                            &mut command_encoder,
+                            pipeline_database,
+                        );
+                    }
                 }
 
                 apply_di_pass::encode(
@@ -340,7 +388,7 @@ impl PathTracerGpu {
             pipeline_database,
         );
 
-        if false {
+        if self.config.firefly_filter {
             firefly_filter_pass::encode(
                 &FireflyFilterPassParameters {
                     resolution: self.local_resolution,
@@ -353,7 +401,7 @@ impl PathTracerGpu {
             );
         }
 
-        if self.frame_idx > 0 && false {
+        if self.config.taa && self.frame_idx > 0 {
             taa_pass::encode(
                 &TaaPassParameters {
                     resolution: self.local_resolution,
