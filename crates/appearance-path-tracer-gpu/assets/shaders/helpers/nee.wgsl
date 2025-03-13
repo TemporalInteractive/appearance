@@ -21,7 +21,7 @@ fn LightSample::intensity(_self: LightSample, hit_point_ws: vec3<f32>) -> f32 {
     } else {
         let cos_out: f32 = abs(dot(_self.triangle_normal, -direction));
 
-        return Triangle::solid_angle(cos_out, _self.triangle_area, distance) * 10.0;
+        return Triangle::solid_angle(cos_out, _self.triangle_area, distance) * 50.0;
     }
 }
 
