@@ -55,6 +55,7 @@ pub struct RestirGiPassParameters<'a> {
     pub rays: &'a wgpu::Buffer,
     pub payloads: &'a wgpu::Buffer,
     pub reservoirs: &'a wgpu::Buffer,
+    pub light_sample_ctxs: &'a wgpu::Buffer,
     pub gbuffer: &'a GBuffer,
     pub scene_resources: &'a SceneResources,
 }
@@ -181,6 +182,16 @@ impl RestirGiPass {
                                     },
                                     count: None,
                                 },
+                                wgpu::BindGroupLayoutEntry {
+                                    binding: 6,
+                                    visibility: wgpu::ShaderStages::COMPUTE,
+                                    ty: wgpu::BindingType::Buffer {
+                                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                                        has_dynamic_offset: false,
+                                        min_binding_size: None,
+                                    },
+                                    count: None,
+                                },
                             ],
                         }),
                         parameters.scene_resources.vertex_pool().bind_group_layout(),
@@ -241,6 +252,10 @@ impl RestirGiPass {
                 wgpu::BindGroupEntry {
                     binding: 5,
                     resource: self.prev_reservoirs.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 6,
+                    resource: parameters.light_sample_ctxs.as_entire_binding(),
                 },
             ],
         });

@@ -345,6 +345,7 @@ impl PathTracerGpu {
                                 rays: &self.sized_resources.rays,
                                 payloads: &self.sized_resources.payloads,
                                 reservoirs: &self.sized_resources.gi_reservoirs,
+                                light_sample_ctxs: &self.sized_resources.light_sample_ctxs,
                                 gbuffer: &self.sized_resources.gbuffer,
                                 scene_resources: &self.scene_resources,
                             },

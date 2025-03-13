@@ -1,6 +1,8 @@
 @include ::random
 @include appearance-packing::shared/packing
 
+const RESTIR_GI_PHAT_MAX_BOUNCES: u32 = 1;
+
 struct GiReservoir {
     sample_count: f32,
     contribution_weight: f32,
