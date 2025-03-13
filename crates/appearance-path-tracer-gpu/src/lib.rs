@@ -289,7 +289,7 @@ impl PathTracerGpu {
                     pipeline_database,
                 );
 
-                if i == 0 {
+                if i == 0 && false {
                     self.sized_resources.restir_di_pass.encode(
                         &RestirDiPassParameters {
                             resolution: self.local_resolution,
@@ -340,31 +340,31 @@ impl PathTracerGpu {
             pipeline_database,
         );
 
-        firefly_filter_pass::encode(
-            &FireflyFilterPassParameters {
-                resolution: self.local_resolution,
-                demodulated_radiance,
-                gbuffer: &self.sized_resources.gbuffer,
-            },
-            &ctx.device,
-            &mut command_encoder,
-            pipeline_database,
-        );
+        // firefly_filter_pass::encode(
+        //     &FireflyFilterPassParameters {
+        //         resolution: self.local_resolution,
+        //         demodulated_radiance,
+        //         gbuffer: &self.sized_resources.gbuffer,
+        //     },
+        //     &ctx.device,
+        //     &mut command_encoder,
+        //     pipeline_database,
+        // );
 
-        if self.frame_idx > 0 && false {
-            taa_pass::encode(
-                &TaaPassParameters {
-                    resolution: self.local_resolution,
-                    history_influence: 0.8,
-                    demodulated_radiance,
-                    prev_demodulated_radiance,
-                    gbuffer: &self.sized_resources.gbuffer,
-                },
-                &ctx.device,
-                &mut command_encoder,
-                pipeline_database,
-            );
-        }
+        // if self.frame_idx > 0 && false {
+        //     taa_pass::encode(
+        //         &TaaPassParameters {
+        //             resolution: self.local_resolution,
+        //             history_influence: 0.8,
+        //             demodulated_radiance,
+        //             prev_demodulated_radiance,
+        //             gbuffer: &self.sized_resources.gbuffer,
+        //         },
+        //         &ctx.device,
+        //         &mut command_encoder,
+        //         pipeline_database,
+        //     );
+        // }
 
         demodulate_radiance::encode(
             &DemodulateRadiancePassParameters {

@@ -56,8 +56,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
                 continue;
             }
 
-            // TODO: geometry test?
-
             let neighbor_color: vec3<f32> = PackedRgb9e5::unpack(demodulated_radiance[flat_sample_pixel]);
             let neighbor_lum: f32 = linear_to_luma(neighbor_color);
 
