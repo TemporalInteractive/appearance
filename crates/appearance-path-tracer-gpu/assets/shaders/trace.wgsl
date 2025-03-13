@@ -190,7 +190,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
                 gbuffer_position_ws = hit_point_ws;
                 gbuffer_depth_ws = depth_ws;
                 gbuffer_normal_ws = front_facing_shading_normal_ws;
-                gbuffer_albedo = disney_bsdf.color;
+                gbuffer_albedo = material.color + material.emission;
             }
 
             let di_reservoir: DiReservoir = Nee::sample_ris(hit_point_ws, w_out_worldspace, front_facing_shading_normal_ws,
