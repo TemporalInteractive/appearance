@@ -341,7 +341,7 @@ impl PathTracerGpu {
             taa_pass::encode(
                 &TaaPassParameters {
                     resolution: self.local_resolution,
-                    history_influence: 0.9,
+                    history_influence: 0.8,
                     demodulated_radiance,
                     prev_demodulated_radiance,
                     gbuffer: &self.sized_resources.gbuffer,
