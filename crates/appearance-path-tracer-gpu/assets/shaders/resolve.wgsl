@@ -43,12 +43,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
 
     var accumulated: vec3<f32> = PackedRgb9e5::unpack(radiance[i]);
 
-    // let gbuffer_texel: GBufferTexel = gbuffer[i];
-    // var albedo: vec3<f32> = PackedRgb9e5::unpack(gbuffer_texel.albedo);
-    // if (!GBufferTexel::is_sky(gbuffer_texel)) {
-    //     accumulated /= albedo + 0.000001;
-    // }
-
     accumulated /= f32(constants.sample_count);
     accumulated = hdr_to_sdr(accumulated);
 
