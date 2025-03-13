@@ -7,6 +7,7 @@ use appearance_world::visible_world_action::VisibleWorldActionType;
 use apply_di_pass::ApplyDiPassParameters;
 use demodulate_radiance::DemodulateRadiancePassParameters;
 use film::Film;
+use firefly_filter_pass::FireflyFilterPassParameters;
 use gbuffer::GBuffer;
 use glam::{UVec2, Vec3};
 use raygen_pass::RaygenPassParameters;
@@ -19,6 +20,7 @@ use trace_pass::TracePassParameters;
 mod apply_di_pass;
 mod demodulate_radiance;
 mod film;
+mod firefly_filter_pass;
 mod gbuffer;
 mod raygen_pass;
 mod resolve_pass;
@@ -325,20 +327,31 @@ impl PathTracerGpu {
             }
         }
 
-        if self.frame_idx > 0 && false {
-            demodulate_radiance::encode(
-                &DemodulateRadiancePassParameters {
-                    resolution: self.local_resolution,
-                    remodulate: false,
-                    in_radiance: &self.sized_resources.radiance,
-                    out_radiance: demodulated_radiance,
-                    gbuffer: &self.sized_resources.gbuffer,
-                },
-                &ctx.device,
-                &mut command_encoder,
-                pipeline_database,
-            );
+        demodulate_radiance::encode(
+            &DemodulateRadiancePassParameters {
+                resolution: self.local_resolution,
+                remodulate: false,
+                in_radiance: &self.sized_resources.radiance,
+                out_radiance: demodulated_radiance,
+                gbuffer: &self.sized_resources.gbuffer,
+            },
+            &ctx.device,
+            &mut command_encoder,
+            pipeline_database,
+        );
 
+        firefly_filter_pass::encode(
+            &FireflyFilterPassParameters {
+                resolution: self.local_resolution,
+                demodulated_radiance,
+                gbuffer: &self.sized_resources.gbuffer,
+            },
+            &ctx.device,
+            &mut command_encoder,
+            pipeline_database,
+        );
+
+        if self.frame_idx > 0 && false {
             taa_pass::encode(
                 &TaaPassParameters {
                     resolution: self.local_resolution,
@@ -351,20 +364,20 @@ impl PathTracerGpu {
                 &mut command_encoder,
                 pipeline_database,
             );
-
-            demodulate_radiance::encode(
-                &DemodulateRadiancePassParameters {
-                    resolution: self.local_resolution,
-                    remodulate: true,
-                    in_radiance: demodulated_radiance,
-                    out_radiance: &self.sized_resources.radiance,
-                    gbuffer: &self.sized_resources.gbuffer,
-                },
-                &ctx.device,
-                &mut command_encoder,
-                pipeline_database,
-            );
         }
+
+        demodulate_radiance::encode(
+            &DemodulateRadiancePassParameters {
+                resolution: self.local_resolution,
+                remodulate: true,
+                in_radiance: demodulated_radiance,
+                out_radiance: &self.sized_resources.radiance,
+                gbuffer: &self.sized_resources.gbuffer,
+            },
+            &ctx.device,
+            &mut command_encoder,
+            pipeline_database,
+        );
 
         resolve_pass::encode(
             &ResolvePassParameters {

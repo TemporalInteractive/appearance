@@ -23,18 +23,14 @@ var<storage, read_write> demodulated_radiance: array<PackedRgb9e5>;
 var<storage, read> prev_demodulated_radiance: array<PackedRgb9e5>;
 
 // Source: M. Pharr, W. Jakob, and G. Humphreys, Physically Based Rendering, Morgan Kaufmann, 2016.
-fn mitchell_1d(_x: f32, B: f32, C: f32) -> f32
-{
+fn mitchell_1d(_x: f32, B: f32, C: f32) -> f32 {
     let x: f32 = abs(2.0 * _x);
     let one_div_six: f32 = 1.0 / 6.0;
 
-    if (x > 1)
-    {
+    if (x > 1) {
         return ((-B - 6.0 * C) * x * x * x + (6.0 * B + 30.0 * C) * x * x +
                 (-12.0 * B - 48.0 * C) * x + (8.0 * B + 24.0 * C)) * one_div_six;
-    }
-    else
-    {
+    } else {
         return ((12.0 - 9.0 * B - 6.0 * C) * x * x * x +
                 (-18.0 + 12.0 * B + 6.0 * C) * x * x +
                 (6.0 - 2.0 * B)) * one_div_six;
@@ -42,8 +38,7 @@ fn mitchell_1d(_x: f32, B: f32, C: f32) -> f32
 }
 
 // Source: https://github.com/playdeadgames/temporal
-fn clip_aabb(aabb_min: vec3<f32>, aabb_max: vec3<f32>, hist_sample: vec3<f32>) -> vec3<f32>
-{
+fn clip_aabb(aabb_min: vec3<f32>, aabb_max: vec3<f32>, hist_sample: vec3<f32>) -> vec3<f32> {
     let center: vec3<f32> = 0.5 * (aabb_max + aabb_min);
     let extents: vec3<f32> = 0.5 * (aabb_max - aabb_min);
 
@@ -52,12 +47,9 @@ fn clip_aabb(aabb_min: vec3<f32>, aabb_max: vec3<f32>, hist_sample: vec3<f32>) -
     ray_to_center_unit = abs(ray_to_center_unit);
     let ray_to_center_unit_max: f32 = max(ray_to_center_unit.x, max(ray_to_center_unit.y, ray_to_center_unit.z));
 
-    if (ray_to_center_unit_max > 1.0)
-    {
+    if (ray_to_center_unit_max > 1.0) {
         return center + ray_to_center / ray_to_center_unit_max;
-    }
-    else
-    {
+    } else {
         return hist_sample;
     }
 }
@@ -91,18 +83,14 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
 
     var sample_count: f32 = 1.0;
 
-    for (var x: i32 = -1; x <= 1; x += 1)
-    {
-        for (var y: i32 = -1; y <= 1; y += 1)
-        {
-            if (x == 0 && y == 0)
-            {
+    for (var x: i32 = -1; x <= 1; x += 1) {
+        for (var y: i32 = -1; y <= 1; y += 1) {
+            if (x == 0 && y == 0) {
                 continue;
             }
 
             let sample_pixel: vec2<i32> = vec2<i32>(id) + vec2<i32>(x, y);
-            if (any(sample_pixel < vec2<i32>(0)) || any(sample_pixel >= vec2<i32>(constants.resolution - 1)))
-            {
+            if (any(sample_pixel < vec2<i32>(0)) || any(sample_pixel >= vec2<i32>(constants.resolution))) {
                 continue;
             }
 
