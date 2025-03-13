@@ -20,17 +20,17 @@ struct PackedGiReservoir {
     _padding2: u32,
 }
 
-fn GiReservoir::new() -> DiReservoir {
-    return DiReservoir(0.0, 0.0, 0.0, 0.0, vec3<f32>(0.0));
+fn GiReservoir::new() -> GiReservoir {
+    return GiReservoir(0.0, 0.0, 0.0, 0.0, vec3<f32>(0.0));
 }
 
 fn PackedGiReservoir::new(gi_reservoir: GiReservoir) -> PackedGiReservoir {
-    return PackedDiReservoir(
-        di_reservoir.sample_count,
-        di_reservoir.contribution_weight,
-        di_reservoir.weight_sum,
-        di_reservoir.selected_phat,
-        PackedNormalizedXyz10::new(di_reservoir.w_in_worldspace, 0),
+    return PackedGiReservoir(
+        gi_reservoir.sample_count,
+        gi_reservoir.contribution_weight,
+        gi_reservoir.weight_sum,
+        gi_reservoir.selected_phat,
+        PackedNormalizedXyz10::new(gi_reservoir.w_in_worldspace, 0),
         0,
         0,
         0

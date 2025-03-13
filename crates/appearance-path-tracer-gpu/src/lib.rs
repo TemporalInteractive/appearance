@@ -5,6 +5,7 @@ use appearance_packing::PackedRgb9e5;
 use appearance_wgpu::{pipeline_database::PipelineDatabase, wgpu, Context};
 use appearance_world::visible_world_action::VisibleWorldActionType;
 use apply_di_pass::ApplyDiPassParameters;
+use apply_gi_pass::ApplyGiPassParameters;
 use demodulate_radiance::DemodulateRadiancePassParameters;
 use film::Film;
 use firefly_filter_pass::FireflyFilterPassParameters;
@@ -19,6 +20,7 @@ use taa_pass::TaaPassParameters;
 use trace_pass::TracePassParameters;
 
 mod apply_di_pass;
+mod apply_gi_pass;
 mod demodulate_radiance;
 mod film;
 mod firefly_filter_pass;
@@ -47,7 +49,7 @@ struct Payload {
 
 struct SizedResources {
     film: Film,
-    rays: [wgpu::Buffer; 2],
+    rays: wgpu::Buffer,
     payloads: wgpu::Buffer,
     radiance: wgpu::Buffer,
     demodulated_radiance: [wgpu::Buffer; 2],
@@ -64,13 +66,11 @@ impl SizedResources {
     fn new(resolution: UVec2, device: &wgpu::Device) -> Self {
         let film = Film::new(resolution, device);
 
-        let rays = std::array::from_fn(|i| {
-            device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some(&format!("appearance-path-tracer-gpu rays {}", i)),
-                size: (std::mem::size_of::<Ray>() as u32 * resolution.x * resolution.y) as u64,
-                mapped_at_creation: false,
-                usage: wgpu::BufferUsages::STORAGE,
-            })
+        let rays = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("appearance-path-tracer-gpu rays"),
+            size: (std::mem::size_of::<Ray>() as u32 * resolution.x * resolution.y) as u64,
+            mapped_at_creation: false,
+            usage: wgpu::BufferUsages::STORAGE,
         });
 
         let payloads = device.create_buffer(&wgpu::BufferDescriptor {
@@ -159,7 +159,7 @@ pub struct PathTracerGpuConfig {
 impl Default for PathTracerGpuConfig {
     fn default() -> Self {
         Self {
-            max_bounces: 1,
+            max_bounces: 2,
             sample_count: 1,
             restir_di: false,
             restir_gi: false,
@@ -280,7 +280,7 @@ impl PathTracerGpu {
                     inv_view,
                     inv_proj,
                     resolution: self.local_resolution,
-                    rays: &self.sized_resources.rays[0],
+                    rays: &self.sized_resources.rays,
                 },
                 &ctx.device,
                 &mut command_encoder,
@@ -288,9 +288,6 @@ impl PathTracerGpu {
             );
 
             for i in 0..self.config.max_bounces {
-                let in_rays = &self.sized_resources.rays[(i as usize) % 2];
-                let out_rays = &self.sized_resources.rays[(i as usize + 1) % 2];
-
                 let seed = self.frame_idx * self.config.sample_count + sample;
 
                 trace_pass::encode(
@@ -299,12 +296,12 @@ impl PathTracerGpu {
                         bounce: i,
                         seed,
                         sample,
-                        in_rays,
-                        out_rays,
+                        rays: &self.sized_resources.rays,
                         payloads: &self.sized_resources.payloads,
                         radiance: &self.sized_resources.radiance,
                         light_sample_reservoirs: &self.sized_resources.light_sample_reservoirs,
                         light_sample_ctxs: &self.sized_resources.light_sample_ctxs,
+                        gi_reservoirs: &self.sized_resources.gi_reservoirs,
                         gbuffer: &self.sized_resources.gbuffer,
                         scene_resources: &self.scene_resources,
                     },
@@ -322,7 +319,7 @@ impl PathTracerGpu {
                                 spatial_pass_count: 2,
                                 spatial_pixel_radius: 30.0,
                                 unbiased: false,
-                                in_rays,
+                                rays: &self.sized_resources.rays,
                                 payloads: &self.sized_resources.payloads,
                                 light_sample_reservoirs: &self
                                     .sized_resources
@@ -345,7 +342,7 @@ impl PathTracerGpu {
                                 spatial_pass_count: 0, // TODO
                                 spatial_pixel_radius: 30.0,
                                 unbiased: false,
-                                in_rays,
+                                rays: &self.sized_resources.rays,
                                 payloads: &self.sized_resources.payloads,
                                 reservoirs: &self.sized_resources.gi_reservoirs,
                                 gbuffer: &self.sized_resources.gbuffer,
@@ -361,10 +358,24 @@ impl PathTracerGpu {
                 apply_di_pass::encode(
                     &ApplyDiPassParameters {
                         ray_count: self.local_resolution.x * self.local_resolution.y,
-                        in_rays,
+                        rays: &self.sized_resources.rays,
                         payloads: &self.sized_resources.payloads,
                         radiance: &self.sized_resources.radiance,
                         light_sample_reservoirs: &self.sized_resources.light_sample_reservoirs,
+                        light_sample_ctxs: &self.sized_resources.light_sample_ctxs,
+                        scene_resources: &self.scene_resources,
+                    },
+                    &ctx.device,
+                    &mut command_encoder,
+                    pipeline_database,
+                );
+
+                apply_gi_pass::encode(
+                    &ApplyGiPassParameters {
+                        ray_count: self.local_resolution.x * self.local_resolution.y,
+                        rays: &self.sized_resources.rays,
+                        payloads: &self.sized_resources.payloads,
+                        gi_reservoirs: &self.sized_resources.gi_reservoirs,
                         light_sample_ctxs: &self.sized_resources.light_sample_ctxs,
                         scene_resources: &self.scene_resources,
                     },

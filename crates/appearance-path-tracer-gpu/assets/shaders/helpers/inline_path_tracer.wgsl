@@ -1,5 +1,6 @@
 @include ::color
 @include appearance-path-tracer-gpu::shared/ray
+@include appearance-path-tracer-gpu::shared/restir/gi_reservoir
 @include appearance-path-tracer-gpu::shared/material/disney_bsdf
 
 @include appearance-path-tracer-gpu::helpers/trace
@@ -183,4 +184,44 @@ fn InlinePathTracer::trace(_origin: vec3<f32>, _direction: vec3<f32>, max_bounce
     }
 
     return accumulated;
+}
+
+fn InlinePathTracer::sample_ris(hit_point_ws: vec3<f32>, w_out_worldspace: vec3<f32>, front_facing_shading_normal_ws: vec3<f32>,
+     tangent_to_world: mat3x3<f32>, world_to_tangent: mat3x3<f32>, clearcoat_tangent_to_world: mat3x3<f32>, clearcoat_world_to_tangent: mat3x3<f32>,
+     disney_bsdf: DisneyBsdf, throughput: vec3<f32>, t: f32, back_face: bool, rng: ptr<function, u32>, scene: acceleration_structure) -> GiReservoir {
+    const NUM_SAMPLES: u32 = 1;
+
+    var gi_reservoir = GiReservoir::new();
+
+    for (var i: u32 = 0; i < NUM_SAMPLES; i += 1) {
+        var w_in_worldspace: vec3<f32>;
+        var pdf: f32;
+        var specular: bool;
+        let reflectance: vec3<f32> = DisneyBsdf::sample(disney_bsdf,
+            front_facing_shading_normal_ws, tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
+            w_out_worldspace, t, back_face,
+            random_uniform_float(rng), random_uniform_float(rng), random_uniform_float(rng),
+            &w_in_worldspace, &pdf, &specular
+        );
+        
+        if (pdf > 1e-6) {
+            let cos_in: f32 = abs(dot(w_in_worldspace, front_facing_shading_normal_ws));
+            let local_throughput: vec3<f32> = cos_in * reflectance;
+
+            let gi_origin: vec3<f32> = hit_point_ws + w_in_worldspace * 0.0001;
+            let gi_direction: vec3<f32> = w_in_worldspace;
+            var throughput_result: vec3<f32> = throughput;
+            let contribution: vec3<f32> = throughput * local_throughput * InlinePathTracer::trace(gi_origin, gi_direction, 3, &throughput_result, rng, scene);
+
+            let phat: f32 = linear_to_luma(contribution);
+            let weight: f32 = phat / pdf;
+            GiReservoir::update(&gi_reservoir, weight, rng, w_in_worldspace, phat);
+        }
+    }
+
+    if (gi_reservoir.selected_phat > 0.0) {
+        gi_reservoir.contribution_weight = (1.0 / gi_reservoir.selected_phat) * (1.0 / gi_reservoir.sample_count * gi_reservoir.weight_sum);
+    }
+
+    return gi_reservoir;
 }

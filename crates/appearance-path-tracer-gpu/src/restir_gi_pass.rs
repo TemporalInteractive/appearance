@@ -52,7 +52,7 @@ pub struct RestirGiPassParameters<'a> {
     pub spatial_pass_count: u32,
     pub spatial_pixel_radius: f32,
     pub unbiased: bool,
-    pub in_rays: &'a wgpu::Buffer,
+    pub rays: &'a wgpu::Buffer,
     pub payloads: &'a wgpu::Buffer,
     pub reservoirs: &'a wgpu::Buffer,
     pub gbuffer: &'a GBuffer,
@@ -222,7 +222,7 @@ impl RestirGiPass {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: parameters.in_rays.as_entire_binding(),
+                    resource: parameters.rays.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
@@ -423,7 +423,7 @@ impl RestirGiPass {
     //                 },
     //                 wgpu::BindGroupEntry {
     //                     binding: 1,
-    //                     resource: parameters.in_rays.as_entire_binding(),
+    //                     resource: parameters.rays.as_entire_binding(),
     //                 },
     //                 wgpu::BindGroupEntry {
     //                     binding: 2,
