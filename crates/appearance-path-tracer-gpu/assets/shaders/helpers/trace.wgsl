@@ -61,5 +61,5 @@ fn trace_shadow_ray(_origin: vec3<f32>, direction: vec3<f32>, distance: f32, sce
         return true;
     }
 
-    return true;
+    return false;
 }
