@@ -15,6 +15,10 @@ struct TemporalConstants {
     resolution: UVec2,
     ray_count: u32,
     spatial_pass_count: u32,
+    unbiased: u32,
+    _padding0: u32,
+    _padding1: u32,
+    _padding2: u32,
 }
 
 #[derive(Pod, Clone, Copy, Zeroable)]
@@ -26,7 +30,7 @@ struct SpatialConstants {
     pixel_radius: f32,
     seed: u32,
     spatial_idx: u32,
-    _padding0: u32,
+    unbiased: u32,
 }
 
 #[repr(C)]
@@ -62,6 +66,7 @@ pub struct RestirDiPassParameters<'a> {
     pub seed: u32,
     pub spatial_pass_count: u32,
     pub spatial_pixel_radius: f32,
+    pub unbiased: bool,
     pub in_rays: &'a wgpu::Buffer,
     pub payloads: &'a wgpu::Buffer,
     pub light_sample_reservoirs: &'a wgpu::Buffer,
@@ -224,6 +229,10 @@ impl RestirDiPass {
                 resolution: parameters.resolution,
                 ray_count,
                 spatial_pass_count: parameters.spatial_pass_count,
+                unbiased: parameters.unbiased as u32,
+                _padding0: 0,
+                _padding1: 0,
+                _padding2: 0,
             }),
             usage: wgpu::BufferUsages::UNIFORM,
         });
@@ -417,7 +426,7 @@ impl RestirDiPass {
                     pixel_radius: parameters.spatial_pixel_radius,
                     seed: parameters.seed,
                     spatial_idx: i,
-                    _padding0: 0,
+                    unbiased: parameters.unbiased as u32,
                 }),
                 usage: wgpu::BufferUsages::UNIFORM,
             });
