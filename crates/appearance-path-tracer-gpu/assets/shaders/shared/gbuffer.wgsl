@@ -29,6 +29,11 @@ fn GBufferTexel::is_sky(_self: GBufferTexel) -> bool {
     return _self.depth_ws == 0.0;
 }
 
+fn GBufferTexel::geometric_similarity(_self: GBufferTexel, other: GBufferTexel) -> bool {
+    let plane_dist: f32 = dot(PackedNormalizedXyz10::unpack(_self.normal_ws, 0), other.position_ws - _self.position_ws);
+    return abs(plane_dist) <= 0.01 * _self.depth_ws;
+}
+
 struct Plane {
     p: vec4<f32>,
 }
