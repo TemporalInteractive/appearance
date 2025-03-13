@@ -3,7 +3,7 @@
 @include appearance-path-tracer-gpu::shared/restir_di/di_reservoir
 @include appearance-path-tracer-gpu::shared/material/disney_bsdf
 
-@include appearance-path-tracer-gpu::shared/trace_helpers
+@include appearance-path-tracer-gpu::helpers/trace
 
 ///
 /// BINDING DEPENDENCIES:

@@ -139,7 +139,7 @@ pub struct PathTracerGpuConfig {
 impl Default for PathTracerGpuConfig {
     fn default() -> Self {
         Self {
-            max_bounces: 2,
+            max_bounces: 3,
             sample_count: 1,
         }
     }

@@ -8,8 +8,8 @@
 @include appearance-path-tracer-gpu::shared/sky_bindings
 @include appearance-path-tracer-gpu::shared/gbuffer_bindings
 
-@include appearance-path-tracer-gpu::shared/nee
-@include appearance-path-tracer-gpu::shared/trace_helpers
+@include appearance-path-tracer-gpu::helpers/nee
+@include appearance-path-tracer-gpu::helpers/trace
 
 struct Constants {
     ray_count: u32,
