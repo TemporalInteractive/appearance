@@ -10,6 +10,7 @@
 
 @include appearance-path-tracer-gpu::helpers/nee
 @include appearance-path-tracer-gpu::helpers/trace
+@include appearance-path-tracer-gpu::helpers/inline_path_tracer
 
 struct Constants {
     ray_count: u32,
@@ -224,11 +225,15 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
                 let cos_in: f32 = abs(dot(front_facing_shading_normal_ws, w_in_worldspace));
                 let contribution: vec3<f32> = (1.0 / pdf) * reflectance * cos_in;
                 throughput *= contribution;
+
+                // let gi_origin: vec3<f32> = hit_point_ws + w_in_worldspace * 0.0001;
+                // let gi_direction: vec3<f32> = w_in_worldspace;
+                // accumulated += InlinePathTracer::trace(gi_origin, gi_direction, 1, &throughput, &rng, scene);
             
                 let out_ray = Ray::new(hit_point_ws + w_in_worldspace * 0.0001, w_in_worldspace);
                 out_rays[id] = out_ray;
 
-                payload.t = intersection.t;
+                payload.t = intersection.t;// depth_ws;
             } else {
                 payload.t = -1.0;
             }
