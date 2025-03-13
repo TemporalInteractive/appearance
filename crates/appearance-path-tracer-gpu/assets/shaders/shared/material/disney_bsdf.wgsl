@@ -612,10 +612,11 @@ fn DisneyBsdf::evaluate(_self: DisneyBsdf, i_n: vec3<f32>,
         return ret_val;
     }
 
-    if (_self.roughness <= 0.001) {
-        *pdf = 0.0;
-        return vec3<f32>(0.0);
-    }
+    // Very annoying, don't really see the point of this
+    // if (_self.roughness <= 0.001 && !allow_pure_specular) {
+    //     *pdf = 0.0;
+    //     return vec3<f32>(0.0);
+    // }
 
     var weights = vec4<f32>(
         mix(_self.luminance, 0.0, _self.metallic),

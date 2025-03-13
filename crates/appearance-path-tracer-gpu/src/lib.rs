@@ -162,7 +162,7 @@ impl Default for PathTracerGpuConfig {
             max_bounces: 2,
             sample_count: 1,
             restir_di: false,
-            restir_gi: false,
+            restir_gi: true,
             firefly_filter: false,
             taa: false,
         }
