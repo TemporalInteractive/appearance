@@ -1,7 +1,6 @@
-use std::{future::IntoFuture, sync::Arc};
-
 use bytemuck::Pod;
 use futures::{channel::oneshot, executor::block_on};
+use std::{future::IntoFuture, sync::Arc};
 use wgpu::{DownlevelCapabilities, Features, Instance, Limits, PowerPreference};
 use winit::{
     dpi::PhysicalSize,
@@ -222,12 +221,18 @@ impl Context {
         required_features: Features,
         required_downlevel_capabilities: DownlevelCapabilities,
         required_limits: Limits,
+        no_gpu_validation: bool,
     ) -> Self {
         log::info!("Initializing wgpu...");
 
+        let mut flags = wgpu::InstanceFlags::DEBUG;
+        if no_gpu_validation {
+            flags |= wgpu::InstanceFlags::VALIDATION;
+        }
+
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::VULKAN,
-            flags: wgpu::InstanceFlags::DEBUG | wgpu::InstanceFlags::VALIDATION,
+            flags,
             backend_options: wgpu::BackendOptions::default(),
         });
         surface.pre_adapter(&instance, window);
@@ -247,12 +252,18 @@ impl Context {
         required_features: Features,
         required_downlevel_capabilities: DownlevelCapabilities,
         required_limits: Limits,
+        no_gpu_validation: bool,
     ) -> Self {
         log::info!("Initializing wgpu...");
 
+        let mut flags = wgpu::InstanceFlags::DEBUG;
+        if no_gpu_validation {
+            flags |= wgpu::InstanceFlags::VALIDATION;
+        }
+
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::VULKAN,
-            flags: wgpu::InstanceFlags::DEBUG | wgpu::InstanceFlags::VALIDATION,
+            flags,
             backend_options: wgpu::BackendOptions::default(),
         });
 

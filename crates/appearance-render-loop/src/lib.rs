@@ -58,7 +58,11 @@ struct RenderLoopState<R: RenderLoop> {
 }
 
 impl<R: RenderLoop> RenderLoopState<R> {
-    pub async fn from_window(mut surface: Surface, window: Arc<Window>) -> Self {
+    pub async fn from_window(
+        mut surface: Surface,
+        window: Arc<Window>,
+        no_gpu_validation: bool,
+    ) -> Self {
         let context = Arc::new(
             Context::init_with_window(
                 &mut surface,
@@ -67,6 +71,7 @@ impl<R: RenderLoop> RenderLoopState<R> {
                 R::required_features(),
                 R::required_downlevel_capabilities(),
                 R::required_limits(),
+                no_gpu_validation,
             )
             .await,
         );
@@ -91,6 +96,7 @@ pub struct RenderLoopWindowDesc {
     pub height: u32,
     pub resizeable: bool,
     pub maximized: bool,
+    pub no_gpu_validation: bool,
 }
 
 impl Default for RenderLoopWindowDesc {
@@ -101,6 +107,7 @@ impl Default for RenderLoopWindowDesc {
             height: 1080,
             resizeable: true,
             maximized: false,
+            no_gpu_validation: false,
         }
     }
 }
@@ -145,7 +152,11 @@ impl<R: RenderLoop> ApplicationHandler for RenderLoopHandler<R> {
             .with_maximized(self.window_desc.maximized);
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
 
-        self.state = Some(block_on(RenderLoopState::<R>::from_window(surface, window)));
+        self.state = Some(block_on(RenderLoopState::<R>::from_window(
+            surface,
+            window,
+            self.window_desc.no_gpu_validation,
+        )));
     }
 
     fn suspended(&mut self, _event_loop: &ActiveEventLoop) {

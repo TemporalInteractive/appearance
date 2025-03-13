@@ -45,6 +45,10 @@ struct Args {
     /// Run the renderer inside the host as a traditional engine would
     #[arg(long, default_value_t = true)]
     render_local: bool,
+
+    /// Forcefully disable gpu validation
+    #[arg(long, default_value_t = false)]
+    no_gpu_validation: bool,
 }
 
 pub struct HostRenderLoop {
@@ -405,6 +409,7 @@ pub fn internal_main() -> Result<()> {
         height: 640,
         resizeable: true,
         maximized: false,
+        no_gpu_validation: Args::parse().no_gpu_validation,
     })
     .run()?;
 

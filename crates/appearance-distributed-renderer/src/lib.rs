@@ -14,14 +14,8 @@ pub struct DistributedRenderer {
     path_tracer: PathTracerGpu,
 }
 
-impl Default for DistributedRenderer {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl DistributedRenderer {
-    pub fn new() -> Self {
+    pub fn new(no_gpu_validation: bool) -> Self {
         let ctx = Arc::new(block_on(Context::init(
             wgpu::Features::empty(),
             wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
@@ -44,6 +38,7 @@ impl DistributedRenderer {
                 max_binding_array_elements_per_shader_stage: 1024 * 32,
                 ..wgpu::Limits::default()
             },
+            no_gpu_validation,
         )));
 
         Self::new_with_context(ctx)
