@@ -294,6 +294,7 @@ impl PathTracerGpu {
                             seed: self.frame_idx,
                             spatial_pass_count: 2,
                             spatial_pixel_radius: 30.0,
+                            unbiased: false,
                             in_rays,
                             payloads: &self.sized_resources.payloads,
                             light_sample_reservoirs: &self.sized_resources.light_sample_reservoirs,

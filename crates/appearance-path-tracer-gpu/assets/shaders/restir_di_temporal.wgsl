@@ -11,11 +11,16 @@
 @include appearance-path-tracer-gpu::shared/gbuffer_bindings
 
 @include appearance-path-tracer-gpu::shared/nee
+@include appearance-path-tracer-gpu::shared/trace_helpers
 
 struct Constants {
     resolution: vec2<u32>,
     ray_count: u32,
     spatial_pass_count: u32,
+    unbiased: u32,
+    _padding0: u32,
+    _padding1: u32,
+    _padding2: u32,
 }
 
 @group(0)
@@ -90,24 +95,38 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
         prev_id = id;
     }
 
-    let current_gbuffer_texel: GBufferTexel = gbuffer[id];
-    let prev_gbuffer_texel: GBufferTexel = prev_gbuffer[prev_id];
-    let current_depth_cs: f32 = GBufferTexel::depth_cs(current_gbuffer_texel, 0.001, 10000.0);
-    let prev_depth_cs: f32 = GBufferTexel::depth_cs(prev_gbuffer_texel, 0.001, 10000.0);
-    let valid_delta_depth: bool = (abs(current_depth_cs - prev_depth_cs) / current_depth_cs) < 0.1;
-    let current_normal_ws: vec3<f32> = PackedNormalizedXyz10::unpack(current_gbuffer_texel.normal_ws, 0);
-    let prev_normal_ws: vec3<f32> = PackedNormalizedXyz10::unpack(prev_gbuffer_texel.normal_ws, 0);
-    let valid_delta_normal: bool = dot(current_normal_ws, prev_normal_ws) > 0.906; // 25 degrees
+    var valid_prev_reservoir: bool = true;
+    if (constants.unbiased == 0) {
+        let current_gbuffer_texel: GBufferTexel = gbuffer[id];
+        let prev_gbuffer_texel: GBufferTexel = prev_gbuffer[prev_id];
+        let current_depth_cs: f32 = GBufferTexel::depth_cs(current_gbuffer_texel, 0.001, 10000.0);
+        let prev_depth_cs: f32 = GBufferTexel::depth_cs(prev_gbuffer_texel, 0.001, 10000.0);
+        let valid_delta_depth: bool = (abs(current_depth_cs - prev_depth_cs) / current_depth_cs) < 0.1;
+        let current_normal_ws: vec3<f32> = PackedNormalizedXyz10::unpack(current_gbuffer_texel.normal_ws, 0);
+        let prev_normal_ws: vec3<f32> = PackedNormalizedXyz10::unpack(prev_gbuffer_texel.normal_ws, 0);
+        let valid_delta_normal: bool = dot(current_normal_ws, prev_normal_ws) > 0.906; // 25 degrees
 
-    var valid_prev_reservoir: bool = valid_delta_depth && valid_delta_normal;
+        valid_prev_reservoir = valid_delta_depth && valid_delta_normal;
+    }
+
     if (valid_prev_reservoir) {
         var prev_reservoir: DiReservoir = PackedDiReservoir::unpack(prev_reservoirs[prev_id]);
         prev_reservoir.sample_count = min(prev_reservoir.sample_count, 20.0 * reservoir.sample_count);
 
         let w_out_worldspace: vec3<f32> = -direction;
         let w_in_worldspace: vec3<f32> = normalize(prev_reservoir.sample.point - hit_point_ws);
+
+        var visibility: bool = true;
+        if (constants.unbiased > 0) {
+            let distance: f32 = distance(prev_reservoir.sample.point, hit_point_ws);
+
+            if (!trace_shadow_ray(hit_point_ws, w_in_worldspace, distance, scene)) {
+                visibility = false;
+            }
+        }
+
         let n_dot_l: f32 = dot(w_in_worldspace, front_facing_shading_normal_ws);
-        if (n_dot_l > 0.0) {
+        if (n_dot_l > 0.0 && visibility) {
             let sample_intensity = LightSample::intensity(prev_reservoir.sample, hit_point_ws);
 
             var shading_pdf: f32;

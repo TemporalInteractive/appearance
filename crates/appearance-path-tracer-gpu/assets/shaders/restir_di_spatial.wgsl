@@ -21,7 +21,7 @@ struct Constants {
     pixel_radius: f32,
     seed: u32,
     spatial_idx: u32,
-    _padding0: u32,
+    unbiased: u32,
 }
 
 @group(0)
@@ -135,20 +135,34 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
         let neighbour_id = mirror_pixel(center_id + offset);
         let flat_neighbour_id: u32 = neighbour_id.y * constants.resolution.x + neighbour_id.x;
 
-        let neighbour_gbuffer_texel: GBufferTexel = gbuffer[flat_neighbour_id];
-        let neighbour_depth_cs: f32 = GBufferTexel::depth_cs(neighbour_gbuffer_texel, 0.001, 10000.0);
-        let valid_delta_depth: bool = (abs(center_depth_cs - neighbour_depth_cs) / center_depth_cs) < 0.1;
-        let neighbour_normal_ws: vec3<f32> = PackedNormalizedXyz10::unpack(neighbour_gbuffer_texel.normal_ws, 0);
-        let valid_delta_normal: bool = dot(center_normal_ws, neighbour_normal_ws) > 0.906; // 25 degrees
+        var valid_neighbour_reservoir: bool = true;
+        if (constants.unbiased == 0) {
+            let neighbour_gbuffer_texel: GBufferTexel = gbuffer[flat_neighbour_id];
+            let neighbour_depth_cs: f32 = GBufferTexel::depth_cs(neighbour_gbuffer_texel, 0.001, 10000.0);
+            let valid_delta_depth: bool = (abs(center_depth_cs - neighbour_depth_cs) / center_depth_cs) < 0.1;
+            let neighbour_normal_ws: vec3<f32> = PackedNormalizedXyz10::unpack(neighbour_gbuffer_texel.normal_ws, 0);
+            let valid_delta_normal: bool = dot(center_normal_ws, neighbour_normal_ws) > 0.906; // 25 degrees
 
-        let valid_neighbour_reservoir: bool = valid_delta_depth && valid_delta_normal;
+            valid_neighbour_reservoir = valid_delta_depth && valid_delta_normal;
+        }
+
         if (valid_neighbour_reservoir) {
             var neighbour_reservoir: DiReservoir = PackedDiReservoir::unpack(in_reservoirs[flat_neighbour_id]);
 
             let w_out_worldspace: vec3<f32> = -direction;
             let w_in_worldspace: vec3<f32> = normalize(neighbour_reservoir.sample.point - hit_point_ws);
+
+            var visibility: bool = true;
+            if (constants.unbiased > 0) {
+                let distance: f32 = distance(neighbour_reservoir.sample.point, hit_point_ws);
+
+                if (!trace_shadow_ray(hit_point_ws, w_in_worldspace, distance, scene)) {
+                    visibility = false;
+                }
+            }
+
             let n_dot_l: f32 = dot(w_in_worldspace, front_facing_shading_normal_ws);
-            if (n_dot_l > 0.0) {
+            if (n_dot_l > 0.0 && visibility) {
                 let sample_intensity = LightSample::intensity(neighbour_reservoir.sample, hit_point_ws);
 
                 var shading_pdf: f32;
