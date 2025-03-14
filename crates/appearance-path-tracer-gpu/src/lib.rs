@@ -146,6 +146,7 @@ impl SizedResources {
 
     fn end_frame(&mut self, camera: &Camera) {
         self.gbuffer.end_frame(camera);
+        self.restir_di_pass.end_frame();
         self.restir_gi_pass.end_frame();
     }
 }
@@ -167,7 +168,7 @@ impl Default for PathTracerGpuConfig {
             max_bounces: 2,
             sample_count: 1,
             restir_di: true,
-            restir_gi: true,
+            restir_gi: false,
             firefly_filter: false,
             taa: false,
         }
@@ -321,7 +322,7 @@ impl PathTracerGpu {
                             &RestirDiPassParameters {
                                 resolution: self.local_resolution,
                                 seed: self.frame_idx,
-                                spatial_pass_count: 2,
+                                spatial_pass_count: 0,
                                 spatial_pixel_radius: 30.0,
                                 unbiased: false,
                                 rays: &self.sized_resources.rays,

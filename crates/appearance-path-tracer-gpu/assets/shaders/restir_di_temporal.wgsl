@@ -41,14 +41,22 @@ var scene: acceleration_structure;
 
 @group(0)
 @binding(4)
-var<storage, read_write> reservoirs: array<PackedDiReservoir>;
+var<storage, read> reservoirs_in: array<PackedDiReservoir>;
 
 @group(0)
 @binding(5)
-var<storage, read_write> prev_reservoirs: array<PackedDiReservoir>;
+var<storage, read_write> reservoirs_out: array<PackedDiReservoir>;
 
 @group(0)
 @binding(6)
+var<storage, read> prev_reservoirs_in: array<PackedDiReservoir>;
+
+@group(0)
+@binding(7)
+var<storage, read_write> prev_reservoirs_out: array<PackedDiReservoir>;
+
+@group(0)
+@binding(8)
 var<storage, read> light_sample_ctxs: array<LightSampleCtx>;
 
 @compute
@@ -84,13 +92,13 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     let clearcoat_tangent_to_world: mat3x3<f32> = build_orthonormal_basis(front_facing_clearcoat_normal_ws);
     let clearcoat_world_to_tangent: mat3x3<f32> = transpose(clearcoat_tangent_to_world);
 
-    let reservoir: DiReservoir = PackedDiReservoir::unpack(reservoirs[id]);
+    let reservoir: DiReservoir = PackedDiReservoir::unpack(reservoirs_in[id]);
 
     var prev_point_ss: vec2<f32>;
     var prev_id: u32;
     if (GBuffer::reproject(hit_point_ws, constants.resolution, &prev_point_ss)) {
         let prev_id_2d = vec2<u32>(floor(prev_point_ss));
-        prev_id = id;//prev_id_2d.y * constants.resolution.x + prev_id_2d.x; TODO: fix this
+        prev_id = prev_id_2d.y * constants.resolution.x + prev_id_2d.x;
     } else {
         prev_id = id;
     }
@@ -110,7 +118,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     }
 
     if (valid_prev_reservoir) {
-        var prev_reservoir: DiReservoir = PackedDiReservoir::unpack(prev_reservoirs[prev_id]);
+        var prev_reservoir: DiReservoir = PackedDiReservoir::unpack(prev_reservoirs_in[prev_id]);
         prev_reservoir.sample_count = min(prev_reservoir.sample_count, 30.0);
 
         let w_out_worldspace: vec3<f32> = -direction;
@@ -148,12 +156,12 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
             combined_reservoir.contribution_weight = (1.0 / combined_reservoir.selected_phat) * (1.0 / combined_reservoir.sample_count * combined_reservoir.weight_sum);
         }
 
-        reservoirs[id] = PackedDiReservoir::new(combined_reservoir);
+        reservoirs_out[id] = PackedDiReservoir::new(combined_reservoir);
         if (constants.spatial_pass_count == 0) {
-            prev_reservoirs[id] = PackedDiReservoir::new(combined_reservoir);
+            prev_reservoirs_out[id] = PackedDiReservoir::new(combined_reservoir);
         }
     } else if (constants.spatial_pass_count == 0) {
-        prev_reservoirs[id] = PackedDiReservoir::new(reservoir);
+        prev_reservoirs_out[id] = PackedDiReservoir::new(reservoir);
     }
 
     payload.rng = rng;
