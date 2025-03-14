@@ -97,7 +97,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     var prev_point_ss: vec2<f32>;
     var prev_id: u32;
     if (GBuffer::reproject(hit_point_ws, constants.resolution, &prev_point_ss)) {
-        prev_point_ss += random_uniform_float2(&rng) * 0.5;
+        //prev_point_ss += random_uniform_float2(&rng) * 0.5;
         let prev_id_2d = vec2<u32>(floor(prev_point_ss));
         prev_id = prev_id_2d.y * constants.resolution.x + prev_id_2d.x;
     } else {
