@@ -99,7 +99,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     if (GBuffer::reproject(hit_point_ws, constants.resolution, &prev_point_ss)) {
         //prev_point_ss += random_uniform_float2(&rng) * 0.5;
         let prev_id_2d = vec2<u32>(floor(prev_point_ss));
-        prev_id = id;//prev_id_2d.y * constants.resolution.x + prev_id_2d.x;
+        prev_id = prev_id_2d.y * constants.resolution.x + prev_id_2d.x;
     } else {
         prev_id = id;
     }
@@ -161,8 +161,12 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
         if (constants.spatial_pass_count == 0) {
             prev_reservoirs_out[id] = PackedDiReservoir::new(combined_reservoir);
         }
-    } else if (constants.spatial_pass_count == 0) {
-        prev_reservoirs_out[id] = PackedDiReservoir::new(reservoir);
+    } else {
+        reservoirs_out[id] = PackedDiReservoir::new(reservoir);
+
+        if (constants.spatial_pass_count == 0) {
+            prev_reservoirs_out[id] = PackedDiReservoir::new(reservoir);
+        }
     }
 
     payload.rng = rng;
