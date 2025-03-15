@@ -135,9 +135,9 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
         let neighbour_id = mirror_pixel(center_id + offset);
         let flat_neighbour_id: u32 = neighbour_id.y * constants.resolution.x + neighbour_id.x;
 
-        // if (flat_neighbour_id == flat_id) {
-        //     continue;
-        // }
+        if (flat_neighbour_id == flat_id) {
+            continue;
+        }
 
         var valid_neighbour_reservoir: bool = true;
         if (constants.unbiased == 0) {

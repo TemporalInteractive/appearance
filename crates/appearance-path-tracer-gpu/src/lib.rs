@@ -168,7 +168,7 @@ impl Default for PathTracerGpuConfig {
             max_bounces: 2,
             sample_count: 1,
             restir_di: true,
-            restir_gi: false,
+            restir_gi: true,
             firefly_filter: false,
             taa: false,
         }
@@ -345,7 +345,7 @@ impl PathTracerGpu {
                             &RestirGiPassParameters {
                                 resolution: self.local_resolution,
                                 seed: self.frame_idx,
-                                spatial_pass_count: 0, // TODO: Why does spatial reuse become super dark?
+                                spatial_pass_count: 1,
                                 spatial_pixel_radius: 30.0,
                                 unbiased: false,
                                 rays: &self.sized_resources.rays,

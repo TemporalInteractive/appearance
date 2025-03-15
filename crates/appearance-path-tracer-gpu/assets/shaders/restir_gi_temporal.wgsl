@@ -153,8 +153,11 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
         if (constants.spatial_pass_count == 0 || true) {
             prev_reservoirs_out[id] = PackedGiReservoir::new(combined_reservoir);
         }
-    } else if (constants.spatial_pass_count == 0 || true) {
-        prev_reservoirs_out[id] = PackedGiReservoir::new(reservoir);
+    } else {
+        reservoirs_out[id] = PackedGiReservoir::new(reservoir);
+        if (constants.spatial_pass_count == 0 || true) {
+            prev_reservoirs_out[id] = PackedGiReservoir::new(reservoir);
+        }
     }
 
     payload.rng = rng;
