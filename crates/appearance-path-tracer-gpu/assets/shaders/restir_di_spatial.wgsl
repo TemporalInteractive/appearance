@@ -20,8 +20,8 @@ struct Constants {
     spatial_pass_idx: u32,
     pixel_radius: f32,
     seed: u32,
-    spatial_idx: u32,
     unbiased: u32,
+    _padding0: u32,
 }
 
 @group(0)
@@ -113,19 +113,19 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
 
     let center_id = vec2<i32>(i32(id.x), i32(id.y));
     var radius: f32 = (30.0 / 1920.0) * f32(constants.resolution.x);
-    if (constants.spatial_idx == 0) {
+    if (constants.spatial_pass_idx == 0) {
         radius *= 4.0;
     } else {
         radius *= 2.5;
     }
-    let sampling_radius_offset: f32 = interleaved_gradient_noise_animated(id, constants.seed * 3 + constants.spatial_idx);
+    let sampling_radius_offset: f32 = interleaved_gradient_noise_animated(id, constants.seed * 3 + constants.spatial_pass_idx);
     var pixel_seed: vec2<u32>;
-    if (constants.spatial_idx == 0) {
+    if (constants.spatial_pass_idx == 0) {
         pixel_seed = vec2<u32>(id.x >> 2, id.y >> 2);
     } else {
         pixel_seed = vec2<u32>(id.x >> 1, id.y >> 1);
     }
-    let angle_seed: u32 = hash_combine(pixel_seed.x, hash_combine(pixel_seed.y, constants.seed * 3 + constants.spatial_idx));
+    let angle_seed: u32 = hash_combine(pixel_seed.x, hash_combine(pixel_seed.y, constants.seed * 3 + constants.spatial_pass_idx));
     let sampling_angle_offset: f32 = f32(angle_seed) * (1.0 / f32(0xFFFFFFFF)) * TWO_PI;
 
     for (var i: u32 = 0; i < NUM_SAMPLES; i += 1) {
@@ -134,6 +134,10 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
         let offset = vec2<i32>(current_radius * vec2<f32>(cos(angle), sin(angle)));
         let neighbour_id = mirror_pixel(center_id + offset);
         let flat_neighbour_id: u32 = neighbour_id.y * constants.resolution.x + neighbour_id.x;
+
+        if (flat_neighbour_id == flat_id) {
+            continue;
+        }
 
         var valid_neighbour_reservoir: bool = true;
         if (constants.unbiased == 0) {

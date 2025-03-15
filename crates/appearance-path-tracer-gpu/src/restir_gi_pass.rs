@@ -30,8 +30,8 @@ struct SpatialConstants {
     spatial_pass_idx: u32,
     pixel_radius: f32,
     seed: u32,
-    spatial_idx: u32,
     unbiased: u32,
+    _padding0: u32,
 }
 
 #[repr(C)]
@@ -464,8 +464,8 @@ impl RestirGiPass {
                     spatial_pass_idx: i,
                     pixel_radius: parameters.spatial_pixel_radius,
                     seed: parameters.seed,
-                    spatial_idx: i,
                     unbiased: parameters.unbiased as u32,
+                    _padding0: 0,
                 }),
                 usage: wgpu::BufferUsages::UNIFORM,
             });

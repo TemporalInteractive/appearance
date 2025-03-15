@@ -29,8 +29,8 @@ struct SpatialConstants {
     spatial_pass_idx: u32,
     pixel_radius: f32,
     seed: u32,
-    spatial_idx: u32,
     unbiased: u32,
+    _padding0: u32,
 }
 
 #[repr(C)]
@@ -76,18 +76,25 @@ pub struct RestirDiPassParameters<'a> {
 }
 
 pub struct RestirDiPass {
-    prev_reservoirs: wgpu::Buffer,
+    prev_reservoirs: [wgpu::Buffer; 2],
     intermediate_reservoirs: wgpu::Buffer,
+    frame_idx: u32,
 }
 
 impl RestirDiPass {
     pub fn new(resolution: UVec2, device: &wgpu::Device) -> Self {
-        let prev_reservoirs = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("appearance-path-tracer-gpu::restir_di_pass prev_reservoirs"),
-            size: (std::mem::size_of::<PackedDiReservoir>() as u32 * resolution.x * resolution.y)
-                as u64,
-            mapped_at_creation: false,
-            usage: wgpu::BufferUsages::STORAGE,
+        let prev_reservoirs = std::array::from_fn(|i| {
+            device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some(&format!(
+                    "appearance-path-tracer-gpu::restir_di_pass prev_reservoirs {}",
+                    i,
+                )),
+                size: (std::mem::size_of::<PackedDiReservoir>() as u32
+                    * resolution.x
+                    * resolution.y) as u64,
+                mapped_at_creation: false,
+                usage: wgpu::BufferUsages::STORAGE,
+            })
         });
 
         let intermediate_reservoirs = device.create_buffer(&wgpu::BufferDescriptor {
@@ -101,6 +108,7 @@ impl RestirDiPass {
         Self {
             prev_reservoirs,
             intermediate_reservoirs,
+            frame_idx: 0,
         }
     }
 
@@ -181,7 +189,7 @@ impl RestirDiPass {
                                     binding: 4,
                                     visibility: wgpu::ShaderStages::COMPUTE,
                                     ty: wgpu::BindingType::Buffer {
-                                        ty: wgpu::BufferBindingType::Storage { read_only: false },
+                                        ty: wgpu::BufferBindingType::Storage { read_only: true },
                                         has_dynamic_offset: false,
                                         min_binding_size: None,
                                     },
@@ -199,6 +207,26 @@ impl RestirDiPass {
                                 },
                                 wgpu::BindGroupLayoutEntry {
                                     binding: 6,
+                                    visibility: wgpu::ShaderStages::COMPUTE,
+                                    ty: wgpu::BindingType::Buffer {
+                                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                                        has_dynamic_offset: false,
+                                        min_binding_size: None,
+                                    },
+                                    count: None,
+                                },
+                                wgpu::BindGroupLayoutEntry {
+                                    binding: 7,
+                                    visibility: wgpu::ShaderStages::COMPUTE,
+                                    ty: wgpu::BindingType::Buffer {
+                                        ty: wgpu::BufferBindingType::Storage { read_only: false },
+                                        has_dynamic_offset: false,
+                                        min_binding_size: None,
+                                    },
+                                    count: None,
+                                },
+                                wgpu::BindGroupLayoutEntry {
+                                    binding: 8,
                                     visibility: wgpu::ShaderStages::COMPUTE,
                                     ty: wgpu::BindingType::Buffer {
                                         ty: wgpu::BufferBindingType::Storage { read_only: true },
@@ -237,6 +265,12 @@ impl RestirDiPass {
             usage: wgpu::BufferUsages::UNIFORM,
         });
 
+        let reservoirs_in = parameters.light_sample_reservoirs;
+        let reservoirs_out = &self.intermediate_reservoirs;
+
+        let prev_reservoirs_in = &self.prev_reservoirs[(self.frame_idx as usize) % 2];
+        let prev_reservoirs_out = &self.prev_reservoirs[(self.frame_idx as usize + 1) % 2];
+
         let bind_group_layout = pipeline.get_bind_group_layout(0);
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
@@ -262,14 +296,22 @@ impl RestirDiPass {
                 },
                 wgpu::BindGroupEntry {
                     binding: 4,
-                    resource: parameters.light_sample_reservoirs.as_entire_binding(),
+                    resource: reservoirs_in.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 5,
-                    resource: self.prev_reservoirs.as_entire_binding(),
+                    resource: reservoirs_out.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 6,
+                    resource: prev_reservoirs_in.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 7,
+                    resource: prev_reservoirs_out.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 8,
                     resource: parameters.light_sample_ctxs.as_entire_binding(),
                 },
             ],
@@ -425,22 +467,24 @@ impl RestirDiPass {
                     spatial_pass_idx: i,
                     pixel_radius: parameters.spatial_pixel_radius,
                     seed: parameters.seed,
-                    spatial_idx: i,
                     unbiased: parameters.unbiased as u32,
+                    _padding0: 0,
                 }),
                 usage: wgpu::BufferUsages::UNIFORM,
             });
 
-            let in_reservoir_buffer = if i % 2 == 0 {
+            let in_reservoir_buffer = if i % 2 != 0 {
                 parameters.light_sample_reservoirs
             } else {
                 &self.intermediate_reservoirs
             };
-            let out_reservoir_buffer = if i % 2 != 0 {
+            let out_reservoir_buffer = if i % 2 == 0 {
                 parameters.light_sample_reservoirs
             } else {
                 &self.intermediate_reservoirs
             };
+
+            let prev_reservoirs_out = &self.prev_reservoirs[(self.frame_idx as usize + 1) % 2];
 
             let bind_group_layout = pipeline.get_bind_group_layout(0);
             let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -475,7 +519,7 @@ impl RestirDiPass {
                     },
                     wgpu::BindGroupEntry {
                         binding: 6,
-                        resource: self.prev_reservoirs.as_entire_binding(),
+                        resource: prev_reservoirs_out.as_entire_binding(),
                     },
                     wgpu::BindGroupEntry {
                         binding: 7,
@@ -517,7 +561,7 @@ impl RestirDiPass {
             );
         }
 
-        if parameters.spatial_pass_count % 2 != 0 {
+        if parameters.spatial_pass_count % 2 == 0 {
             command_encoder.copy_buffer_to_buffer(
                 &self.intermediate_reservoirs,
                 0,
@@ -526,5 +570,9 @@ impl RestirDiPass {
                 self.intermediate_reservoirs.size(),
             );
         }
+    }
+
+    pub fn end_frame(&mut self) {
+        self.frame_idx += 1;
     }
 }
