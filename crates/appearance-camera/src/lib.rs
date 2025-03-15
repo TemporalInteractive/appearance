@@ -140,7 +140,7 @@ impl Camera {
     }
 
     pub fn build_prev_frustum(&self) -> Frustum {
-        const NEAR_PLANE: f32 = 0.0001;
+        const NEAR_PLANE: f32 = 0.01;
 
         let m = self.transform.get_prev_matrix().to_cols_array();
         let x = Vec3::new(m[0], m[4], m[8]);
