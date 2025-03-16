@@ -82,8 +82,6 @@ fn Nee::sample_uniform(r0: f32, r1: f32, r2: f32, r34: vec2<f32>, sample_point: 
         sun_pick_probability = 1.0;
     }
 
-    sun_pick_probability = 0.0;
-
     if (r0 < sun_pick_probability) {
         return Nee::sample_sun(r34, sun_pick_probability, pdf);
     } else {

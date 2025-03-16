@@ -190,6 +190,8 @@ fn InlinePathTracer::trace(_origin: vec3<f32>, _direction: vec3<f32>, max_bounce
                 accumulated += (*throughput) * color;
                 return accumulated;
             }
+
+            break;
         }
     }
 
