@@ -144,36 +144,38 @@ fn InlinePathTracer::trace(_origin: vec3<f32>, _direction: vec3<f32>, max_bounce
                     }
                 }
                 
-                if (bounce > 1) {
-                    let russian_roulette: f32 = max((*throughput).r, max((*throughput).g, (*throughput).b));
+                if (bounce + 1 < max_bounces) {
+                    if (bounce > 1) {
+                        let russian_roulette: f32 = max((*throughput).r, max((*throughput).g, (*throughput).b));
 
-                    if (russian_roulette < random_uniform_float(rng)) {
-                        return accumulated;
-                    } else {
-                        (*throughput) *= 1.0 / russian_roulette;
+                        if (russian_roulette < random_uniform_float(rng)) {
+                            return accumulated;
+                        } else {
+                            (*throughput) *= 1.0 / russian_roulette;
+                        }
                     }
-                }
 
-                var w_in_worldspace: vec3<f32>;
-                var pdf: f32;
-                var specular: bool;
-                let reflectance: vec3<f32> = DisneyBsdf::sample(disney_bsdf,
-                    front_facing_shading_normal_ws, tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
-                    w_out_worldspace, intersection.t, back_face,
-                    random_uniform_float(rng), random_uniform_float(rng), random_uniform_float(rng),
-                    &w_in_worldspace, &pdf, &specular
-                );
+                    var w_in_worldspace: vec3<f32>;
+                    var pdf: f32;
+                    var specular: bool;
+                    let reflectance: vec3<f32> = DisneyBsdf::sample(disney_bsdf,
+                        front_facing_shading_normal_ws, tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
+                        w_out_worldspace, intersection.t, back_face,
+                        random_uniform_float(rng), random_uniform_float(rng), random_uniform_float(rng),
+                        &w_in_worldspace, &pdf, &specular
+                    );
 
-                let sample_valid: bool = pdf > 1e-6;
-                if (sample_valid) {
-                    let cos_in: f32 = abs(dot(front_facing_shading_normal_ws, w_in_worldspace));
-                    let contribution: vec3<f32> = (1.0 / pdf) * reflectance * cos_in;
-                    (*throughput) *= contribution;
+                    let sample_valid: bool = pdf > 1e-6;
+                    if (sample_valid) {
+                        let cos_in: f32 = abs(dot(front_facing_shading_normal_ws, w_in_worldspace));
+                        let contribution: vec3<f32> = (1.0 / pdf) * reflectance * cos_in;
+                        (*throughput) *= contribution;
 
-                    origin = hit_point_ws + w_in_worldspace * 0.0001;
-                    direction = w_in_worldspace;
-                } else {
-                    return accumulated;
+                        origin = hit_point_ws + w_in_worldspace * 0.0001;
+                        direction = w_in_worldspace;
+                    } else {
+                        return accumulated;
+                    }
                 }
             } else {
                 let color = Sky::sky(direction, true);

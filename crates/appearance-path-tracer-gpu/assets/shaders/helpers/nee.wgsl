@@ -19,7 +19,7 @@ fn LightSample::intensity(_self: LightSample, hit_point_ws: vec3<f32>) -> f32 {
     if (_self.triangle_area == 0.0) {
         return Sky::sun_intensity(direction.y);
     } else {
-        let cos_out: f32 = abs(dot(_self.triangle_normal, -direction));
+        let cos_out: f32 = dot(_self.triangle_normal, -direction);
 
         return Triangle::solid_angle(cos_out, _self.triangle_area, distance) * 10.0;
     }

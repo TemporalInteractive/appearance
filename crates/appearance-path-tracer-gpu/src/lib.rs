@@ -300,6 +300,7 @@ impl PathTracerGpu {
                     &TracePassParameters {
                         ray_count: self.local_resolution.x * self.local_resolution.y,
                         bounce: i,
+                        max_bounces: self.config.max_bounces,
                         seed,
                         sample,
                         rays: &self.sized_resources.rays,
@@ -345,7 +346,7 @@ impl PathTracerGpu {
                             &RestirGiPassParameters {
                                 resolution: self.local_resolution,
                                 seed: self.frame_idx,
-                                spatial_pass_count: 1,
+                                spatial_pass_count: 0,
                                 spatial_pixel_radius: 30.0,
                                 unbiased: false,
                                 rays: &self.sized_resources.rays,
@@ -377,19 +378,21 @@ impl PathTracerGpu {
                     pipeline_database,
                 );
 
-                apply_gi_pass::encode(
-                    &ApplyGiPassParameters {
-                        ray_count: self.local_resolution.x * self.local_resolution.y,
-                        rays: &self.sized_resources.rays,
-                        payloads: &self.sized_resources.payloads,
-                        gi_reservoirs: &self.sized_resources.gi_reservoirs,
-                        light_sample_ctxs: &self.sized_resources.light_sample_ctxs,
-                        scene_resources: &self.scene_resources,
-                    },
-                    &ctx.device,
-                    &mut command_encoder,
-                    pipeline_database,
-                );
+                if i + 1 < self.config.max_bounces {
+                    apply_gi_pass::encode(
+                        &ApplyGiPassParameters {
+                            ray_count: self.local_resolution.x * self.local_resolution.y,
+                            rays: &self.sized_resources.rays,
+                            payloads: &self.sized_resources.payloads,
+                            gi_reservoirs: &self.sized_resources.gi_reservoirs,
+                            light_sample_ctxs: &self.sized_resources.light_sample_ctxs,
+                            scene_resources: &self.scene_resources,
+                        },
+                        &ctx.device,
+                        &mut command_encoder,
+                        pipeline_database,
+                    );
+                }
             }
         }
 
