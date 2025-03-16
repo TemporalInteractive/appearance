@@ -228,7 +228,7 @@ fn InlinePathTracer::sample_ris(hit_point_ws: vec3<f32>, w_out_worldspace: vec3<
 
             let phat: f32 = linear_to_luma(contribution);
             let weight: f32 = phat / pdf;
-            GiReservoir::update(&gi_reservoir, weight, rng, sample_point_ws, phat);
+            GiReservoir::update(&gi_reservoir, weight, rng, sample_point_ws, phat, phat_rng);
         }
     }
 
