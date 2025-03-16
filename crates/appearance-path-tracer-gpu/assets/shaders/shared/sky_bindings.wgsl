@@ -49,5 +49,5 @@ fn Sky::sky(direction: vec3<f32>, skip_sun: bool) -> vec3<f32> {
         sky_color += intensity * 1000.0 * sundisk * sky_constants.sun_color;
     }
 
-    return sky_color;
+    return vec3<f32>(0.0);//sky_color;
 }

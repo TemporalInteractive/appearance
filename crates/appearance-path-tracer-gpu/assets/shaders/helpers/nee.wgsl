@@ -21,7 +21,7 @@ fn LightSample::intensity(_self: LightSample, hit_point_ws: vec3<f32>) -> f32 {
     } else {
         let cos_out: f32 = abs(dot(_self.triangle_normal, -direction));
 
-        return Triangle::solid_angle(cos_out, _self.triangle_area, distance) * 50.0;
+        return Triangle::solid_angle(cos_out, _self.triangle_area, distance) * 10.0;
     }
 }
 
@@ -81,6 +81,8 @@ fn Nee::sample_uniform(r0: f32, r1: f32, r2: f32, r34: vec2<f32>, sample_point: 
     } else {
         sun_pick_probability = 1.0;
     }
+
+    sun_pick_probability = 0.0;
 
     if (r0 < sun_pick_probability) {
         return Nee::sample_sun(r34, sun_pick_probability, pdf);
