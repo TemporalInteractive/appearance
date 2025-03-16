@@ -49,9 +49,9 @@ var<storage, read> in_reservoirs: array<PackedGiReservoir>;
 @binding(5)
 var<storage, read_write> out_reservoirs: array<PackedGiReservoir>;
 
-// @group(0)
-// @binding(6)
-// var<storage, read_write> prev_reservoirs: array<PackedGiReservoir>;
+@group(0)
+@binding(6)
+var<storage, read_write> prev_reservoirs: array<PackedGiReservoir>;
 
 @group(0)
 @binding(7)
@@ -107,7 +107,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
 
     var combined_reservoir = GiReservoir::new();
     var combined_sample_count: f32 = reservoir.sample_count;
-    GiReservoir::update(&combined_reservoir, reservoir.selected_phat * reservoir.contribution_weight * reservoir.sample_count, &rng, reservoir.w_in_worldspace, reservoir.selected_phat);
+    GiReservoir::update(&combined_reservoir, reservoir.selected_phat * reservoir.contribution_weight * reservoir.sample_count, &rng, reservoir.w_in_worldspace, reservoir.selected_phat, reservoir.phat_rng);
 
     let center_gbuffer_texel: GBufferTexel = gbuffer[flat_id];
     let center_depth_cs: f32 = GBufferTexel::depth_cs(center_gbuffer_texel, 0.001, 10000.0);
@@ -169,11 +169,12 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
                 let local_throughput: vec3<f32> = cos_in * reflectance;
                 let gi_origin: vec3<f32> = hit_point_ws + w_in_worldspace * 0.0001;
                 let gi_direction: vec3<f32> = w_in_worldspace;
-                var throughput_result: vec3<f32> = throughput;
-                let contribution: vec3<f32> = throughput * local_throughput * InlinePathTracer::trace(gi_origin, gi_direction, RESTIR_GI_PHAT_MAX_BOUNCES, &throughput_result, &rng, scene);
+                var throughput_result: vec3<f32> = throughput * local_throughput;
+                var phat_rng: u32 = neighbour_reservoir.phat_rng;
+                let contribution: vec3<f32> = InlinePathTracer::trace(gi_origin, gi_direction, RESTIR_GI_PHAT_MAX_BOUNCES, &throughput_result, &phat_rng, scene);
                 neighbour_reservoir.selected_phat = linear_to_luma(contribution);
 
-                GiReservoir::update(&combined_reservoir, neighbour_reservoir.selected_phat * neighbour_reservoir.contribution_weight * neighbour_reservoir.sample_count, &rng, neighbour_reservoir.w_in_worldspace, neighbour_reservoir.selected_phat);
+                GiReservoir::update(&combined_reservoir, neighbour_reservoir.selected_phat * neighbour_reservoir.contribution_weight * neighbour_reservoir.sample_count, &rng, neighbour_reservoir.w_in_worldspace, neighbour_reservoir.selected_phat, neighbour_reservoir.phat_rng);
                 combined_sample_count += neighbour_reservoir.sample_count;
             }
         }

@@ -41,9 +41,9 @@ pub struct PackedGiReservoir {
     weight_sum: f32,
     selected_phat: f32,
     w_in_worldspace: PackedNormalizedXyz10,
+    phat_rng: u32,
     _padding0: u32,
     _padding1: u32,
-    _padding2: u32,
 }
 
 pub struct RestirGiPassParameters<'a> {
@@ -420,16 +420,16 @@ impl RestirGiPass {
                                     },
                                     count: None,
                                 },
-                                // wgpu::BindGroupLayoutEntry {
-                                //     binding: 6,
-                                //     visibility: wgpu::ShaderStages::COMPUTE,
-                                //     ty: wgpu::BindingType::Buffer {
-                                //         ty: wgpu::BufferBindingType::Storage { read_only: false },
-                                //         has_dynamic_offset: false,
-                                //         min_binding_size: None,
-                                //     },
-                                //     count: None,
-                                // },
+                                wgpu::BindGroupLayoutEntry {
+                                    binding: 6,
+                                    visibility: wgpu::ShaderStages::COMPUTE,
+                                    ty: wgpu::BindingType::Buffer {
+                                        ty: wgpu::BufferBindingType::Storage { read_only: false },
+                                        has_dynamic_offset: false,
+                                        min_binding_size: None,
+                                    },
+                                    count: None,
+                                },
                                 wgpu::BindGroupLayoutEntry {
                                     binding: 7,
                                     visibility: wgpu::ShaderStages::COMPUTE,
@@ -481,6 +481,8 @@ impl RestirGiPass {
                 &self.intermediate_reservoirs
             };
 
+            let prev_reservoirs_out = &self.prev_reservoirs[(self.frame_idx as usize + 1) % 2];
+
             let bind_group_layout = pipeline.get_bind_group_layout(0);
             let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
                 label: None,
@@ -512,10 +514,10 @@ impl RestirGiPass {
                         binding: 5,
                         resource: out_reservoir_buffer.as_entire_binding(),
                     },
-                    // wgpu::BindGroupEntry {
-                    //     binding: 6,
-                    //     resource: self.prev_reservoirs.as_entire_binding(),
-                    // },
+                    wgpu::BindGroupEntry {
+                        binding: 6,
+                        resource: prev_reservoirs_out.as_entire_binding(),
+                    },
                     wgpu::BindGroupEntry {
                         binding: 7,
                         resource: parameters.light_sample_ctxs.as_entire_binding(),

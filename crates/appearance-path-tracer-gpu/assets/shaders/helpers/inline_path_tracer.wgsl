@@ -212,16 +212,17 @@ fn InlinePathTracer::sample_ris(hit_point_ws: vec3<f32>, w_out_worldspace: vec3<
 
             let gi_origin: vec3<f32> = hit_point_ws + w_in_worldspace * 0.0001;
             let gi_direction: vec3<f32> = w_in_worldspace;
-            var throughput_result: vec3<f32> = throughput;
-            let contribution: vec3<f32> = throughput * local_throughput * InlinePathTracer::trace(gi_origin, gi_direction, RESTIR_GI_PHAT_MAX_BOUNCES, &throughput_result, rng, scene);
+            var throughput_result: vec3<f32> = throughput * local_throughput;
+            let phat_rng: u32 = *rng;
+            let contribution: vec3<f32> = InlinePathTracer::trace(gi_origin, gi_direction, RESTIR_GI_PHAT_MAX_BOUNCES, &throughput_result, rng, scene);
 
             let phat: f32 = linear_to_luma(contribution);
             let weight: f32 = phat / pdf;
-            GiReservoir::update(&gi_reservoir, weight, rng, w_in_worldspace, phat);
+            GiReservoir::update(&gi_reservoir, weight, rng, w_in_worldspace, phat, phat_rng);
         }
     }
 
-    if (gi_reservoir.selected_phat > 0.0) {
+    if (gi_reservoir.selected_phat > 0.0 && gi_reservoir.sample_count * gi_reservoir.weight_sum > 0.0) {
         gi_reservoir.contribution_weight = (1.0 / gi_reservoir.selected_phat) * (1.0 / gi_reservoir.sample_count * gi_reservoir.weight_sum);
     }
 
