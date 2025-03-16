@@ -166,7 +166,7 @@ impl Default for PathTracerGpuConfig {
     fn default() -> Self {
         Self {
             max_bounces: 2,
-            sample_count: 1,
+            sample_count: 16,
             restir_di: true,
             restir_gi: true,
             firefly_filter: false,

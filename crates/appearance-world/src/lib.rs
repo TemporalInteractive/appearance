@@ -83,7 +83,7 @@ impl World {
             ecs,
             entities_marked_for_destroy: Vec::new(),
             camera: Camera::new(
-                Transform::from_translation(Vec3::new(0.0, 2.0, 0.0)),
+                Transform::from_translation(Vec3::new(0.7, 0.6, 2.0)),
                 60.0,
                 0.1,
                 100.0,
