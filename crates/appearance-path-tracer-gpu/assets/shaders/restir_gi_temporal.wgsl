@@ -125,7 +125,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
         prev_reservoir.sample_count = min(prev_reservoir.sample_count, 20.0 * reservoir.sample_count);
 
         let w_out_worldspace: vec3<f32> = -direction;
-        let w_in_worldspace: vec3<f32> = prev_reservoir.w_in_worldspace;
+        let w_in_worldspace: vec3<f32> = normalize(prev_reservoir.sample_point_ws - hit_point_ws);
 
         var shading_pdf: f32;
         let reflectance: vec3<f32> = DisneyBsdf::evaluate(disney_bsdf, front_facing_shading_normal_ws,
@@ -138,12 +138,13 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
         let gi_origin: vec3<f32> = hit_point_ws + w_in_worldspace * 0.0001;
         let gi_direction: vec3<f32> = w_in_worldspace;
         var throughput_result: vec3<f32> = throughput;
-        let contribution: vec3<f32> = throughput * local_throughput * InlinePathTracer::trace(gi_origin, gi_direction, RESTIR_GI_PHAT_MAX_BOUNCES, &throughput_result, &rng, scene);
+        var sample_point_ws: vec3<f32>;
+        let contribution: vec3<f32> = throughput * local_throughput * InlinePathTracer::trace(gi_origin, gi_direction, RESTIR_GI_PHAT_MAX_BOUNCES, &throughput_result, &sample_point_ws, &rng, scene);
         prev_reservoir.selected_phat = linear_to_luma(contribution);
 
         var combined_reservoir = GiReservoir::new();
-        GiReservoir::update(&combined_reservoir, reservoir.selected_phat * reservoir.contribution_weight * reservoir.sample_count, &rng, reservoir.w_in_worldspace, reservoir.selected_phat);
-        GiReservoir::update(&combined_reservoir, prev_reservoir.selected_phat * prev_reservoir.contribution_weight * prev_reservoir.sample_count, &rng, prev_reservoir.w_in_worldspace, prev_reservoir.selected_phat);
+        GiReservoir::update(&combined_reservoir, reservoir.selected_phat * reservoir.contribution_weight * reservoir.sample_count, &rng, reservoir.sample_point_ws, reservoir.selected_phat);
+        GiReservoir::update(&combined_reservoir, prev_reservoir.selected_phat * prev_reservoir.contribution_weight * prev_reservoir.sample_count, &rng, prev_reservoir.sample_point_ws, prev_reservoir.selected_phat);
         combined_reservoir.sample_count = reservoir.sample_count + prev_reservoir.sample_count;
         if (combined_reservoir.selected_phat > 0.0) {
             combined_reservoir.contribution_weight = (1.0 / combined_reservoir.selected_phat) * (1.0 / combined_reservoir.sample_count * combined_reservoir.weight_sum);

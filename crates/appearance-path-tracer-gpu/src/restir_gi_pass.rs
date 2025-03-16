@@ -1,4 +1,3 @@
-use appearance_packing::PackedNormalizedXyz10;
 use appearance_wgpu::{
     include_shader_src,
     pipeline_database::PipelineDatabase,
@@ -6,7 +5,7 @@ use appearance_wgpu::{
     ComputePipelineDescriptorExtensions,
 };
 use bytemuck::{Pod, Zeroable};
-use glam::UVec2;
+use glam::{UVec2, Vec3};
 
 use crate::{gbuffer::GBuffer, scene_resources::SceneResources};
 
@@ -40,10 +39,8 @@ pub struct PackedGiReservoir {
     contribution_weight: f32,
     weight_sum: f32,
     selected_phat: f32,
-    w_in_worldspace: PackedNormalizedXyz10,
+    sample_point_ws: Vec3,
     _padding0: u32,
-    _padding1: u32,
-    _padding2: u32,
 }
 
 pub struct RestirGiPassParameters<'a> {
