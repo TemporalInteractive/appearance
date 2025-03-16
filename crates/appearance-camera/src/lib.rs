@@ -63,7 +63,7 @@ impl Default for CameraController {
             translation_speed: 1.0,
             look_sensitivity: 0.3,
             vertical_rotation: Quat::IDENTITY,
-            horizontal_rotation: Quat::from_axis_angle(UP, (90.0f32).to_radians()),
+            horizontal_rotation: Quat::from_axis_angle(UP, (-90.0f32).to_radians()),
         }
     }
 }

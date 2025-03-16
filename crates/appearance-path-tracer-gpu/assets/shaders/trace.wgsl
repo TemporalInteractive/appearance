@@ -17,6 +17,10 @@ struct Constants {
     bounce: u32,
     seed: u32,
     sample: u32,
+    max_bounces: u32,
+    _padding0: u32,
+    _padding1: u32,
+    _padding2: u32,
 }
 
 @group(0)
@@ -203,51 +207,25 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
             light_sample_reservoirs[id] = PackedDiReservoir::new(di_reservoir);
             light_sample_ctxs[id] = LightSampleCtx::new(tex_coord, material_idx, throughput, front_facing_shading_normal_ws, clearcoat_tangent_to_world[2]);
 
-            if (constants.bounce > 1) {
-                let russian_roulette: f32 = max(throughput.r, max(throughput.g, throughput.b));
-
-                if (russian_roulette < random_uniform_float(&rng)) {
-                    payload.t = -1.0;
-                    break;
-                } else {
-                    throughput *= 1.0 / russian_roulette;
-                }
-            }
-
-            var gi_reservoir: GiReservoir = InlinePathTracer::sample_ris(hit_point_ws, w_out_worldspace, front_facing_shading_normal_ws,
-                tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
-                disney_bsdf, throughput, intersection.t, back_face, &rng, scene);
-            gi_reservoirs[id] = PackedGiReservoir::new(gi_reservoir);
-
             payload.t = depth_ws;
 
-            // var w_in_worldspace: vec3<f32>;
-            // var pdf: f32;
-            // var specular: bool;
-            // let reflectance: vec3<f32> = DisneyBsdf::sample(disney_bsdf,
-            //     front_facing_shading_normal_ws, tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
-            //     w_out_worldspace, intersection.t, back_face,
-            //     random_uniform_float(&rng), random_uniform_float(&rng), random_uniform_float(&rng),
-            //     &w_in_worldspace, &pdf, &specular
-            // );
+            if (constants.bounce + 1 < constants.max_bounces) {
+                if (constants.bounce > 1) {
+                    let russian_roulette: f32 = max(throughput.r, max(throughput.g, throughput.b));
 
-            // let sample_valid: bool = pdf > 1e-6;
-            // if (sample_valid) {
-            //     let cos_in: f32 = abs(dot(front_facing_shading_normal_ws, w_in_worldspace));
-            //     let contribution: vec3<f32> = (1.0 / pdf) * reflectance * cos_in;
-            //     throughput *= contribution;
+                    if (russian_roulette < random_uniform_float(&rng)) {
+                        payload.t = -1.0;
+                        break;
+                    } else {
+                        throughput *= 1.0 / russian_roulette;
+                    }
+                }
 
-            //     // let gi_origin: vec3<f32> = hit_point_ws + w_in_worldspace * 0.0001;
-            //     // let gi_direction: vec3<f32> = w_in_worldspace;
-            //     // accumulated += InlinePathTracer::trace(gi_origin, gi_direction, 1, &throughput, &rng, scene);
-            
-            //     let out_ray = Ray::new(hit_point_ws + w_in_worldspace * 0.0001, w_in_worldspace);
-            //     out_rays[id] = out_ray;
-
-            //     payload.t = depth_ws;
-            // } else {
-            //     payload.t = -1.0;
-            // }
+                var gi_reservoir: GiReservoir = InlinePathTracer::sample_ris(hit_point_ws, w_out_worldspace, front_facing_shading_normal_ws,
+                    tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
+                    disney_bsdf, throughput, intersection.t, back_face, &rng, scene);
+                gi_reservoirs[id] = PackedGiReservoir::new(gi_reservoir);
+            }
         } else {
             gbuffer_albedo = vec3<f32>(1.0);
 

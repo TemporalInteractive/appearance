@@ -8,7 +8,8 @@ struct GiReservoir {
     contribution_weight: f32,
     weight_sum: f32,
     selected_phat: f32,
-    w_in_worldspace: vec3<f32>,
+    sample_point_ws: vec3<f32>,
+    phat_rng: u32,
 }
 
 struct PackedGiReservoir {
@@ -16,14 +17,12 @@ struct PackedGiReservoir {
     contribution_weight: f32,
     weight_sum: f32,
     selected_phat: f32,
-    w_in_worldspace: PackedNormalizedXyz10,
-    _padding0: u32,
-    _padding1: u32,
-    _padding2: u32,
+    sample_point_ws: vec3<f32>,
+    phat_rng: u32,
 }
 
 fn GiReservoir::new() -> GiReservoir {
-    return GiReservoir(0.0, 0.0, 0.0, 0.0, vec3<f32>(0.0));
+    return GiReservoir(0.0, 0.0, 0.0, 0.0, vec3<f32>(0.0), 0);
 }
 
 fn PackedGiReservoir::new(gi_reservoir: GiReservoir) -> PackedGiReservoir {
@@ -32,10 +31,8 @@ fn PackedGiReservoir::new(gi_reservoir: GiReservoir) -> PackedGiReservoir {
         gi_reservoir.contribution_weight,
         gi_reservoir.weight_sum,
         gi_reservoir.selected_phat,
-        PackedNormalizedXyz10::new(gi_reservoir.w_in_worldspace, 0),
-        0,
-        0,
-        0
+        gi_reservoir.sample_point_ws,
+        gi_reservoir.phat_rng,
     );
 }
 
@@ -45,17 +42,19 @@ fn PackedGiReservoir::unpack(_self: PackedGiReservoir) -> GiReservoir {
         _self.contribution_weight,
         _self.weight_sum,
         _self.selected_phat,
-        PackedNormalizedXyz10::unpack(_self.w_in_worldspace, 0)
+        _self.sample_point_ws,
+        _self.phat_rng
     );
 }
 
-fn GiReservoir::update(_self: ptr<function, GiReservoir>, sample_weight: f32, rng: ptr<function, u32>, w_in_worldspace: vec3<f32>, phat: f32) -> bool {
+fn GiReservoir::update(_self: ptr<function, GiReservoir>, sample_weight: f32, rng: ptr<function, u32>, sample_point_ws: vec3<f32>, phat: f32, phat_rng: u32) -> bool {
     (*_self).weight_sum += sample_weight;
     (*_self).sample_count += 1.0;
 
     if (random_uniform_float(rng) <= (sample_weight / (*_self).weight_sum)) {
-        (*_self).w_in_worldspace = w_in_worldspace;
+        (*_self).sample_point_ws = sample_point_ws;
         (*_self).selected_phat = phat;
+        (*_self).phat_rng = phat_rng;
         return true;
     }
     return false;
