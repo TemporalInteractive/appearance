@@ -55,8 +55,9 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     var payload: Payload = payloads[id];
     if (payload.t < 0.0) { return; } // TODO: indirect dispatch with pids
 
+    let hit_point_ws = origin + direction * payload.t;
+
     let gi_reservoir: GiReservoir = PackedGiReservoir::unpack(gi_reservoirs[id]);
-    let w_in_worldspace: vec3<f32> = gi_reservoir.w_in_worldspace;
     if (gi_reservoir.contribution_weight > 0.0) {
         let light_sample_ctx: LightSampleCtx = light_sample_ctxs[id];
 
@@ -68,7 +69,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
         let material: Material = Material::from_material_descriptor(material_descriptor, tex_coord);
         let disney_bsdf = DisneyBsdf::from_material(material);
 
-        let hit_point_ws = origin + direction * payload.t;
         let front_facing_shading_normal_ws: vec3<f32> = PackedNormalizedXyz10::unpack(light_sample_ctx.front_facing_shading_normal_ws, 0);
         let tangent_to_world: mat3x3<f32> = build_orthonormal_basis(front_facing_shading_normal_ws);
         let world_to_tangent: mat3x3<f32> = transpose(tangent_to_world);
@@ -78,6 +78,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
         let clearcoat_world_to_tangent: mat3x3<f32> = transpose(clearcoat_tangent_to_world);
 
         let w_out_worldspace: vec3<f32> = -direction;
+        let w_in_worldspace: vec3<f32> = normalize(gi_reservoir.sample_point_ws - hit_point_ws);
 
         var shading_pdf: f32;
         let reflectance: vec3<f32> = DisneyBsdf::evaluate(disney_bsdf, front_facing_shading_normal_ws, tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,

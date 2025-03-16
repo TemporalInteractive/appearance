@@ -13,7 +13,7 @@
 ///
 
 /// Returns radiance traced along the path starting at origin
-fn InlinePathTracer::trace(_origin: vec3<f32>, _direction: vec3<f32>, max_bounces: u32, throughput: ptr<function, vec3<f32>>, rng: ptr<function, u32>, scene: acceleration_structure) -> vec3<f32> {
+fn InlinePathTracer::trace(_origin: vec3<f32>, _direction: vec3<f32>, max_bounces: u32, throughput: ptr<function, vec3<f32>>, first_hit_ws: ptr<function, vec3<f32>>, rng: ptr<function, u32>, scene: acceleration_structure) -> vec3<f32> {
     var origin: vec3<f32> = _origin;
     var direction: vec3<f32> = _direction;
 
@@ -143,6 +143,10 @@ fn InlinePathTracer::trace(_origin: vec3<f32>, _direction: vec3<f32>, max_bounce
                         };
                     }
                 }
+
+                if (bounce == 0) {
+                    *first_hit_ws = hit_point_ws;
+                }
                 
                 if (bounce + 1 < max_bounces) {
                     if (bounce > 1) {
@@ -178,6 +182,10 @@ fn InlinePathTracer::trace(_origin: vec3<f32>, _direction: vec3<f32>, max_bounce
                     }
                 }
             } else {
+                if (bounce == 0) {
+                    *first_hit_ws = vec3<f32>(0.0);
+                }
+
                 let color = Sky::sky(direction, true);
                 accumulated += (*throughput) * color;
                 return accumulated;
@@ -212,13 +220,15 @@ fn InlinePathTracer::sample_ris(hit_point_ws: vec3<f32>, w_out_worldspace: vec3<
 
             let gi_origin: vec3<f32> = hit_point_ws + w_in_worldspace * 0.0001;
             let gi_direction: vec3<f32> = w_in_worldspace;
+
             var throughput_result: vec3<f32> = throughput * local_throughput;
             let phat_rng: u32 = *rng;
-            let contribution: vec3<f32> = InlinePathTracer::trace(gi_origin, gi_direction, RESTIR_GI_PHAT_MAX_BOUNCES, &throughput_result, rng, scene);
+            var sample_point_ws: vec3<f32>;
+            let contribution: vec3<f32> = InlinePathTracer::trace(gi_origin, gi_direction, RESTIR_GI_PHAT_MAX_BOUNCES, &throughput_result, &sample_point_ws, rng, scene);
 
             let phat: f32 = linear_to_luma(contribution);
             let weight: f32 = phat / pdf;
-            GiReservoir::update(&gi_reservoir, weight, rng, w_in_worldspace, phat, phat_rng);
+            GiReservoir::update(&gi_reservoir, weight, rng, sample_point_ws, phat);
         }
     }
 
