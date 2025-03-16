@@ -167,7 +167,7 @@ impl Default for PathTracerGpuConfig {
         Self {
             max_bounces: 2,
             sample_count: 1,
-            restir_di: true,
+            restir_di: false,
             restir_gi: true,
             firefly_filter: false,
             taa: false,
@@ -346,7 +346,7 @@ impl PathTracerGpu {
                             &RestirGiPassParameters {
                                 resolution: self.local_resolution,
                                 seed: self.frame_idx,
-                                spatial_pass_count: 1,
+                                spatial_pass_count: 0,
                                 spatial_pixel_radius: 30.0,
                                 unbiased: false,
                                 rays: &self.sized_resources.rays,
