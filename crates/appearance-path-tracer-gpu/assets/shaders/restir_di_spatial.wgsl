@@ -112,20 +112,15 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     let center_normal_ws: vec3<f32> = PackedNormalizedXyz10::unpack(center_gbuffer_texel.normal_ws, 0);
 
     let center_id = vec2<i32>(i32(id.x), i32(id.y));
-    var radius: f32 = (30.0 / 1920.0) * f32(constants.resolution.x);
-    if (constants.spatial_pass_idx == 0) {
-        radius *= 4.0;
-    } else {
-        radius *= 2.5;
-    }
-    let sampling_radius_offset: f32 = interleaved_gradient_noise_animated(id, constants.seed * 3 + constants.spatial_pass_idx);
-    var pixel_seed: vec2<u32>;
+    var radius: f32 = f32(constants.resolution.x + constants.resolution.y) / 2.0 * 0.05;
+    let sampling_radius_offset: f32 = interleaved_gradient_noise_animated(id, constants.seed * constants.spatial_pass_count + constants.spatial_pass_idx);
+    var pixel_seed: vec2<u32> = id;
     if (constants.spatial_pass_idx == 0) {
         pixel_seed = vec2<u32>(id.x >> 2, id.y >> 2);
     } else {
         pixel_seed = vec2<u32>(id.x >> 1, id.y >> 1);
     }
-    let angle_seed: u32 = hash_combine(pixel_seed.x, hash_combine(pixel_seed.y, constants.seed * 3 + constants.spatial_pass_idx));
+    let angle_seed: u32 = hash_combine(pixel_seed.x, hash_combine(pixel_seed.y, constants.seed * constants.spatial_pass_count + constants.spatial_pass_idx));
     let sampling_angle_offset: f32 = f32(angle_seed) * (1.0 / f32(0xFFFFFFFF)) * TWO_PI;
 
     for (var i: u32 = 0; i < NUM_SAMPLES; i += 1) {
@@ -150,9 +145,14 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
             valid_neighbour_reservoir = valid_delta_depth && valid_delta_normal;
         }
 
-        if (valid_neighbour_reservoir) {
-            var neighbour_reservoir: DiReservoir = PackedDiReservoir::unpack(in_reservoirs[flat_neighbour_id]);
+        if (!valid_neighbour_reservoir) {
+            radius = max(radius * 0.5, 3.0);
+        }
 
+        var neighbour_reservoir: DiReservoir = PackedDiReservoir::unpack(in_reservoirs[flat_neighbour_id]);
+        
+        neighbour_reservoir.selected_phat = 0.0;
+        if (valid_neighbour_reservoir) {
             let w_out_worldspace: vec3<f32> = -direction;
             let w_in_worldspace: vec3<f32> = normalize(neighbour_reservoir.sample.point - hit_point_ws);
 
@@ -176,17 +176,15 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
                 let contribution: vec3<f32> = n_dot_l * reflectance;
 
                 neighbour_reservoir.selected_phat = linear_to_luma(contribution * sample_intensity);
-            } else {
-                neighbour_reservoir.selected_phat = 0.0;
             }
-
-            DiReservoir::update(&combined_reservoir, neighbour_reservoir.selected_phat * neighbour_reservoir.contribution_weight * neighbour_reservoir.sample_count, &rng, neighbour_reservoir.sample, neighbour_reservoir.selected_phat);
-            combined_sample_count += neighbour_reservoir.sample_count;
         }
+
+        DiReservoir::update(&combined_reservoir, neighbour_reservoir.selected_phat * neighbour_reservoir.contribution_weight * neighbour_reservoir.sample_count, &rng, neighbour_reservoir.sample, neighbour_reservoir.selected_phat);
+        combined_sample_count += neighbour_reservoir.sample_count;
     }
 
     combined_reservoir.sample_count = combined_sample_count;
-    if (combined_reservoir.selected_phat > 0.0) {
+    if (combined_reservoir.selected_phat > 0.0 && combined_reservoir.sample_count * combined_reservoir.weight_sum > 0.0) {
         combined_reservoir.contribution_weight = (1.0 / combined_reservoir.selected_phat) * (1.0 / combined_reservoir.sample_count * combined_reservoir.weight_sum);
     }
 

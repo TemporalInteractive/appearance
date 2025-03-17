@@ -158,7 +158,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
         DiReservoir::update(&combined_reservoir, reservoir.selected_phat * reservoir.contribution_weight * reservoir.sample_count, &rng, reservoir.sample, reservoir.selected_phat);
         DiReservoir::update(&combined_reservoir, prev_reservoir.selected_phat * prev_reservoir.contribution_weight * prev_reservoir.sample_count, &rng, prev_reservoir.sample, prev_reservoir.selected_phat);
         combined_reservoir.sample_count = reservoir.sample_count + prev_reservoir.sample_count;
-        if (combined_reservoir.selected_phat > 0.0) {
+        if (combined_reservoir.selected_phat > 0.0 && combined_reservoir.sample_count * combined_reservoir.weight_sum > 0.0) {
             combined_reservoir.contribution_weight = (1.0 / combined_reservoir.selected_phat) * (1.0 / combined_reservoir.sample_count * combined_reservoir.weight_sum);
         }
 

@@ -19,15 +19,14 @@ fn LightSample::intensity(_self: LightSample, hit_point_ws: vec3<f32>) -> f32 {
     if (_self.triangle_area == 0.0) {
         return Sky::sun_intensity(direction.y);
     } else {
-        let cos_out: f32 = dot(_self.triangle_normal, -direction);
-
+        let cos_out: f32 = max(dot(_self.triangle_normal, -direction), 0.0);
         return Triangle::solid_angle(cos_out, _self.triangle_area, distance) * 10.0;
     }
 }
 
 fn Nee::sample_emissive_triangle(r0: f32, r1: f32, r23: vec2<f32>, sample_point: vec3<f32>, sun_pick_probability: f32, pdf: ptr<function, f32>) -> LightSample {
     for (var i: u32 = 0; i < vertex_pool_constants.num_emissive_triangle_instances; i += 1) {
-        let emissive_triangle_instance: EmissiveTriangleInstance = emissive_triangle_instances[i];
+        let emissive_triangle_instance: EmissiveTriangleInstance = emissive_triangle_instances[i]; // TODO: speedup
         if (r0 <= emissive_triangle_instance.cdf) {
             let vertex_pool_slice: VertexPoolSlice = vertex_pool_slices[emissive_triangle_instance.vertex_pool_slice_idx];
 
@@ -82,6 +81,8 @@ fn Nee::sample_uniform(r0: f32, r1: f32, r2: f32, r34: vec2<f32>, sample_point: 
         sun_pick_probability = 1.0;
     }
 
+    sun_pick_probability = 0.0;
+
     if (r0 < sun_pick_probability) {
         return Nee::sample_sun(r34, sun_pick_probability, pdf);
     } else {
@@ -104,6 +105,9 @@ fn Nee::sample_ris(hit_point_ws: vec3<f32>, w_out_worldspace: vec3<f32>, front_f
         let w_in_worldspace: vec3<f32> = normalize(sample.point - hit_point_ws);
 
         let n_dot_l: f32 = dot(w_in_worldspace, front_facing_shading_normal_ws);
+
+        var phat: f32 = 0.0;
+        var weight: f32 = 0.0;
         if (n_dot_l > 0.0 && sample_pdf > 0.0) {
             let sample_intensity = LightSample::intensity(sample, hit_point_ws);
 
@@ -115,21 +119,20 @@ fn Nee::sample_ris(hit_point_ws: vec3<f32>, w_out_worldspace: vec3<f32>, front_f
             
             if (shading_pdf > 0.0) {
                 let contribution: vec3<f32> = n_dot_l * reflectance;
-                let phat: f32 = linear_to_luma(contribution * sample_intensity);
-                let weight: f32 = phat / sample_pdf;
-                DiReservoir::update(&di_reservoir, weight, rng, sample, phat);
+                phat = linear_to_luma(contribution * sample_intensity);
+                weight = phat / sample_pdf;
             }
         }
+
+        DiReservoir::update(&di_reservoir, weight, rng, sample, phat);
     }
 
-    if (di_reservoir.selected_phat > 0.0) {
+    if (di_reservoir.selected_phat > 0.0 && di_reservoir.sample_count * di_reservoir.weight_sum > 0.0) {
         let direction: vec3<f32> = normalize(di_reservoir.sample.point - hit_point_ws);
         let distance: f32 = distance(di_reservoir.sample.point, hit_point_ws);
 
         if (trace_shadow_ray(hit_point_ws, direction, distance, scene)) {
             di_reservoir.contribution_weight = (1.0 / di_reservoir.selected_phat) * (1.0 / di_reservoir.sample_count * di_reservoir.weight_sum);
-        } else {
-            di_reservoir.contribution_weight = 0.0;
         }
     }
 

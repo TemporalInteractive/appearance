@@ -207,10 +207,10 @@ impl Default for PathTracerGpuConfig {
         Self {
             max_bounces: 2,
             sample_count: 1,
-            restir_di: true,
-            restir_gi: true,
+            restir_di: false,
+            restir_gi: false,
             firefly_filter: false,
-            taa: true,
+            taa: false,
         }
     }
 }
@@ -379,7 +379,7 @@ impl PathTracerGpu {
                             &RestirDiPassParameters {
                                 resolution: self.local_resolution,
                                 seed: self.frame_idx,
-                                spatial_pass_count: 2,
+                                spatial_pass_count: 1,
                                 spatial_pixel_radius: 30.0,
                                 unbiased: false,
                                 rays: &self.sized_resources.rays,
@@ -454,60 +454,60 @@ impl PathTracerGpu {
             }
         }
 
-        demodulate_radiance::encode(
-            &DemodulateRadiancePassParameters {
-                resolution: self.local_resolution,
-                remodulate: false,
-                in_radiance: &self.sized_resources.radiance,
-                out_radiance: demodulated_radiance,
-                gbuffer: &self.sized_resources.gbuffer,
-            },
-            &ctx.device,
-            &mut command_encoder,
-            pipeline_database,
-        );
+        // demodulate_radiance::encode(
+        //     &DemodulateRadiancePassParameters {
+        //         resolution: self.local_resolution,
+        //         remodulate: false,
+        //         in_radiance: &self.sized_resources.radiance,
+        //         out_radiance: demodulated_radiance,
+        //         gbuffer: &self.sized_resources.gbuffer,
+        //     },
+        //     &ctx.device,
+        //     &mut command_encoder,
+        //     pipeline_database,
+        // );
 
-        if self.config.firefly_filter {
-            firefly_filter_pass::encode(
-                &FireflyFilterPassParameters {
-                    resolution: self.local_resolution,
-                    demodulated_radiance,
-                    gbuffer: &self.sized_resources.gbuffer,
-                },
-                &ctx.device,
-                &mut command_encoder,
-                pipeline_database,
-            );
-        }
+        // if self.config.firefly_filter {
+        //     firefly_filter_pass::encode(
+        //         &FireflyFilterPassParameters {
+        //             resolution: self.local_resolution,
+        //             demodulated_radiance,
+        //             gbuffer: &self.sized_resources.gbuffer,
+        //         },
+        //         &ctx.device,
+        //         &mut command_encoder,
+        //         pipeline_database,
+        //     );
+        // }
 
-        if self.config.taa && self.frame_idx > 0 {
-            taa_pass::encode(
-                &TaaPassParameters {
-                    resolution: self.local_resolution,
-                    history_influence: 0.8,
-                    demodulated_radiance,
-                    prev_demodulated_radiance,
-                    gbuffer: &self.sized_resources.gbuffer,
-                    velocity_texture_view: &self.sized_resources.velocity_texture_view,
-                },
-                &ctx.device,
-                &mut command_encoder,
-                pipeline_database,
-            );
-        }
+        // if self.config.taa && self.frame_idx > 0 {
+        //     taa_pass::encode(
+        //         &TaaPassParameters {
+        //             resolution: self.local_resolution,
+        //             history_influence: 0.8,
+        //             demodulated_radiance,
+        //             prev_demodulated_radiance,
+        //             gbuffer: &self.sized_resources.gbuffer,
+        //             velocity_texture_view: &self.sized_resources.velocity_texture_view,
+        //         },
+        //         &ctx.device,
+        //         &mut command_encoder,
+        //         pipeline_database,
+        //     );
+        // }
 
-        demodulate_radiance::encode(
-            &DemodulateRadiancePassParameters {
-                resolution: self.local_resolution,
-                remodulate: true,
-                in_radiance: demodulated_radiance,
-                out_radiance: &self.sized_resources.radiance,
-                gbuffer: &self.sized_resources.gbuffer,
-            },
-            &ctx.device,
-            &mut command_encoder,
-            pipeline_database,
-        );
+        // demodulate_radiance::encode(
+        //     &DemodulateRadiancePassParameters {
+        //         resolution: self.local_resolution,
+        //         remodulate: true,
+        //         in_radiance: demodulated_radiance,
+        //         out_radiance: &self.sized_resources.radiance,
+        //         gbuffer: &self.sized_resources.gbuffer,
+        //     },
+        //     &ctx.device,
+        //     &mut command_encoder,
+        //     pipeline_database,
+        // );
 
         resolve_pass::encode(
             &ResolvePassParameters {
