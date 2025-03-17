@@ -210,7 +210,7 @@ impl Default for PathTracerGpuConfig {
             restir_di: true,
             restir_gi: true,
             firefly_filter: false,
-            taa: false,
+            taa: true,
         }
     }
 }
@@ -488,6 +488,7 @@ impl PathTracerGpu {
                     demodulated_radiance,
                     prev_demodulated_radiance,
                     gbuffer: &self.sized_resources.gbuffer,
+                    velocity_texture_view: &self.sized_resources.velocity_texture_view,
                 },
                 &ctx.device,
                 &mut command_encoder,

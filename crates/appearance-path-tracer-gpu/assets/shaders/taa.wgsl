@@ -22,6 +22,10 @@ var<storage, read_write> demodulated_radiance: array<PackedRgb9e5>;
 @binding(2)
 var<storage, read> prev_demodulated_radiance: array<PackedRgb9e5>;
 
+@group(0)
+@binding(3)
+var velocity_texture: texture_storage_2d<rgba32float, read>;
+
 // Source: M. Pharr, W. Jakob, and G. Humphreys, Physically Based Rendering, Morgan Kaufmann, 2016.
 fn mitchell_1d(_x: f32, B: f32, C: f32) -> f32 {
     let x: f32 = abs(2.0 * _x);
@@ -113,13 +117,13 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     reconstructed /= max(weight_sum, 1e-5);
 
     var history: vec3<f32>;
-    var prev_point_ss: vec2<f32>;
+
+    let velocity: vec2<f32> = textureLoad(velocity_texture, vec2<i32>(id)).xy;
+    var prev_point_ss = vec2<f32>(id) - (vec2<f32>(constants.resolution) * velocity);
     var prev_id: u32;
-    if (GBuffer::reproject(current_gbuffer_texel.position_ws, constants.resolution, &prev_point_ss)) {
+    if (all(prev_point_ss >= vec2<f32>(0.0)) && all(prev_point_ss <= vec2<f32>(constants.resolution - 1))) {
         let prev_id_2d = vec2<u32>(floor(prev_point_ss));
         prev_id = prev_id_2d.y * constants.resolution.x + prev_id_2d.x;
-
-        prev_point_ss -= 0.5;
 
         let prev_id00: u32 = min(u32(floor(prev_point_ss.y)), constants.resolution.y - 1) * constants.resolution.x + min(u32(floor(prev_point_ss.x)), constants.resolution.x - 1);
         let history00: vec3<f32> = PackedRgb9e5::unpack(prev_demodulated_radiance[prev_id00]);

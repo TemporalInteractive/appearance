@@ -23,6 +23,7 @@ pub struct TaaPassParameters<'a> {
     pub demodulated_radiance: &'a wgpu::Buffer,
     pub prev_demodulated_radiance: &'a wgpu::Buffer,
     pub gbuffer: &'a GBuffer,
+    pub velocity_texture_view: &'a wgpu::TextureView,
 }
 
 pub fn encode(
@@ -78,6 +79,16 @@ pub fn encode(
                                 },
                                 count: None,
                             },
+                            wgpu::BindGroupLayoutEntry {
+                                binding: 3,
+                                visibility: wgpu::ShaderStages::COMPUTE,
+                                ty: wgpu::BindingType::StorageTexture {
+                                    access: wgpu::StorageTextureAccess::ReadOnly,
+                                    format: wgpu::TextureFormat::Rgba32Float,
+                                    view_dimension: wgpu::TextureViewDimension::D2,
+                                },
+                                count: None,
+                            },
                         ],
                     }),
                     empty_bind_group_layout(device),
@@ -116,6 +127,10 @@ pub fn encode(
             wgpu::BindGroupEntry {
                 binding: 2,
                 resource: parameters.prev_demodulated_radiance.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 3,
+                resource: wgpu::BindingResource::TextureView(parameters.velocity_texture_view),
             },
         ],
     });
