@@ -114,12 +114,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     let center_normal_ws: vec3<f32> = PackedNormalizedXyz10::unpack(center_gbuffer_texel.normal_ws, 0);
 
     let center_id = vec2<i32>(i32(id.x), i32(id.y));
-    var radius: f32 = (30.0 / 1920.0) * f32(constants.resolution.x); // TODO: 10 percent, half until 3 pixels min
-    if (constants.spatial_pass_idx == 0) {
-        radius *= 4.0;
-    } else {
-        radius *= 2.5;
-    }
+    var radius: f32 = f32(constants.resolution.x + constants.resolution.y) / 2.0 * 0.05;
     let sampling_radius_offset: f32 = interleaved_gradient_noise_animated(id, constants.seed * 3 + constants.spatial_pass_idx);
     var pixel_seed: vec2<u32>;
     if (constants.spatial_pass_idx == 0) {
@@ -170,7 +165,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
             var cos_in: f32 = abs(dot(w_in_worldspace, front_facing_shading_normal_ws));
             //cos_in *= jacobianDiffuse(center_gbuffer_texel.position_ws, neighbour_gbuffer_texel.position_ws, neighbour_normal_ws, w_in_worldspace, payload.t);
 
-            if (cos_in > 0.0 && visibility) {
+            valid_neighbour_reservoir = cos_in > 0.0 && visibility;
+            if (valid_neighbour_reservoir) {
                 var shading_pdf: f32;
                 let reflectance: vec3<f32> = DisneyBsdf::evaluate(disney_bsdf, front_facing_shading_normal_ws,
                     tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
@@ -188,6 +184,10 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
                 GiReservoir::update(&combined_reservoir, neighbour_reservoir.selected_phat * neighbour_reservoir.contribution_weight * neighbour_reservoir.sample_count, &rng, neighbour_reservoir.sample_point_ws, neighbour_reservoir.selected_phat, neighbour_reservoir.phat_rng);
                 combined_sample_count += neighbour_reservoir.sample_count;
             }
+        }
+
+        if (!valid_neighbour_reservoir) {
+            radius = max(radius * 0.5, 3.0);
         }
     }
 
