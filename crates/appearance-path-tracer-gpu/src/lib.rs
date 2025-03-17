@@ -207,7 +207,7 @@ impl Default for PathTracerGpuConfig {
         Self {
             max_bounces: 2,
             sample_count: 1,
-            restir_di: false,
+            restir_di: true,
             restir_gi: true,
             firefly_filter: false,
             taa: false,
@@ -389,6 +389,7 @@ impl PathTracerGpu {
                                     .light_sample_reservoirs,
                                 light_sample_ctxs: &self.sized_resources.light_sample_ctxs,
                                 gbuffer: &self.sized_resources.gbuffer,
+                                velocity_texture_view: &self.sized_resources.velocity_texture_view,
                                 scene_resources: &self.scene_resources,
                             },
                             &ctx.device,
