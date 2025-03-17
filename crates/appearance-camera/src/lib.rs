@@ -140,8 +140,6 @@ impl Camera {
     }
 
     pub fn build_prev_frustum(&self) -> Frustum {
-        const NEAR_PLANE: f32 = 0.01;
-
         let m = self.transform.get_prev_matrix().to_cols_array();
         let x = Vec3::new(m[0], m[4], m[8]);
         let y = Vec3::new(m[1], m[5], m[9]);
@@ -151,11 +149,11 @@ impl Camera {
 
         // Compute near-plane dimensions based on the FOV
         let half_fov_rad = self.fov.to_radians() * 0.5;
-        let near_height = (half_fov_rad.tan()) * NEAR_PLANE;
+        let near_height = (half_fov_rad.tan()) * self.near;
         let near_width = near_height * self.aspect_ratio;
 
         // Compute frustum near-plane corners
-        let forward_near = z * NEAR_PLANE; // Move forward by near_plane distance
+        let forward_near = z * self.near; // Move forward by near_plane distance
         let top_left = origin + forward_near + (y * near_height) - (x * near_width);
         let top_right = origin + forward_near + (y * near_height) + (x * near_width);
         let bottom_left = origin + forward_near - (y * near_height) - (x * near_width);

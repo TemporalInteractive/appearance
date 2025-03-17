@@ -54,6 +54,7 @@ pub struct RestirGiPassParameters<'a> {
     pub reservoirs: &'a wgpu::Buffer,
     pub light_sample_ctxs: &'a wgpu::Buffer,
     pub gbuffer: &'a GBuffer,
+    pub velocity_texture_view: &'a wgpu::TextureView,
     pub scene_resources: &'a SceneResources,
 }
 
@@ -219,6 +220,16 @@ impl RestirGiPass {
                                     },
                                     count: None,
                                 },
+                                wgpu::BindGroupLayoutEntry {
+                                    binding: 9,
+                                    visibility: wgpu::ShaderStages::COMPUTE,
+                                    ty: wgpu::BindingType::StorageTexture {
+                                        access: wgpu::StorageTextureAccess::ReadOnly,
+                                        format: wgpu::TextureFormat::Rgba32Float,
+                                        view_dimension: wgpu::TextureViewDimension::D2,
+                                    },
+                                    count: None,
+                                },
                             ],
                         }),
                         parameters.scene_resources.vertex_pool().bind_group_layout(),
@@ -298,6 +309,10 @@ impl RestirGiPass {
                     binding: 8,
                     resource: parameters.light_sample_ctxs.as_entire_binding(),
                 },
+                wgpu::BindGroupEntry {
+                    binding: 9,
+                    resource: wgpu::BindingResource::TextureView(parameters.velocity_texture_view),
+                },
             ],
         });
 
@@ -320,7 +335,11 @@ impl RestirGiPass {
                 cpass.set_bind_group(3, &parameters.scene_resources.sky().bind_group(device), &[]);
                 cpass.set_bind_group(4, &parameters.gbuffer.bind_group(device), &[]);
                 cpass.insert_debug_marker("appearance-path-tracer-gpu::restir_gi_temporal");
-                cpass.dispatch_workgroups(ray_count.div_ceil(128), 1, 1);
+                cpass.dispatch_workgroups(
+                    parameters.resolution.x.div_ceil(16),
+                    parameters.resolution.y.div_ceil(16),
+                    1,
+                );
             },
         );
 

@@ -60,21 +60,26 @@ var<storage, read_write> prev_reservoirs_out: array<PackedGiReservoir>;
 @binding(8)
 var<storage, read> light_sample_ctxs: array<LightSampleCtx>;
 
+@group(0)
+@binding(9)
+var velocity_texture: texture_storage_2d<rgba32float, read>;
+
 @compute
-@workgroup_size(128)
+@workgroup_size(16, 16)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     @builtin(num_workgroups) dispatch_size: vec3<u32>) {
-    let id: u32 = global_id.x;
-    if (id >= constants.ray_count) { return; }
+    let id: vec2<u32> = global_id.xy;
+    if (any(id >= constants.resolution)) { return; }
+    let flat_id: u32 = id.y * constants.resolution.x + id.x;
 
-    let ray: Ray = in_rays[id];
+    let ray: Ray = in_rays[flat_id];
     var origin: vec3<f32> = ray.origin;
     var direction: vec3<f32> = PackedNormalizedXyz10::unpack(ray.direction, 0);
 
-    var payload: Payload = payloads[id];
+    var payload: Payload = payloads[flat_id];
     if (payload.t < 0.0) { return; } // TODO: indirect dispatch with pids
     
-    let light_sample_ctx: LightSampleCtx = light_sample_ctxs[id];
+    let light_sample_ctx: LightSampleCtx = light_sample_ctxs[flat_id];
     
     var rng: u32 = payload.rng;
     let throughput: vec3<f32> = PackedRgb9e5::unpack(payload.throughput);
@@ -94,35 +99,35 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     let clearcoat_tangent_to_world: mat3x3<f32> = build_orthonormal_basis(front_facing_clearcoat_normal_ws);
     let clearcoat_world_to_tangent: mat3x3<f32> = transpose(clearcoat_tangent_to_world);
 
-    let reservoir: GiReservoir = PackedGiReservoir::unpack(reservoirs_in[id]);
+    let reservoir: GiReservoir = PackedGiReservoir::unpack(reservoirs_in[flat_id]);
 
-    var prev_point_ss: vec2<f32>;
+    var valid_prev_reservoir: bool = false;
     var prev_id: u32;
-    if (GBuffer::reproject(hit_point_ws, constants.resolution, &prev_point_ss)) {
-        // prev_point_ss += random_uniform_float2(&rng) * 0.5;
-        let prev_id_2d = vec2<u32>(floor(prev_point_ss));
-        prev_id = prev_id_2d.y * constants.resolution.x + prev_id_2d.x;
-    } else {
-        prev_id = id;
-    }
 
-    var valid_prev_reservoir: bool = true;
-    let current_gbuffer_texel: GBufferTexel = gbuffer[id];
-    let prev_gbuffer_texel: GBufferTexel = prev_gbuffer[prev_id];
-    let prev_normal_ws: vec3<f32> = PackedNormalizedXyz10::unpack(prev_gbuffer_texel.normal_ws, 0);
-    if (constants.unbiased == 0) {
-        let current_depth_cs: f32 = GBufferTexel::depth_cs(current_gbuffer_texel, 0.001, 10000.0);
-        let prev_depth_cs: f32 = GBufferTexel::depth_cs(prev_gbuffer_texel, 0.001, 10000.0);
-        let valid_delta_depth: bool = (abs(current_depth_cs - prev_depth_cs) / current_depth_cs) < 0.1;
-        let current_normal_ws: vec3<f32> = PackedNormalizedXyz10::unpack(current_gbuffer_texel.normal_ws, 0);
-        let valid_delta_normal: bool = dot(current_normal_ws, prev_normal_ws) > 0.906; // 25 degrees
+    let velocity: vec2<f32> = textureLoad(velocity_texture, vec2<i32>(id)).xy;
+    let prev_id_unclamped = vec2<i32>(vec2<f32>(id) - (vec2<f32>(constants.resolution) * velocity) + (vec2<f32>(random_uniform_float(&rng), random_uniform_float(&rng)) * 0.5));
+    if (all(prev_id_unclamped >= vec2<i32>(0)) && all(prev_id_unclamped < vec2<i32>(constants.resolution))) {
+        prev_id = u32(prev_id_unclamped.y) * constants.resolution.x + u32(prev_id_unclamped.x);
 
-        valid_prev_reservoir = valid_delta_depth && valid_delta_normal;
+        let current_gbuffer_texel: GBufferTexel = gbuffer[flat_id];
+        let prev_gbuffer_texel: GBufferTexel = prev_gbuffer[prev_id];
+        let prev_normal_ws: vec3<f32> = PackedNormalizedXyz10::unpack(prev_gbuffer_texel.normal_ws, 0);
+        if (constants.unbiased == 0) {
+            let current_depth_cs: f32 = GBufferTexel::depth_cs(current_gbuffer_texel, 0.001, 10000.0);
+            let prev_depth_cs: f32 = GBufferTexel::depth_cs(prev_gbuffer_texel, 0.001, 10000.0);
+            let valid_delta_depth: bool = (abs(current_depth_cs - prev_depth_cs) / current_depth_cs) < 0.1;
+            let current_normal_ws: vec3<f32> = PackedNormalizedXyz10::unpack(current_gbuffer_texel.normal_ws, 0);
+            let valid_delta_normal: bool = dot(current_normal_ws, prev_normal_ws) > 0.906; // 25 degrees
+
+            valid_prev_reservoir = valid_delta_depth && valid_delta_normal;
+        } else {
+            valid_prev_reservoir = true;
+        }
     }
 
     if (valid_prev_reservoir) {
         var prev_reservoir: GiReservoir = PackedGiReservoir::unpack(prev_reservoirs_in[prev_id]);
-        prev_reservoir.sample_count = min(prev_reservoir.sample_count, 20.0 * reservoir.sample_count);
+        prev_reservoir.sample_count = min(prev_reservoir.sample_count, 30.0);
 
         let w_out_worldspace: vec3<f32> = -direction;
         let w_in_worldspace: vec3<f32> = normalize(prev_reservoir.sample_point_ws - hit_point_ws);
@@ -151,17 +156,17 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
             combined_reservoir.contribution_weight = (1.0 / combined_reservoir.selected_phat) * (1.0 / combined_reservoir.sample_count * combined_reservoir.weight_sum);
         }
 
-        reservoirs_out[id] = PackedGiReservoir::new(combined_reservoir);
+        reservoirs_out[flat_id] = PackedGiReservoir::new(combined_reservoir);
         if (constants.spatial_pass_count == 0 || true) {
-            prev_reservoirs_out[id] = PackedGiReservoir::new(combined_reservoir);
+            prev_reservoirs_out[flat_id] = PackedGiReservoir::new(combined_reservoir);
         }
     } else {
-        reservoirs_out[id] = PackedGiReservoir::new(reservoir);
+        reservoirs_out[flat_id] = PackedGiReservoir::new(reservoir);
         if (constants.spatial_pass_count == 0 || true) {
-            prev_reservoirs_out[id] = PackedGiReservoir::new(reservoir);
+            prev_reservoirs_out[flat_id] = PackedGiReservoir::new(reservoir);
         }
     }
 
     payload.rng = rng;
-    payloads[id] = payload;
+    payloads[flat_id] = payload;
 }
