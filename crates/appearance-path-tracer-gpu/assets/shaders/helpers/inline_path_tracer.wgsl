@@ -183,7 +183,7 @@ fn InlinePathTracer::trace(_origin: vec3<f32>, _direction: vec3<f32>, max_bounce
                 }
             } else {
                 if (bounce == 0) {
-                    *first_hit_ws = vec3<f32>(0.0);
+                    *first_hit_ws = origin + direction * 1000.0;
                 }
 
                 let color = Sky::sky(direction, true);
