@@ -226,7 +226,7 @@ impl Context {
         log::info!("Initializing wgpu...");
 
         let mut flags = wgpu::InstanceFlags::DEBUG;
-        if no_gpu_validation {
+        if !no_gpu_validation {
             flags |= wgpu::InstanceFlags::VALIDATION;
         }
 
@@ -257,7 +257,7 @@ impl Context {
         log::info!("Initializing wgpu...");
 
         let mut flags = wgpu::InstanceFlags::DEBUG;
-        if no_gpu_validation {
+        if !no_gpu_validation {
             flags |= wgpu::InstanceFlags::VALIDATION;
         }
 

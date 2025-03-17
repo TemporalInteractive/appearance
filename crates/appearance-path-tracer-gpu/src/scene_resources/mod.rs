@@ -10,7 +10,7 @@ use material_pool::MaterialPool;
 use scene_model::SceneModel;
 use sky::Sky;
 use uuid::Uuid;
-use vertex_pool::VertexPool;
+use vertex_pool::{VertexPool, VertexPoolAlloc};
 
 mod material_pool;
 pub mod scene_model;
@@ -19,10 +19,29 @@ mod vertex_pool;
 
 const MAX_TLAS_INSTANCES: usize = 1024 * 8;
 
+struct TransformWithHistory {
+    pub transform: Mat4,
+    pub prev_transform: Mat4,
+}
+
+impl TransformWithHistory {
+    fn new(transform: Mat4) -> Self {
+        Self {
+            transform,
+            prev_transform: transform,
+        }
+    }
+
+    fn update(&mut self, transform: Mat4) {
+        self.prev_transform = self.transform;
+        self.transform = transform;
+    }
+}
+
 pub struct SceneResources {
     model_assets: AssetDatabase<Model>,
     models: HashMap<String, (SceneModel, Vec<Uuid>)>,
-    model_instances: HashMap<Uuid, Mat4>,
+    model_instances: HashMap<Uuid, TransformWithHistory>,
     vertex_pool: VertexPool,
     material_pool: MaterialPool,
     sky: Sky,
@@ -112,12 +131,14 @@ impl SceneResources {
                         .insert(resolved_asset_path, (scene_model, vec![data.entity_uuid]));
                 }
 
-                self.model_instances
-                    .insert(data.entity_uuid, data.transform_matrix);
+                self.model_instances.insert(
+                    data.entity_uuid,
+                    TransformWithHistory::new(data.transform_matrix),
+                );
             }
             VisibleWorldActionType::TransformModel(data) => {
                 if let Some(instance_transform) = self.model_instances.get_mut(&data.entity_uuid) {
-                    *instance_transform = data.transform_matrix;
+                    instance_transform.update(data.transform_matrix);
                 } else {
                     log::warn!("Failed to update model instance transform.");
                 }
@@ -210,7 +231,7 @@ impl SceneResources {
                             asset_path.clone(),
                             model,
                             *root_node,
-                            *instance_transform,
+                            instance_transform.transform,
                             0,
                             &mut blas_instances,
                             &mut blas_idx_to_mesh_mapping,
@@ -252,5 +273,56 @@ impl SceneResources {
 
     pub fn end_frame(&mut self) {
         self.vertex_pool.end_frame();
+    }
+
+    fn model_instance_iter_rec<F: FnMut(&VertexPoolAlloc, Mat4, Mat4)>(
+        f: &mut F,
+        model_asset_path: String,
+        model: &SceneModel,
+        node: u32,
+        parent_transform: Mat4,
+        prev_parent_transform: Mat4,
+    ) {
+        let transform = parent_transform * model.nodes[node as usize].transform.get_matrix();
+        let prev_transform =
+            prev_parent_transform * model.nodes[node as usize].transform.get_matrix();
+
+        if let Some(mesh_idx) = &model.nodes[node as usize].mesh {
+            let vertex_slice = &model.vertex_pool_allocs[*mesh_idx as usize];
+
+            f(vertex_slice, transform, prev_transform);
+        }
+
+        for child_node in &model.nodes[node as usize].children {
+            Self::model_instance_iter_rec(
+                f,
+                model_asset_path.clone(),
+                model,
+                *child_node,
+                transform,
+                prev_transform,
+            );
+        }
+    }
+
+    pub fn model_instance_iter<F: FnMut(&VertexPoolAlloc, Mat4, Mat4)>(&self, mut f: F) {
+        for (asset_path, (model, entity_uuids)) in &self.models {
+            for root_node in &model.root_nodes {
+                // Loop over all world instances of the model
+                for entity_uuid in entity_uuids {
+                    // If this instance doesn't have a transform anymore, it has been destroyed
+                    if let Some(instance_transform) = self.model_instances.get(entity_uuid) {
+                        Self::model_instance_iter_rec(
+                            &mut f,
+                            asset_path.clone(),
+                            model,
+                            *root_node,
+                            instance_transform.transform,
+                            instance_transform.prev_transform,
+                        );
+                    }
+                }
+            }
+        }
     }
 }
