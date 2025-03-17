@@ -149,10 +149,9 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
             radius = max(radius * 0.5, 3.0);
         }
 
-        var neighbour_reservoir: DiReservoir = PackedDiReservoir::unpack(in_reservoirs[flat_neighbour_id]);
-        
-        neighbour_reservoir.selected_phat = 0.0;
         if (valid_neighbour_reservoir) {
+            var neighbour_reservoir: DiReservoir = PackedDiReservoir::unpack(in_reservoirs[flat_neighbour_id]);
+
             let w_out_worldspace: vec3<f32> = -direction;
             let w_in_worldspace: vec3<f32> = normalize(neighbour_reservoir.sample.point - hit_point_ws);
 
@@ -176,11 +175,11 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
                 let contribution: vec3<f32> = n_dot_l * reflectance;
 
                 neighbour_reservoir.selected_phat = linear_to_luma(contribution * sample_intensity);
+
+                DiReservoir::update(&combined_reservoir, neighbour_reservoir.selected_phat * neighbour_reservoir.contribution_weight * neighbour_reservoir.sample_count, &rng, neighbour_reservoir.sample, neighbour_reservoir.selected_phat);
+                combined_sample_count += neighbour_reservoir.sample_count;
             }
         }
-
-        DiReservoir::update(&combined_reservoir, neighbour_reservoir.selected_phat * neighbour_reservoir.contribution_weight * neighbour_reservoir.sample_count, &rng, neighbour_reservoir.sample, neighbour_reservoir.selected_phat);
-        combined_sample_count += neighbour_reservoir.sample_count;
     }
 
     combined_reservoir.sample_count = combined_sample_count;

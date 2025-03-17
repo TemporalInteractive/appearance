@@ -158,14 +158,24 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
             let w_out_worldspace: vec3<f32> = -direction;
             let w_in_worldspace: vec3<f32> = normalize(neighbour_reservoir.sample_point_ws - hit_point_ws);
 
-            var shading_pdf: f32;
-            let reflectance: vec3<f32> = DisneyBsdf::evaluate(disney_bsdf, front_facing_shading_normal_ws,
-                tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
-                w_out_worldspace, w_in_worldspace, &shading_pdf);
+            var visibility: bool = true;
+            if (constants.unbiased > 0) {
+                let distance: f32 = distance(neighbour_reservoir.sample_point_ws, hit_point_ws);
+
+                if (!trace_shadow_ray(hit_point_ws, w_in_worldspace, distance, scene)) {
+                    visibility = false;
+                }
+            }
+
             var cos_in: f32 = abs(dot(w_in_worldspace, front_facing_shading_normal_ws));
             //cos_in *= jacobianDiffuse(center_gbuffer_texel.position_ws, neighbour_gbuffer_texel.position_ws, neighbour_normal_ws, w_in_worldspace, payload.t);
 
-            if (cos_in > 0.0) {
+            if (cos_in > 0.0 && visibility) {
+                var shading_pdf: f32;
+                let reflectance: vec3<f32> = DisneyBsdf::evaluate(disney_bsdf, front_facing_shading_normal_ws,
+                    tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
+                    w_out_worldspace, w_in_worldspace, &shading_pdf);
+            
                 let local_throughput: vec3<f32> = cos_in * reflectance;
                 let gi_origin: vec3<f32> = hit_point_ws + w_in_worldspace * 0.0001;
                 let gi_direction: vec3<f32> = w_in_worldspace;
