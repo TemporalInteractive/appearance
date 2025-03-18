@@ -53,7 +53,7 @@ fn DiReservoir::update(_self: ptr<function, DiReservoir>, sample_weight: f32, rn
     return false;
 }
 
-fn LightSample::phat(_self: LightSample, light_sample_ctx: LightSampleCtx, hit_point_ws: vec3<f32>, w_out_worldspace: vec3<f32>, scene: acceleration_structure) -> f32 {
+fn LightSample::phat(_self: LightSample, light_sample_ctx: LightSampleCtx, hit_point_ws: vec3<f32>, w_out_worldspace: vec3<f32>, visibility_test: bool, scene: acceleration_structure) -> f32 {
     let tex_coord: vec2<f32> = light_sample_ctx.hit_tex_coord;
     let material_idx: u32 = light_sample_ctx.hit_material_idx;
     let material_descriptor: MaterialDescriptor = material_descriptors[material_idx];
@@ -70,8 +70,11 @@ fn LightSample::phat(_self: LightSample, light_sample_ctx: LightSampleCtx, hit_p
 
     let w_in_worldspace: vec3<f32> = normalize(_self.point - hit_point_ws);
 
-    let distance: f32 = distance(_self.point, hit_point_ws);
-    let visibility: bool = trace_shadow_ray(hit_point_ws, w_in_worldspace, distance, scene);
+    var visibility: bool = true;
+    if (visibility_test) {
+        let distance: f32 = distance(_self.point, hit_point_ws);
+        visibility = trace_shadow_ray(hit_point_ws, w_in_worldspace, distance, scene);
+    }
 
     let n_dot_l: f32 = dot(w_in_worldspace, front_facing_shading_normal_ws);
     if (n_dot_l > 0.0 && visibility) {
@@ -111,20 +114,10 @@ fn DiReservoir::combine_unbiased(r1: DiReservoir, r1_hit_point_ws: vec3<f32>, r1
     combined_reservoir.sample_count = r1.sample_count + r2.sample_count;
 
     var z: f32 = 0.0;
-    if (LightSample::phat(combined_reservoir.sample, r1_light_sample_ctx, r1_hit_point_ws, r1_w_out_worldspace, scene) > 0.0) {
-        // let w_in_worldspace: vec3<f32> = normalize(combined_reservoir.sample.point - r1_hit_point_ws);
-        // let distance: f32 = distance(combined_reservoir.sample.point, r1_hit_point_ws);
-        // if (trace_shadow_ray(r1_hit_point_ws, w_in_worldspace, distance, scene)) {
-        //     z += r1.sample_count;
-        // }
+    if (LightSample::phat(combined_reservoir.sample, r1_light_sample_ctx, r1_hit_point_ws, r1_w_out_worldspace, true, scene) > 0.0) {
         z += r1.sample_count;
     }
-    if (LightSample::phat(combined_reservoir.sample, r2_light_sample_ctx, r2_hit_point_ws, r2_w_out_worldspace, scene) > 0.0) {
-        // let w_in_worldspace: vec3<f32> = normalize(combined_reservoir.sample.point - r2_hit_point_ws);
-        // let distance: f32 = distance(combined_reservoir.sample.point, r2_hit_point_ws);
-        // if (trace_shadow_ray(r2_hit_point_ws, w_in_worldspace, distance, scene)) {
-        //     z += r2.sample_count;
-        // }
+    if (LightSample::phat(combined_reservoir.sample, r2_light_sample_ctx, r2_hit_point_ws, r2_w_out_worldspace, true, scene) > 0.0) {
         z += r2.sample_count;
     }
 

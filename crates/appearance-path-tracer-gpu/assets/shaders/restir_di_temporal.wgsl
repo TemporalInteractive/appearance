@@ -78,51 +78,11 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     var payload: Payload = payloads[flat_id];
     if (payload.t < 0.0) { return; } // TODO: indirect dispatch with pids
 
-    let light_sample_ctx: LightSampleCtx = light_sample_ctxs[flat_id];
-    
     var rng: u32 = payload.rng;
-
-    // let tex_coord: vec2<f32> = light_sample_ctx.hit_tex_coord;
-    // let material_idx: u32 = light_sample_ctx.hit_material_idx;
-    // let material_descriptor: MaterialDescriptor = material_descriptors[material_idx];
-    // let material: Material = Material::from_material_descriptor(material_descriptor, tex_coord);
-    // let disney_bsdf = DisneyBsdf::from_material(material);
-
     let hit_point_ws = origin + direction * payload.t;
-    // let front_facing_shading_normal_ws: vec3<f32> = PackedNormalizedXyz10::unpack(light_sample_ctx.front_facing_shading_normal_ws, 0);
-    // let tangent_to_world: mat3x3<f32> = build_orthonormal_basis(front_facing_shading_normal_ws);
-    // let world_to_tangent: mat3x3<f32> = transpose(tangent_to_world);
 
-    // let front_facing_clearcoat_normal_ws: vec3<f32> = PackedNormalizedXyz10::unpack(light_sample_ctx.front_facing_clearcoat_normal_ws, 0);
-    // let clearcoat_tangent_to_world: mat3x3<f32> = build_orthonormal_basis(front_facing_clearcoat_normal_ws);
-    // let clearcoat_world_to_tangent: mat3x3<f32> = transpose(clearcoat_tangent_to_world);
-
+    let light_sample_ctx: LightSampleCtx = light_sample_ctxs[flat_id];
     var reservoir: DiReservoir = PackedDiReservoir::unpack(reservoirs_in[flat_id]);
-
-    // if (constants.unbiased > 0) {
-    //     let w_out_worldspace: vec3<f32> = -direction;
-    //     let w_in_worldspace: vec3<f32> = normalize(reservoir.sample.point - hit_point_ws);
-
-    //     if (constants.unbiased > 0) {
-    //         let distance: f32 = distance(reservoir.sample.point, hit_point_ws);
-    //         reservoir.visibility = trace_shadow_ray(hit_point_ws, w_in_worldspace, distance, scene);
-    //     }
-
-    //     let n_dot_l: f32 = dot(w_in_worldspace, front_facing_shading_normal_ws);
-    //     if (n_dot_l > 0.0 && reservoir.visibility) {
-    //         let sample_intensity = LightSample::intensity(reservoir.sample, hit_point_ws);
-
-    //         var shading_pdf: f32;
-    //         let reflectance: vec3<f32> = DisneyBsdf::evaluate(disney_bsdf, front_facing_shading_normal_ws,
-    //             tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
-    //             w_out_worldspace, w_in_worldspace, &shading_pdf);
-    //         let contribution: vec3<f32> = n_dot_l * reflectance;
-
-    //         reservoir.selected_phat = linear_to_luma(contribution * sample_intensity);
-    //     } else {
-    //         reservoir.selected_phat = 0.0;
-    //     }
-    // }
 
     var valid_prev_reservoir: bool = false;
     var prev_id: u32;
@@ -150,42 +110,13 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     }
 
     if (valid_prev_reservoir) {
-        //let prev_light_sample_ctx: LightSampleCtx = light_sample_ctxs[prev_id];
         var prev_reservoir: DiReservoir = PackedDiReservoir::unpack(prev_reservoirs_in[prev_id]);
         prev_reservoir.sample_count = min(prev_reservoir.sample_count, 20.0 * reservoir.sample_count);
 
         let w_out_worldspace: vec3<f32> = -direction;
-        //let prev_w_out_worldspace: vec3<f32> = -PackedNormalizedXyz10::unpack(in_rays[prev_id].direction, 0);
-
-        // let w_in_worldspace: vec3<f32> = normalize(prev_reservoir.sample.point - hit_point_ws);
-
-        // var visibility: bool = true;
-        // if (constants.unbiased > 0) {
-        //     let distance: f32 = distance(prev_reservoir.sample.point, hit_point_ws);
-        //     visibility = trace_shadow_ray(hit_point_ws, w_in_worldspace, distance, scene);
-        // }
-
-        // let n_dot_l: f32 = dot(w_in_worldspace, front_facing_shading_normal_ws);
-        // if (n_dot_l > 0.0 && visibility) {
-        //     let sample_intensity = LightSample::intensity(prev_reservoir.sample, hit_point_ws);
-
-        //     var shading_pdf: f32;
-        //     let reflectance: vec3<f32> = DisneyBsdf::evaluate(disney_bsdf, front_facing_shading_normal_ws,
-        //         tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
-        //         w_out_worldspace, w_in_worldspace, &shading_pdf);
-        //     let contribution: vec3<f32> = n_dot_l * reflectance;
-
-        //     prev_reservoir.selected_phat = linear_to_luma(contribution * sample_intensity);
-        // } else {
-        //     prev_reservoir.selected_phat = 0.0;
-        // }
-
-        prev_reservoir.selected_phat = LightSample::phat(prev_reservoir.sample, light_sample_ctx, hit_point_ws, w_out_worldspace, scene);
+        prev_reservoir.selected_phat = LightSample::phat(prev_reservoir.sample, light_sample_ctx, hit_point_ws, w_out_worldspace, constants.unbiased > 0, scene);
 
         reservoir = DiReservoir::combine(reservoir, prev_reservoir, &rng);
-        // reservoir = DiReservoir::combine_unbiased(reservoir, hit_point_ws, light_sample_ctx, w_out_worldspace,
-        //                                            prev_reservoir, prev_gbuffer_texel.position_ws, prev_light_sample_ctx, prev_w_out_worldspace,
-        //                                            &rng, scene);
     }
 
     reservoirs_out[flat_id] = PackedDiReservoir::new(reservoir);
