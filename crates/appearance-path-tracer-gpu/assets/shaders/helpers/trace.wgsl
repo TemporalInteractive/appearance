@@ -14,8 +14,9 @@ fn trace_shadow_ray_opaque(origin: vec3<f32>, direction: vec3<f32>, distance: f3
     return intersection.kind != RAY_QUERY_INTERSECTION_TRIANGLE;
 }
 
-fn trace_shadow_ray(_origin: vec3<f32>, direction: vec3<f32>, distance: f32, scene: acceleration_structure) -> bool {
+fn trace_shadow_ray(_origin: vec3<f32>, direction: vec3<f32>, _distance: f32, scene: acceleration_structure) -> bool {
     var origin: vec3<f32> = _origin;
+    var distance: f32 = _distance - 0.001;
 
     if (MAX_NON_OPAQUE_DEPTH == 1) {
         return trace_shadow_ray_opaque(origin, direction, distance, scene);
