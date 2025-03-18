@@ -83,31 +83,12 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     var payload: Payload = payloads[flat_id];
     if (payload.t < 0.0) { return; } // TODO: indirect dispatch with pids
 
-    let light_sample_ctx: LightSampleCtx = light_sample_ctxs[flat_id];
-    
     var rng: u32 = payload.rng;
     let throughput: vec3<f32> = PackedRgb9e5::unpack(payload.throughput);
-
-    let tex_coord: vec2<f32> = light_sample_ctx.hit_tex_coord;
-    let material_idx: u32 = light_sample_ctx.hit_material_idx;
-    let material_descriptor: MaterialDescriptor = material_descriptors[material_idx];
-    let material: Material = Material::from_material_descriptor(material_descriptor, tex_coord);
-    let disney_bsdf = DisneyBsdf::from_material(material);
-
     let hit_point_ws = origin + direction * payload.t;
-    let front_facing_shading_normal_ws: vec3<f32> = PackedNormalizedXyz10::unpack(light_sample_ctx.front_facing_shading_normal_ws, 0);
-    let tangent_to_world: mat3x3<f32> = build_orthonormal_basis(front_facing_shading_normal_ws);
-    let world_to_tangent: mat3x3<f32> = transpose(tangent_to_world);
 
-    let front_facing_clearcoat_normal_ws: vec3<f32> = PackedNormalizedXyz10::unpack(light_sample_ctx.front_facing_clearcoat_normal_ws, 0);
-    let clearcoat_tangent_to_world: mat3x3<f32> = build_orthonormal_basis(front_facing_clearcoat_normal_ws);
-    let clearcoat_world_to_tangent: mat3x3<f32> = transpose(clearcoat_tangent_to_world);
-
-    let reservoir: GiReservoir = PackedGiReservoir::unpack(in_reservoirs[flat_id]);
-
-    var combined_reservoir = GiReservoir::new();
-    var combined_sample_count: f32 = reservoir.sample_count;
-    GiReservoir::update(&combined_reservoir, reservoir.selected_phat * reservoir.contribution_weight * reservoir.sample_count, &rng, reservoir.sample_point_ws, reservoir.selected_phat, reservoir.phat_rng);
+    let light_sample_ctx: LightSampleCtx = light_sample_ctxs[flat_id];
+    var reservoir: GiReservoir = PackedGiReservoir::unpack(in_reservoirs[flat_id]);
 
     let center_gbuffer_texel: GBufferTexel = gbuffer[flat_id];
     let center_depth_cs: f32 = GBufferTexel::depth_cs(center_gbuffer_texel, 0.001, 10000.0);
@@ -136,53 +117,30 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
             continue;
         }
 
-        var valid_neighbour_reservoir: bool = true;
         let neighbour_gbuffer_texel: GBufferTexel = gbuffer[flat_neighbour_id];
         let neighbour_normal_ws: vec3<f32> = PackedNormalizedXyz10::unpack(neighbour_gbuffer_texel.normal_ws, 0);
-        if (constants.unbiased == 0) {
-            let neighbour_depth_cs: f32 = GBufferTexel::depth_cs(neighbour_gbuffer_texel, 0.001, 10000.0);
-            let valid_delta_depth: bool = (abs(center_depth_cs - neighbour_depth_cs) / center_depth_cs) < 0.1;
-            let valid_delta_normal: bool = dot(center_normal_ws, neighbour_normal_ws) > 0.906; // 25 degrees
+        let neighbour_depth_cs: f32 = GBufferTexel::depth_cs(neighbour_gbuffer_texel, 0.001, 10000.0);
+        let valid_delta_depth: bool = (abs(center_depth_cs - neighbour_depth_cs) / center_depth_cs) < 0.1;
+        let valid_delta_normal: bool = dot(center_normal_ws, neighbour_normal_ws) > 0.906; // 25 degrees
 
-            valid_neighbour_reservoir = valid_delta_depth && valid_delta_normal;
-        }
-
+        var valid_neighbour_reservoir: bool = valid_delta_depth && valid_delta_normal;
         if (valid_neighbour_reservoir) {
             var neighbour_reservoir: GiReservoir = PackedGiReservoir::unpack(in_reservoirs[flat_neighbour_id]);
 
             let w_out_worldspace: vec3<f32> = -direction;
-            let w_in_worldspace: vec3<f32> = normalize(neighbour_reservoir.sample_point_ws - hit_point_ws);
 
-            var visibility: bool = true;
-            if (constants.unbiased > 0) {
-                let distance: f32 = distance(neighbour_reservoir.sample_point_ws, hit_point_ws);
+            neighbour_reservoir.selected_phat = GiReservoir::phat(neighbour_reservoir, light_sample_ctx, throughput, hit_point_ws, w_out_worldspace, scene);
+            valid_neighbour_reservoir = neighbour_reservoir.selected_phat > 0.0;
 
-                if (!trace_shadow_ray(hit_point_ws, w_in_worldspace, distance, scene)) {
-                    visibility = false;
-                }
-            }
-
-            var cos_in: f32 = abs(dot(w_in_worldspace, front_facing_shading_normal_ws));
-            //cos_in *= jacobianDiffuse(center_gbuffer_texel.position_ws, neighbour_gbuffer_texel.position_ws, neighbour_normal_ws, w_in_worldspace, payload.t);
-
-            valid_neighbour_reservoir = cos_in > 0.0 && visibility;
-            if (valid_neighbour_reservoir) {
-                var shading_pdf: f32;
-                let reflectance: vec3<f32> = DisneyBsdf::evaluate(disney_bsdf, front_facing_shading_normal_ws,
-                    tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
-                    w_out_worldspace, w_in_worldspace, &shading_pdf);
-            
-                let local_throughput: vec3<f32> = cos_in * reflectance;
-                let gi_origin: vec3<f32> = hit_point_ws + w_in_worldspace * 0.0001;
-                let gi_direction: vec3<f32> = w_in_worldspace;
-                var throughput_result: vec3<f32> = throughput * local_throughput;
-                var phat_rng: u32 = neighbour_reservoir.phat_rng;
-                var sample_point_ws: vec3<f32>;
-                let contribution: vec3<f32> = InlinePathTracer::trace(gi_origin, gi_direction, RESTIR_GI_PHAT_MAX_BOUNCES, &throughput_result, &sample_point_ws, &phat_rng, scene);
-                neighbour_reservoir.selected_phat = linear_to_luma(contribution);
-
-                GiReservoir::update(&combined_reservoir, neighbour_reservoir.selected_phat * neighbour_reservoir.contribution_weight * neighbour_reservoir.sample_count, &rng, neighbour_reservoir.sample_point_ws, neighbour_reservoir.selected_phat, neighbour_reservoir.phat_rng);
-                combined_sample_count += neighbour_reservoir.sample_count;
+            if (constants.unbiased == 0) {
+                reservoir = GiReservoir::combine(reservoir, neighbour_reservoir, &rng);
+            } else {
+                let neighbour_light_sample_ctx: LightSampleCtx = light_sample_ctxs[flat_neighbour_id];
+                let neighbour_w_out_worldspace: vec3<f32> = -PackedNormalizedXyz10::unpack(in_rays[flat_neighbour_id].direction, 0);
+                let neighbour_throughput: vec3<f32> = PackedRgb9e5::unpack(payloads[flat_neighbour_id].throughput);
+                reservoir = GiReservoir::combine_unbiased(reservoir, hit_point_ws, light_sample_ctx, w_out_worldspace, throughput,
+                                                        neighbour_reservoir, neighbour_gbuffer_texel.position_ws, neighbour_light_sample_ctx, neighbour_w_out_worldspace, neighbour_throughput,
+                                                        &rng, scene);
             }
         }
 
@@ -191,15 +149,10 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
         }
     }
 
-    combined_reservoir.sample_count = combined_sample_count;
-    if (combined_reservoir.selected_phat > 0.0 && combined_reservoir.sample_count * combined_reservoir.weight_sum > 0.0) {
-        combined_reservoir.contribution_weight = (1.0 / combined_reservoir.selected_phat) * (1.0 / combined_reservoir.sample_count * combined_reservoir.weight_sum);
+    out_reservoirs[flat_id] = PackedGiReservoir::new(reservoir);
+    if (constants.spatial_pass_idx == constants.spatial_pass_count - 1) {
+        prev_reservoirs[flat_id] = PackedGiReservoir::new(reservoir);
     }
-
-    out_reservoirs[flat_id] = PackedGiReservoir::new(combined_reservoir);
-    // if (constants.spatial_pass_idx == constants.spatial_pass_count - 1) {
-    //     prev_reservoirs[flat_id] = PackedGiReservoir::new(combined_reservoir);
-    // }
 
     payload.rng = rng;
     payloads[flat_id] = payload;

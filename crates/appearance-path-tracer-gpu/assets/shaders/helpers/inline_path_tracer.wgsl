@@ -240,3 +240,63 @@ fn InlinePathTracer::sample_ris(hit_point_ws: vec3<f32>, w_out_worldspace: vec3<
 
     return gi_reservoir;
 }
+
+// TODO: maybe use throughput is lightsample ctx?
+fn GiReservoir::phat(_self: GiReservoir, light_sample_ctx: LightSampleCtx, throughput: vec3<f32>, hit_point_ws: vec3<f32>, w_out_worldspace: vec3<f32>, scene: acceleration_structure) -> f32 {
+    let tex_coord: vec2<f32> = light_sample_ctx.hit_tex_coord;
+    let material_idx: u32 = light_sample_ctx.hit_material_idx;
+    let material_descriptor: MaterialDescriptor = material_descriptors[material_idx];
+    let material: Material = Material::from_material_descriptor(material_descriptor, tex_coord);
+    let disney_bsdf = DisneyBsdf::from_material(material);
+
+    let front_facing_shading_normal_ws: vec3<f32> = PackedNormalizedXyz10::unpack(light_sample_ctx.front_facing_shading_normal_ws, 0);
+    let tangent_to_world: mat3x3<f32> = build_orthonormal_basis(front_facing_shading_normal_ws);
+    let world_to_tangent: mat3x3<f32> = transpose(tangent_to_world);
+
+    let front_facing_clearcoat_normal_ws: vec3<f32> = PackedNormalizedXyz10::unpack(light_sample_ctx.front_facing_clearcoat_normal_ws, 0);
+    let clearcoat_tangent_to_world: mat3x3<f32> = build_orthonormal_basis(front_facing_clearcoat_normal_ws);
+    let clearcoat_world_to_tangent: mat3x3<f32> = transpose(clearcoat_tangent_to_world);
+    
+    let w_in_worldspace: vec3<f32> = normalize(_self.sample_point_ws - hit_point_ws);
+
+    var shading_pdf: f32;
+    let reflectance: vec3<f32> = DisneyBsdf::evaluate(disney_bsdf, front_facing_shading_normal_ws,
+        tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
+        w_out_worldspace, w_in_worldspace, &shading_pdf);
+    var cos_in: f32 = abs(dot(w_in_worldspace, front_facing_shading_normal_ws));
+    //jacobianDiffuse(current_gbuffer_texel.position_ws, prev_gbuffer_texel.position_ws, prev_normal_ws, w_in_worldspace, payload.t);
+
+    let local_throughput: vec3<f32> = cos_in * reflectance;
+    let gi_origin: vec3<f32> = hit_point_ws + w_in_worldspace * 0.0001;
+    let gi_direction: vec3<f32> = w_in_worldspace;
+    var throughput_result: vec3<f32> = throughput * local_throughput;
+    var phat_rng: u32 = _self.phat_rng;
+    var sample_point_ws: vec3<f32>;
+    let contribution: vec3<f32> = InlinePathTracer::trace(gi_origin, gi_direction, RESTIR_GI_PHAT_MAX_BOUNCES, &throughput_result, &sample_point_ws, &phat_rng, scene);
+    return linear_to_luma(contribution);
+}
+
+fn GiReservoir::combine_unbiased(r1: GiReservoir, r1_hit_point_ws: vec3<f32>, r1_light_sample_ctx: LightSampleCtx, r1_w_out_worldspace: vec3<f32>, r1_throughput: vec3<f32>,
+                                  r2: GiReservoir, r2_hit_point_ws: vec3<f32>, r2_light_sample_ctx: LightSampleCtx, r2_w_out_worldspace: vec3<f32>, r2_throughput: vec3<f32>,
+                                  rng: ptr<function, u32>, scene: acceleration_structure) -> GiReservoir {
+    var combined_reservoir = GiReservoir::new();
+    GiReservoir::update(&combined_reservoir, r1.selected_phat * r1.contribution_weight * r1.sample_count, rng, r1.sample_point_ws, r1.selected_phat, r1.phat_rng);
+    GiReservoir::update(&combined_reservoir, r2.selected_phat * r2.contribution_weight * r2.sample_count, rng, r2.sample_point_ws, r2.selected_phat, r2.phat_rng);
+    combined_reservoir.sample_count = r1.sample_count + r2.sample_count;
+
+    var z: f32 = 0.0;
+    if (GiReservoir::phat(combined_reservoir, r1_light_sample_ctx, r1_throughput, r1_hit_point_ws, r1_w_out_worldspace, scene) > 0.0) {
+    //if (LightSample::phat(combined_reservoir.sample, r1_light_sample_ctx, r1_hit_point_ws, r1_w_out_worldspace, true, scene) > 0.0) {
+        z += r1.sample_count;
+    }
+    if (GiReservoir::phat(combined_reservoir, r2_light_sample_ctx, r2_throughput, r2_hit_point_ws, r2_w_out_worldspace, scene) > 0.0) {
+    //if (LightSample::phat(combined_reservoir.sample, r2_light_sample_ctx, r2_hit_point_ws, r2_w_out_worldspace, true, scene) > 0.0) {
+        z += r2.sample_count;
+    }
+
+    if (combined_reservoir.selected_phat > 0.0 && z * combined_reservoir.weight_sum > 0.0) {
+        combined_reservoir.contribution_weight = (1.0 / combined_reservoir.selected_phat) * (1.0 / z * combined_reservoir.weight_sum);
+    }
+
+    return combined_reservoir;
+}
