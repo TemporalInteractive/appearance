@@ -1,6 +1,8 @@
 @include ::random
 @include appearance-path-tracer-gpu::shared/light_sample
 
+const RESTIR_DI_EPSILON: f32 = 1e-6;
+
 struct DiReservoir {
     sample_count: f32,
     contribution_weight: f32,
@@ -98,7 +100,7 @@ fn DiReservoir::combine(r1: DiReservoir, r2: DiReservoir, rng: ptr<function, u32
     DiReservoir::update(&combined_reservoir, r2.selected_phat * r2.contribution_weight * r2.sample_count, rng, r2.sample, r2.selected_phat);
     combined_reservoir.sample_count = r1.sample_count + r2.sample_count;
 
-    if (combined_reservoir.selected_phat > 0.0 && combined_reservoir.sample_count * combined_reservoir.weight_sum > 0.0) {
+    if (combined_reservoir.selected_phat > RESTIR_DI_EPSILON && combined_reservoir.sample_count * combined_reservoir.weight_sum > RESTIR_DI_EPSILON) {
         combined_reservoir.contribution_weight = (1.0 / combined_reservoir.selected_phat) * (1.0 / combined_reservoir.sample_count * combined_reservoir.weight_sum);
     }
 
@@ -121,7 +123,7 @@ fn DiReservoir::combine_unbiased(r1: DiReservoir, r1_hit_point_ws: vec3<f32>, r1
         z += r2.sample_count;
     }
 
-    if (combined_reservoir.selected_phat > 0.0 && z * combined_reservoir.weight_sum > 0.0) {
+    if (combined_reservoir.selected_phat > RESTIR_DI_EPSILON && z * combined_reservoir.weight_sum > RESTIR_DI_EPSILON) {
         combined_reservoir.contribution_weight = (1.0 / combined_reservoir.selected_phat) * (1.0 / z * combined_reservoir.weight_sum);
     }
 
