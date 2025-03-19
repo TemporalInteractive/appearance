@@ -4,7 +4,8 @@
 /// appearance-path-tracer-gpu::shared/material/material_pool_bindings
 ///
 
-const MAX_NON_OPAQUE_DEPTH: u32 = 3;
+const MAX_NON_OPAQUE_DEPTH: u32 = 1;
+const MAX_NON_OPAQUE_SHADOW_DEPTH: u32 = 1;
 
 fn trace_shadow_ray_opaque(origin: vec3<f32>, direction: vec3<f32>, distance: f32, scene: acceleration_structure) -> bool {
     var shadow_rq: ray_query;
@@ -18,12 +19,12 @@ fn trace_shadow_ray(_origin: vec3<f32>, direction: vec3<f32>, _distance: f32, sc
     var origin: vec3<f32> = _origin;
     var distance: f32 = _distance - 0.001;
 
-    if (MAX_NON_OPAQUE_DEPTH == 1) {
+    if (MAX_NON_OPAQUE_SHADOW_DEPTH == 1) {
         return trace_shadow_ray_opaque(origin, direction, distance, scene);
     }
 
     var travelled_distance: f32 = 0.0;
-    for (var step: u32 = 0; step < MAX_NON_OPAQUE_DEPTH; step += 1) {
+    for (var step: u32 = 0; step < MAX_NON_OPAQUE_SHADOW_DEPTH; step += 1) {
         var rq: ray_query;
         rayQueryInitialize(&rq, scene, RayDesc(0u, 0xFFu, 0.0, distance - travelled_distance, origin + direction * 0.00001, direction));
         rayQueryProceed(&rq);
@@ -53,7 +54,7 @@ fn trace_shadow_ray(_origin: vec3<f32>, direction: vec3<f32>, _distance: f32, sc
                 // TODO: non-opaque geometry would be a better choice, not properly supported by wgpu yet
                 origin += direction * intersection.t;
                 travelled_distance += intersection.t;
-                continue;
+                continue; // check if last? return false if so
             }
 
             return false;
