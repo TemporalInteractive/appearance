@@ -20,9 +20,14 @@ fn InlinePathTracer::trace(_origin: vec3<f32>, _direction: vec3<f32>, max_bounce
     var accumulated = vec3<f32>(0.0);
 
     for (var bounce: u32 = 0; bounce < max_bounces; bounce += 1) {
+        var safe_origin_normal: vec3<f32> = direction;
         for (var step: u32 = 0; step < MAX_NON_OPAQUE_DEPTH; step += 1) {
+            if (dot(safe_origin_normal, direction) < 0.0) {
+                safe_origin_normal *= -1.0;
+            }
+
             var rq: ray_query;
-            rayQueryInitialize(&rq, scene, RayDesc(0u, 0xFFu, 0.0, 1000.0, origin, direction));
+            rayQueryInitialize(&rq, scene, RayDesc(0u, 0xFFu, 0.0, 1000.0, safe_origin(origin, safe_origin_normal), direction));
             rayQueryProceed(&rq);
 
             let intersection = rayQueryGetCommittedIntersection(&rq);
@@ -48,8 +53,12 @@ fn InlinePathTracer::trace(_origin: vec3<f32>, _direction: vec3<f32>, max_bounce
 
                 if (material_color.a < material_descriptor.alpha_cutoff) {
                     if (step + 1 < MAX_NON_OPAQUE_DEPTH) {
+                        var p01: vec3<f32> = v1.position - v0.position;
+                        var p02: vec3<f32> = v2.position - v0.position;
+                        safe_origin_normal = normalize(cross(p01, p02));
+    
                         // TODO: non-opaque geometry would be a better choice, not properly supported by wgpu yet
-                        origin += direction * (intersection.t + 0.001);
+                        origin += direction * safely_traced_t(intersection.t);
                         continue;
                     } else {
                         material_color.a = 1.0;
@@ -129,7 +138,7 @@ fn InlinePathTracer::trace(_origin: vec3<f32>, _direction: vec3<f32>, max_bounce
                     let n_dot_l: f32 = dot(shadow_direction, front_facing_shading_normal_ws);
 
                     if (n_dot_l > 0.0) {
-                        if (trace_shadow_ray(hit_point_ws, shadow_direction, shadow_distance, scene)) {
+                        if (trace_shadow_ray(hit_point_ws, shadow_direction, shadow_distance, front_facing_shading_normal_ws, scene)) {
                             let w_in_worldspace: vec3<f32> = shadow_direction;
 
                             var shading_pdf: f32;

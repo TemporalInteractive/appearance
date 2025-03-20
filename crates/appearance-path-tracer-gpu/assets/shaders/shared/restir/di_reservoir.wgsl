@@ -75,7 +75,7 @@ fn LightSample::phat(_self: LightSample, light_sample_ctx: LightSampleCtx, hit_p
     var visibility: bool = true;
     if (visibility_test) {
         let distance: f32 = distance(_self.point, hit_point_ws);
-        visibility = trace_shadow_ray(hit_point_ws, w_in_worldspace, distance, scene);
+        visibility = trace_shadow_ray(hit_point_ws, w_in_worldspace, distance, front_facing_shading_normal_ws, scene);
     }
 
     let n_dot_l: f32 = dot(w_in_worldspace, front_facing_shading_normal_ws);

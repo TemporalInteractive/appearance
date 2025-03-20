@@ -129,7 +129,7 @@ fn Nee::sample_ris(hit_point_ws: vec3<f32>, w_out_worldspace: vec3<f32>, front_f
         let direction: vec3<f32> = normalize(di_reservoir.sample.point - hit_point_ws);
         let distance: f32 = distance(di_reservoir.sample.point, hit_point_ws);
 
-        if (trace_shadow_ray(hit_point_ws, direction, distance, scene)) {
+        if (trace_shadow_ray(hit_point_ws, direction, distance, front_facing_shading_normal_ws, scene)) {
             di_reservoir.contribution_weight = (1.0 / di_reservoir.selected_phat) * (1.0 / di_reservoir.sample_count * di_reservoir.weight_sum);
         }
     }
