@@ -84,7 +84,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     var rng: u32 = payload.rng;
 
     var gbuffer_position_ws: vec3<f32>;
-    var gbuffer_depth_ws: f32;
+    var gbuffer_depth_ws: f32 = 0.0;
     var gbuffer_normal_ws: vec3<f32>;
     var gbuffer_albedo: vec3<f32>;
 

@@ -111,7 +111,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
 
     if (valid_prev_reservoir) {
         var prev_reservoir: DiReservoir = PackedDiReservoir::unpack(prev_reservoirs_in[prev_id]);
-        prev_reservoir.sample_count = min(prev_reservoir.sample_count, 20.0);
+        prev_reservoir.sample_count = min(prev_reservoir.sample_count, 20.0 * reservoir.sample_count);
 
         let w_out_worldspace: vec3<f32> = -direction;
         prev_reservoir.selected_phat = LightSample::phat(prev_reservoir.sample, light_sample_ctx, hit_point_ws, w_out_worldspace, constants.unbiased > 0, scene);

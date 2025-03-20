@@ -14,7 +14,7 @@ fn safe_origin(origin: vec3<f32>, normal: vec3<f32>) -> vec3<f32> {
 }
 
 fn safe_distance(distance: f32) -> f32 {
-    return distance - TRACE_EPSILON;
+    return distance - TRACE_EPSILON * 2.0;
 }
 
 fn safely_traced_t(t: f32) -> f32 {
