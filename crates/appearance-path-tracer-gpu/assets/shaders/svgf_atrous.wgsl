@@ -4,6 +4,17 @@
 
 @include appearance-path-tracer-gpu::shared/gbuffer_bindings
 
+const PHI_NORMAL: f32 = 128.0;
+const PHI_DEPTH: f32 = 0.1;
+const PHI_LUMA: f32 = 4.0;
+
+const KERNEL_WEIGHTS: array<f32, 3> = array<f32, 3>(
+    3.0 / 8.0,
+    1.0 / 4.0,
+    1.0 / 16.0
+);
+
+
 struct Constants {
     resolution: vec2<u32>,
     pass_idx: u32,
@@ -24,11 +35,11 @@ var<storage, read_write> out_temporal_demodulated_radiance: array<PackedRgb9e5>;
 
 @group(0)
 @binding(3)
-var<storage, read> in_temporal_moments: array<vec2<f32>>;
+var<storage, read> in_variance: array<f32>;
 
 @group(0)
 @binding(4)
-var<storage, read_write> out_temporal_moments: array<vec2<f32>>;
+var<storage, read_write> out_variance: array<f32>;
 
 @group(0)
 @binding(5)
@@ -51,8 +62,11 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     let step_size: u32 = 1u << constants.pass_idx;
 
     var radiance_sum: vec3<f32> = PackedRgb9e5::unpack(in_temporal_demodulated_radiance[flat_id]);
-    var moments_sum: vec2<f32> = in_temporal_moments[flat_id];
-    var weight_sum: f32 = 0.0;
+    var variance_sum: f32 = in_variance[flat_id];
+    var weight_sum: f32 = 1.0;
+
+    let current_luma: f32 = linear_to_luma(radiance_sum);
+    let current_variance: f32 = variance_sum;
 
     if (constants.pass_idx == 0) {
         out_history_demodulated_radiance[flat_id] = PackedRgb9e5::new(radiance_sum);
@@ -75,19 +89,31 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
                 continue;
             }
 
-            let weight: f32 = 1.0;
+            let sample_radiance: vec3<f32> = PackedRgb9e5::unpack(in_temporal_demodulated_radiance[flat_sample_id]);
+            let sample_luma: f32 = linear_to_luma(sample_radiance);
 
-            radiance_sum += PackedRgb9e5::unpack(in_temporal_demodulated_radiance[flat_sample_id]) * weight;
-            moments_sum += in_temporal_moments[flat_sample_id] * weight;
+            let normal_weight: f32 = pow(max(dot(current_gbuffer_texel.normal_ws, sample_gbuffer_texel.normal_ws), 0.0), PHI_NORMAL);
+
+            let depth_diff: f32 = abs(current_gbuffer_texel.depth_ws - sample_gbuffer_texel.depth_ws);
+            let depth_weight: f32 = exp(-sqr(depth_diff) / (2.0 * sqr(PHI_DEPTH)));
+
+            let luma_diff: f32 = abs(current_luma - sample_luma);
+            let luma_weight: f32 = exp(-luma_diff / (max(PHI_LUMA * sqrt(current_variance), 1e-8)));
+
+            var weight: f32 = normal_weight * depth_weight * luma_weight;
+            weight *= KERNEL_WEIGHTS[abs(x)] * KERNEL_WEIGHTS[abs(y)];
+
+            radiance_sum += sample_radiance * weight;
+            variance_sum += in_variance[flat_sample_id] * sqr(weight);
             weight_sum += weight;
         }
     }
 
     radiance_sum /= weight_sum;
-    moments_sum /= weight_sum;
+    variance_sum /= sqr(weight_sum);
 
     out_temporal_demodulated_radiance[flat_id] = PackedRgb9e5::new(radiance_sum);
-    out_temporal_moments[flat_id] = moments_sum;
+    out_variance[flat_id] = variance_sum;
     // if (constants.pass_idx == 0) {
     //     out_history_demodulated_radiance[flat_id] = PackedRgb9e5::new(radiance_sum);
     // }

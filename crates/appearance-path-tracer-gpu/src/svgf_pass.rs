@@ -38,6 +38,7 @@ pub struct SvgfPassParameters<'a> {
 pub struct SvgfPass {
     temporal_demodulated_radiance: [wgpu::Buffer; 2],
     temporal_moments: [wgpu::Buffer; 2],
+    variance: [wgpu::Buffer; 2],
     history_demodulated_radiance: wgpu::Buffer,
     temporal_frame_count: wgpu::Buffer,
     frame_idx: u32,
@@ -70,6 +71,18 @@ impl SvgfPass {
             })
         });
 
+        let variance = std::array::from_fn(|i| {
+            device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some(&format!(
+                    "appearance-path-tracer-gpu::svgf_temporal variance {}",
+                    i,
+                )),
+                size: (std::mem::size_of::<f32>() as u32 * resolution.x * resolution.y) as u64,
+                mapped_at_creation: false,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+            })
+        });
+
         let history_demodulated_radiance = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("appearance-path-tracer-gpu::svgf_temporal history_demodulated_radiance"),
             size: (std::mem::size_of::<PackedRgb9e5>() as u32 * resolution.x * resolution.y) as u64,
@@ -87,6 +100,7 @@ impl SvgfPass {
         Self {
             temporal_demodulated_radiance,
             temporal_moments,
+            variance,
             history_demodulated_radiance,
             temporal_frame_count,
             frame_idx: 0,
@@ -203,6 +217,16 @@ impl SvgfPass {
                                 wgpu::BindGroupLayoutEntry {
                                     binding: 7,
                                     visibility: wgpu::ShaderStages::COMPUTE,
+                                    ty: wgpu::BindingType::Buffer {
+                                        ty: wgpu::BufferBindingType::Storage { read_only: false },
+                                        has_dynamic_offset: false,
+                                        min_binding_size: None,
+                                    },
+                                    count: None,
+                                },
+                                wgpu::BindGroupLayoutEntry {
+                                    binding: 8,
+                                    visibility: wgpu::ShaderStages::COMPUTE,
                                     ty: wgpu::BindingType::StorageTexture {
                                         access: wgpu::StorageTextureAccess::ReadOnly,
                                         format: wgpu::TextureFormat::Rgba32Float,
@@ -237,6 +261,8 @@ impl SvgfPass {
         let in_temporal_moments = &self.temporal_moments[(self.frame_idx as usize) % 2];
         let out_temporal_moments = &self.temporal_moments[(self.frame_idx as usize + 1) % 2];
 
+        let out_variance = &self.variance[(self.frame_idx as usize + 1) % 2];
+
         let bind_group_layout = pipeline.get_bind_group_layout(0);
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
@@ -268,10 +294,14 @@ impl SvgfPass {
                 },
                 wgpu::BindGroupEntry {
                     binding: 6,
-                    resource: self.temporal_frame_count.as_entire_binding(),
+                    resource: out_variance.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 7,
+                    resource: self.temporal_frame_count.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 8,
                     resource: wgpu::BindingResource::TextureView(parameters.velocity_texture_view),
                 },
             ],
@@ -418,10 +448,8 @@ impl SvgfPass {
                 &self.temporal_demodulated_radiance[(self.frame_idx as usize + 1 + i as usize) % 2];
             let out_temporal_demodulated_radiance =
                 &self.temporal_demodulated_radiance[(self.frame_idx as usize + i as usize) % 2];
-            let in_temporal_moments =
-                &self.temporal_moments[(self.frame_idx as usize + 1 + i as usize) % 2];
-            let out_temporal_moments =
-                &self.temporal_moments[(self.frame_idx as usize + i as usize) % 2];
+            let in_variance = &self.variance[(self.frame_idx as usize + 1 + i as usize) % 2];
+            let out_variance = &self.variance[(self.frame_idx as usize + i as usize) % 2];
 
             let bind_group_layout = pipeline.get_bind_group_layout(0);
             let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -442,11 +470,11 @@ impl SvgfPass {
                     },
                     wgpu::BindGroupEntry {
                         binding: 3,
-                        resource: in_temporal_moments.as_entire_binding(),
+                        resource: in_variance.as_entire_binding(),
                     },
                     wgpu::BindGroupEntry {
                         binding: 4,
-                        resource: out_temporal_moments.as_entire_binding(),
+                        resource: out_variance.as_entire_binding(),
                     },
                     wgpu::BindGroupEntry {
                         binding: 5,

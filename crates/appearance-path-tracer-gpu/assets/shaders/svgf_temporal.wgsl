@@ -36,10 +36,14 @@ var<storage, read_write> out_temporal_moments: array<vec2<f32>>;
 
 @group(0)
 @binding(6)
-var<storage, read_write> temporal_frame_count: array<u32>;
+var<storage, read_write> out_variance: array<f32>;
 
 @group(0)
 @binding(7)
+var<storage, read_write> temporal_frame_count: array<u32>;
+
+@group(0)
+@binding(8)
 var velocity_texture: texture_storage_2d<rgba32float, read>;
 
 fn sample_temporal_demodulated_radiance(pos: vec2<f32>) -> vec3<f32> {
@@ -124,6 +128,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     let alpha: f32 = 1.0 / (1.0 + f32(frame_count));
     temporal_moments = mix(temporal_moments, moments, alpha);
     temporal_radiance = mix(temporal_radiance, radiance, alpha);
+
+    out_variance[flat_id] = max(temporal_moments.y - sqr(temporal_moments.x), 0.0);
 
     out_temporal_demodulated_radiance[flat_id] = PackedRgb9e5::new(temporal_radiance);
     out_temporal_moments[flat_id] = temporal_moments;
