@@ -20,9 +20,14 @@ fn InlinePathTracer::trace(_origin: vec3<f32>, _direction: vec3<f32>, max_bounce
     var accumulated = vec3<f32>(0.0);
 
     for (var bounce: u32 = 0; bounce < max_bounces; bounce += 1) {
+        var safe_origin_normal: vec3<f32> = direction;
         for (var step: u32 = 0; step < MAX_NON_OPAQUE_DEPTH; step += 1) {
+            if (dot(safe_origin_normal, direction) < 0.0) {
+                safe_origin_normal *= -1.0;
+            }
+
             var rq: ray_query;
-            rayQueryInitialize(&rq, scene, RayDesc(0u, 0xFFu, 0.0, 1000.0, origin, direction));
+            rayQueryInitialize(&rq, scene, RayDesc(0u, 0xFFu, 0.0, safe_distance(1000.0), safe_origin(origin, safe_origin_normal), direction));
             rayQueryProceed(&rq);
 
             let intersection = rayQueryGetCommittedIntersection(&rq);
@@ -48,8 +53,12 @@ fn InlinePathTracer::trace(_origin: vec3<f32>, _direction: vec3<f32>, max_bounce
 
                 if (material_color.a < material_descriptor.alpha_cutoff) {
                     if (step + 1 < MAX_NON_OPAQUE_DEPTH) {
+                        var p01: vec3<f32> = v1.position - v0.position;
+                        var p02: vec3<f32> = v2.position - v0.position;
+                        safe_origin_normal = normalize(cross(p01, p02));
+    
                         // TODO: non-opaque geometry would be a better choice, not properly supported by wgpu yet
-                        origin += direction * (intersection.t + 0.001);
+                        origin += direction * safely_traced_t(intersection.t);
                         continue;
                     } else {
                         material_color.a = 1.0;
@@ -73,7 +82,7 @@ fn InlinePathTracer::trace(_origin: vec3<f32>, _direction: vec3<f32>, max_bounce
                 let hit_tangent_ws: vec3<f32> = normalize((local_to_world_inv_trans * vec4<f32>(tbn[0], 1.0)).xyz);
                 let hit_bitangent_ws: vec3<f32> = normalize((local_to_world_inv_trans * vec4<f32>(tbn[1], 1.0)).xyz);
                 var hit_normal_ws: vec3<f32> = normalize((local_to_world_inv_trans * vec4<f32>(tbn[2], 1.0)).xyz);
-                let hit_point_ws = origin + direction * intersection.t;
+                let hit_point_ws = origin + direction * safely_traced_t(intersection.t);
 
                 let hit_tangent_to_world = mat3x3<f32>(
                     hit_tangent_ws,
@@ -129,7 +138,7 @@ fn InlinePathTracer::trace(_origin: vec3<f32>, _direction: vec3<f32>, max_bounce
                     let n_dot_l: f32 = dot(shadow_direction, front_facing_shading_normal_ws);
 
                     if (n_dot_l > 0.0) {
-                        if (trace_shadow_ray(hit_point_ws, shadow_direction, shadow_distance, scene)) {
+                        if (trace_shadow_ray(hit_point_ws, shadow_direction, shadow_distance, front_facing_shading_normal_ws, scene)) {
                             let w_in_worldspace: vec3<f32> = shadow_direction;
 
                             var shading_pdf: f32;
@@ -164,7 +173,7 @@ fn InlinePathTracer::trace(_origin: vec3<f32>, _direction: vec3<f32>, max_bounce
                     var specular: bool;
                     let reflectance: vec3<f32> = DisneyBsdf::sample(disney_bsdf,
                         front_facing_shading_normal_ws, tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
-                        w_out_worldspace, intersection.t, back_face,
+                        w_out_worldspace, safely_traced_t(intersection.t), back_face,
                         random_uniform_float(rng), random_uniform_float(rng), random_uniform_float(rng),
                         &w_in_worldspace, &pdf, &specular
                     );
@@ -175,7 +184,7 @@ fn InlinePathTracer::trace(_origin: vec3<f32>, _direction: vec3<f32>, max_bounce
                         let contribution: vec3<f32> = (1.0 / pdf) * reflectance * cos_in;
                         (*throughput) *= contribution;
 
-                        origin = hit_point_ws + w_in_worldspace * 0.0001;
+                        origin = hit_point_ws;
                         direction = w_in_worldspace;
                     } else {
                         return accumulated;
@@ -183,7 +192,7 @@ fn InlinePathTracer::trace(_origin: vec3<f32>, _direction: vec3<f32>, max_bounce
                 }
             } else {
                 if (bounce == 0) {
-                    *first_hit_ws = vec3<f32>(0.0);
+                    *first_hit_ws = origin + direction * 1000.0;
                 }
 
                 let color = Sky::sky(direction, true);
@@ -239,4 +248,64 @@ fn InlinePathTracer::sample_ris(hit_point_ws: vec3<f32>, w_out_worldspace: vec3<
     }
 
     return gi_reservoir;
+}
+
+// TODO: maybe use throughput is lightsample ctx?
+fn GiReservoir::phat(_self: GiReservoir, light_sample_ctx: LightSampleCtx, throughput: vec3<f32>, hit_point_ws: vec3<f32>, w_out_worldspace: vec3<f32>, scene: acceleration_structure) -> f32 {
+    let tex_coord: vec2<f32> = light_sample_ctx.hit_tex_coord;
+    let material_idx: u32 = light_sample_ctx.hit_material_idx;
+    let material_descriptor: MaterialDescriptor = material_descriptors[material_idx];
+    let material: Material = Material::from_material_descriptor(material_descriptor, tex_coord);
+    let disney_bsdf = DisneyBsdf::from_material(material);
+
+    let front_facing_shading_normal_ws: vec3<f32> = PackedNormalizedXyz10::unpack(light_sample_ctx.front_facing_shading_normal_ws, 0);
+    let tangent_to_world: mat3x3<f32> = build_orthonormal_basis(front_facing_shading_normal_ws);
+    let world_to_tangent: mat3x3<f32> = transpose(tangent_to_world);
+
+    let front_facing_clearcoat_normal_ws: vec3<f32> = PackedNormalizedXyz10::unpack(light_sample_ctx.front_facing_clearcoat_normal_ws, 0);
+    let clearcoat_tangent_to_world: mat3x3<f32> = build_orthonormal_basis(front_facing_clearcoat_normal_ws);
+    let clearcoat_world_to_tangent: mat3x3<f32> = transpose(clearcoat_tangent_to_world);
+    
+    let w_in_worldspace: vec3<f32> = normalize(_self.sample_point_ws - hit_point_ws);
+
+    var shading_pdf: f32;
+    let reflectance: vec3<f32> = DisneyBsdf::evaluate(disney_bsdf, front_facing_shading_normal_ws,
+        tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
+        w_out_worldspace, w_in_worldspace, &shading_pdf);
+    var cos_in: f32 = abs(dot(w_in_worldspace, front_facing_shading_normal_ws));
+    //jacobianDiffuse(current_gbuffer_texel.position_ws, prev_gbuffer_texel.position_ws, prev_normal_ws, w_in_worldspace, payload.t);
+
+    let local_throughput: vec3<f32> = cos_in * reflectance;
+    let gi_origin: vec3<f32> = hit_point_ws + w_in_worldspace * 0.0001;
+    let gi_direction: vec3<f32> = w_in_worldspace;
+    var throughput_result: vec3<f32> = throughput * local_throughput;
+    var phat_rng: u32 = _self.phat_rng;
+    var sample_point_ws: vec3<f32>;
+    let contribution: vec3<f32> = InlinePathTracer::trace(gi_origin, gi_direction, RESTIR_GI_PHAT_MAX_BOUNCES, &throughput_result, &sample_point_ws, &phat_rng, scene);
+    return linear_to_luma(contribution);
+}
+
+fn GiReservoir::combine_unbiased(r1: GiReservoir, r1_hit_point_ws: vec3<f32>, r1_light_sample_ctx: LightSampleCtx, r1_w_out_worldspace: vec3<f32>, r1_throughput: vec3<f32>,
+                                  r2: GiReservoir, r2_hit_point_ws: vec3<f32>, r2_light_sample_ctx: LightSampleCtx, r2_w_out_worldspace: vec3<f32>, r2_throughput: vec3<f32>,
+                                  rng: ptr<function, u32>, scene: acceleration_structure) -> GiReservoir {
+    var combined_reservoir = GiReservoir::new();
+    GiReservoir::update(&combined_reservoir, r1.selected_phat * r1.contribution_weight * r1.sample_count, rng, r1.sample_point_ws, r1.selected_phat, r1.phat_rng);
+    GiReservoir::update(&combined_reservoir, r2.selected_phat * r2.contribution_weight * r2.sample_count, rng, r2.sample_point_ws, r2.selected_phat, r2.phat_rng);
+    combined_reservoir.sample_count = r1.sample_count + r2.sample_count;
+
+    var z: f32 = 0.0;
+    if (GiReservoir::phat(combined_reservoir, r1_light_sample_ctx, r1_throughput, r1_hit_point_ws, r1_w_out_worldspace, scene) > 0.0) {
+    //if (LightSample::phat(combined_reservoir.sample, r1_light_sample_ctx, r1_hit_point_ws, r1_w_out_worldspace, true, scene) > 0.0) {
+        z += r1.sample_count;
+    }
+    if (GiReservoir::phat(combined_reservoir, r2_light_sample_ctx, r2_throughput, r2_hit_point_ws, r2_w_out_worldspace, scene) > 0.0) {
+    //if (LightSample::phat(combined_reservoir.sample, r2_light_sample_ctx, r2_hit_point_ws, r2_w_out_worldspace, true, scene) > 0.0) {
+        z += r2.sample_count;
+    }
+
+    if (combined_reservoir.selected_phat > 0.0 && z * combined_reservoir.weight_sum > 0.0) {
+        combined_reservoir.contribution_weight = (1.0 / combined_reservoir.selected_phat) * (1.0 / z * combined_reservoir.weight_sum);
+    }
+
+    return combined_reservoir;
 }

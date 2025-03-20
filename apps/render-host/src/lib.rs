@@ -62,8 +62,8 @@ pub struct HostRenderLoop {
     input_handler: InputHandler,
     camera_controller: CameraController,
     world: World,
-    duck_entity: Option<specs::Entity>,
-    toy_car_entity: specs::Entity,
+    // duck_entity: Option<specs::Entity>,
+    // toy_car_entity: specs::Entity,
 }
 
 impl RenderLoop for HostRenderLoop {
@@ -123,10 +123,10 @@ impl RenderLoop for HostRenderLoop {
         });
 
         let mut world = World::new();
-        let duck_entity =
-            world.create_entity("Duck", Transform::from_scale(Vec3::splat(1.0)), |builder| {
-                builder.with(ModelComponent::new("::Duck.glb"))
-            });
+        // let duck_entity =
+        //     world.create_entity("Duck", Transform::from_scale(Vec3::splat(1.0)), |builder| {
+        //         builder.with(ModelComponent::new("::Duck.glb"))
+        //     });
         let _ = world.create_entity(
             "Sponza",
             Transform::new(Vec3::new(3.0, 0.0, 0.0), Quat::IDENTITY, Vec3::splat(1.0)),
@@ -142,16 +142,16 @@ impl RenderLoop for HostRenderLoop {
         //     Transform::new(Vec3::new(3.0, 0.0, 0.0), Quat::IDENTITY, Vec3::splat(1.0)),
         //     |builder| builder.with(ModelComponent::new("::SponzaOrbs.glb")),
         // );
-        let _ = world.create_entity(
-            "NeonSigns",
-            Transform::new(Vec3::new(3.0, 0.0, 0.0), Quat::IDENTITY, Vec3::splat(1.0)),
-            |builder| builder.with(ModelComponent::new("::SponzaNeon.glb")),
-        );
-        let toy_car_entity = world.create_entity(
-            "ToyCar",
-            Transform::new(Vec3::new(3.0, 0.5, 0.0), Quat::IDENTITY, Vec3::splat(45.0)),
-            |builder| builder.with(ModelComponent::new("::ToyCarNonEmissive.glb")),
-        );
+        // let _ = world.create_entity(
+        //     "NeonSigns",
+        //     Transform::new(Vec3::new(3.0, 0.0, 0.0), Quat::IDENTITY, Vec3::splat(1.0)),
+        //     |builder| builder.with(ModelComponent::new("::SponzaNeon.glb")),
+        // );
+        // let toy_car_entity = world.create_entity(
+        //     "ToyCar",
+        //     Transform::new(Vec3::new(3.0, 0.5, 0.0), Quat::IDENTITY, Vec3::splat(45.0)),
+        //     |builder| builder.with(ModelComponent::new("::ToyCarNonEmissive.glb")),
+        // );
         // let _ = world.create_entity(
         //     "Chess",
         //     Transform::new(Vec3::new(-2.0, 0.5, 0.0), Quat::IDENTITY, Vec3::splat(3.0)),
@@ -207,8 +207,8 @@ impl RenderLoop for HostRenderLoop {
             input_handler: InputHandler::new(),
             camera_controller: CameraController::new(),
             world,
-            duck_entity: Some(duck_entity),
-            toy_car_entity,
+            // duck_entity: Some(duck_entity),
+            // toy_car_entity,
         }
     }
 
@@ -265,26 +265,26 @@ impl RenderLoop for HostRenderLoop {
             fps_avg / self.fps_history.len() as f32
         );
 
-        if let Some(duck_entity) = self.duck_entity {
-            let mut transforms_mut = self.world.entities_mut::<TransformComponent>();
+        // if let Some(duck_entity) = self.duck_entity {
+        //     let mut transforms_mut = self.world.entities_mut::<TransformComponent>();
 
-            let duck_transform = transforms_mut.get_mut(duck_entity).unwrap();
-            duck_transform.transform.translate(RIGHT * delta_time * 0.5);
-        }
+        //     let duck_transform = transforms_mut.get_mut(duck_entity).unwrap();
+        //     duck_transform.transform.translate(RIGHT * delta_time * 0.5);
+        // }
 
-        {
-            let mut transforms_mut = self.world.entities_mut::<TransformComponent>();
-            let transform = transforms_mut.get_mut(self.toy_car_entity).unwrap();
-            transform
-                .transform
-                .rotate(Quat::from_axis_angle(UP, delta_time * 0.3));
-        }
+        // {
+        //     let mut transforms_mut = self.world.entities_mut::<TransformComponent>();
+        //     let transform = transforms_mut.get_mut(self.toy_car_entity).unwrap();
+        //     transform
+        //         .transform
+        //         .rotate(Quat::from_axis_angle(UP, delta_time * 0.3));
+        // }
 
-        if self.input_handler.key(KeyCode::KeyX) {
-            if let Some(duck_entity) = self.duck_entity.take() {
-                self.world.destroy_entity(duck_entity);
-            }
-        }
+        // if self.input_handler.key(KeyCode::KeyX) {
+        //     if let Some(duck_entity) = self.duck_entity.take() {
+        //         self.world.destroy_entity(duck_entity);
+        //     }
+        // }
 
         if self.input_handler.key(KeyCode::Escape) {
             return true;

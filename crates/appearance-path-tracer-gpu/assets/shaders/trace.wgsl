@@ -84,19 +84,24 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     var rng: u32 = payload.rng;
 
     var gbuffer_position_ws: vec3<f32>;
-    var gbuffer_depth_ws: f32;
+    var gbuffer_depth_ws: f32 = 0.0;
     var gbuffer_normal_ws: vec3<f32>;
     var gbuffer_albedo: vec3<f32>;
 
     var depth_ws: f32 = 0.0;
+    var safe_origin_normal: vec3<f32> = direction;
     for (var step: u32 = 0; step < MAX_NON_OPAQUE_DEPTH; step += 1) {
+        if (dot(safe_origin_normal, direction) < 0.0) {
+            safe_origin_normal *= -1.0;
+        }
+
         var rq: ray_query;
-        rayQueryInitialize(&rq, scene, RayDesc(0u, 0xFFu, 0.0, 1000.0, origin, direction));
+        rayQueryInitialize(&rq, scene, RayDesc(0u, 0xFFu, 0.0, 1000.0, safe_origin(origin, safe_origin_normal), direction));
         rayQueryProceed(&rq);
 
         let intersection = rayQueryGetCommittedIntersection(&rq);
         if (intersection.kind == RAY_QUERY_INTERSECTION_TRIANGLE) {
-            depth_ws += intersection.t;
+            depth_ws += safely_traced_t(intersection.t);
 
             let vertex_pool_slice_index: u32 = intersection.instance_custom_data;
             let vertex_pool_slice: VertexPoolSlice = vertex_pool_slices[vertex_pool_slice_index];
@@ -119,8 +124,12 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
 
             if (material_color.a < material_descriptor.alpha_cutoff) {
                 if (step + 1 < MAX_NON_OPAQUE_DEPTH) {
+                    var p01: vec3<f32> = v1.position - v0.position;
+                    var p02: vec3<f32> = v2.position - v0.position;
+                    safe_origin_normal = normalize(cross(p01, p02));
+
                     // TODO: non-opaque geometry would be a better choice, not properly supported by wgpu yet
-                    origin += direction * (intersection.t + 0.001);
+                    origin += direction * safely_traced_t(intersection.t);
                     continue;
                 } else {
                     material_color.a = 1.0;
@@ -148,7 +157,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
             let hit_tangent_ws: vec3<f32> = normalize((local_to_world_inv_trans * vec4<f32>(tbn[0], 1.0)).xyz);
             let hit_bitangent_ws: vec3<f32> = normalize((local_to_world_inv_trans * vec4<f32>(tbn[1], 1.0)).xyz);
             var hit_normal_ws: vec3<f32> = normalize((local_to_world_inv_trans * vec4<f32>(tbn[2], 1.0)).xyz);
-            let hit_point_ws = origin + direction * intersection.t;
+            let hit_point_ws = origin + direction * safely_traced_t(intersection.t);
 
             let hit_tangent_to_world = mat3x3<f32>(
                 hit_tangent_ws,
@@ -223,7 +232,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
 
                 var gi_reservoir: GiReservoir = InlinePathTracer::sample_ris(hit_point_ws, w_out_worldspace, front_facing_shading_normal_ws,
                     tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
-                    disney_bsdf, throughput, intersection.t, back_face, &rng, scene);
+                    disney_bsdf, throughput, safely_traced_t(intersection.t), back_face, &rng, scene);
                 gi_reservoirs[id] = PackedGiReservoir::new(gi_reservoir);
             }
         } else {

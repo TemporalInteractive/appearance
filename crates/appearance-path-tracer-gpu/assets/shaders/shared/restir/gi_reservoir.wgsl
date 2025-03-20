@@ -60,6 +60,19 @@ fn GiReservoir::update(_self: ptr<function, GiReservoir>, sample_weight: f32, rn
     return false;
 }
 
+fn GiReservoir::combine(r1: GiReservoir, r2: GiReservoir, rng: ptr<function, u32>) -> GiReservoir {
+    var combined_reservoir = GiReservoir::new();
+    GiReservoir::update(&combined_reservoir, r1.selected_phat * r1.contribution_weight * r1.sample_count, rng, r1.sample_point_ws, r1.selected_phat, r1.phat_rng);
+    GiReservoir::update(&combined_reservoir, r2.selected_phat * r2.contribution_weight * r2.sample_count, rng, r2.sample_point_ws, r2.selected_phat, r2.phat_rng);
+    combined_reservoir.sample_count = r1.sample_count + r2.sample_count;
+
+    if (combined_reservoir.selected_phat > 0.0 && combined_reservoir.sample_count * combined_reservoir.weight_sum > 0.0) {
+        combined_reservoir.contribution_weight = (1.0 / combined_reservoir.selected_phat) * (1.0 / combined_reservoir.sample_count * combined_reservoir.weight_sum);
+    }
+
+    return combined_reservoir;
+}
+
 // https://dl.acm.org/doi/pdf/10.1145/2766997 at section 5 under "Jacobians"
 // Calculate geometric ratio from base path X (this is the pixel you are sampling from) to the
 // neighbor Y that wants to reuse X.

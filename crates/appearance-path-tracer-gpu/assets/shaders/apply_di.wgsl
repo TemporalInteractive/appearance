@@ -89,7 +89,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     let shadow_distance: f32 = distance(light_sample.point, hit_point_ws);
     let n_dot_l: f32 = dot(shadow_direction, front_facing_shading_normal_ws);
     if (n_dot_l > 0.0) {
-        if (trace_shadow_ray(hit_point_ws, shadow_direction, shadow_distance, scene)) {
+        if (trace_shadow_ray(hit_point_ws, shadow_direction, shadow_distance, front_facing_shading_normal_ws, scene)) {
             let w_out_worldspace: vec3<f32> = -direction;
             let w_in_worldspace: vec3<f32> = shadow_direction;
 
