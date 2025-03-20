@@ -17,6 +17,7 @@ use resolve_pass::ResolvePassParameters;
 use restir_di_pass::{LightSampleCtx, PackedDiReservoir, RestirDiPass, RestirDiPassParameters};
 use restir_gi_pass::{PackedGiReservoir, RestirGiPass, RestirGiPassParameters};
 use scene_resources::SceneResources;
+use svgf_pass::{SvgfPass, SvgfPassParameters};
 use taa_pass::TaaPassParameters;
 use trace_pass::TracePassParameters;
 
@@ -32,6 +33,7 @@ mod resolve_pass;
 mod restir_di_pass;
 mod restir_gi_pass;
 mod scene_resources;
+mod svgf_pass;
 mod taa_pass;
 mod trace_pass;
 
@@ -64,6 +66,7 @@ struct SizedResources {
 
     restir_di_pass: RestirDiPass,
     restir_gi_pass: RestirGiPass,
+    svgf_pass: SvgfPass,
 }
 
 impl SizedResources {
@@ -100,7 +103,7 @@ impl SizedResources {
                 size: (std::mem::size_of::<PackedRgb9e5>() as u32 * resolution.x * resolution.y)
                     as u64,
                 mapped_at_creation: false,
-                usage: wgpu::BufferUsages::STORAGE,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             })
         });
 
@@ -167,6 +170,8 @@ impl SizedResources {
         let restir_di_pass = RestirDiPass::new(resolution, device);
         let restir_gi_pass = RestirGiPass::new(resolution, device);
 
+        let svgf_pass = SvgfPass::new(resolution, device);
+
         Self {
             film,
             rays,
@@ -181,6 +186,7 @@ impl SizedResources {
             depth_texture,
             restir_di_pass,
             restir_gi_pass,
+            svgf_pass,
         }
     }
 
@@ -188,6 +194,7 @@ impl SizedResources {
         self.gbuffer.end_frame(camera);
         self.restir_di_pass.end_frame();
         self.restir_gi_pass.end_frame();
+        self.svgf_pass.end_frame();
     }
 }
 
@@ -198,6 +205,7 @@ pub struct PathTracerGpuConfig {
 
     restir_di: bool,
     restir_gi: bool,
+    svgf: bool,
     firefly_filter: bool,
     taa: bool,
 }
@@ -207,8 +215,9 @@ impl Default for PathTracerGpuConfig {
         Self {
             max_bounces: 2,
             sample_count: 1,
-            restir_di: true,
-            restir_gi: true,
+            restir_di: false,
+            restir_gi: false,
+            svgf: true,
             firefly_filter: false,
             taa: false,
         }
@@ -466,6 +475,21 @@ impl PathTracerGpu {
             &mut command_encoder,
             pipeline_database,
         );
+
+        if self.config.svgf {
+            self.sized_resources.svgf_pass.encode(
+                &SvgfPassParameters {
+                    resolution: self.local_resolution,
+                    history_influence: 0.8,
+                    demodulated_radiance,
+                    gbuffer: &self.sized_resources.gbuffer,
+                    velocity_texture_view: &self.sized_resources.velocity_texture_view,
+                },
+                &ctx.device,
+                &mut command_encoder,
+                pipeline_database,
+            );
+        }
 
         if self.config.firefly_filter {
             firefly_filter_pass::encode(
