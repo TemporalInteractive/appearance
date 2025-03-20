@@ -4,11 +4,9 @@
 
 @include appearance-path-tracer-gpu::shared/gbuffer_bindings
 
-const MAX_TEMPORAL_FRAMES: u32 = 24;
-
 struct Constants {
     resolution: vec2<u32>,
-    history_influence: f32,
+    max_history_frames: u32,
     seed: u32,
 }
 
@@ -22,7 +20,7 @@ var<storage, read> demodulated_radiance: array<PackedRgb9e5>;
 
 @group(0)
 @binding(2)
-var<storage, read> in_temporal_demodulated_radiance: array<PackedRgb9e5>;
+var<storage, read> history_demodulated_radiance: array<PackedRgb9e5>;
 
 @group(0)
 @binding(3)
@@ -53,10 +51,10 @@ fn sample_temporal_demodulated_radiance(pos: vec2<f32>) -> vec3<f32> {
     let idx01: u32 = min(i_pos.y + 1, constants.resolution.y - 1) * constants.resolution.x + i_pos.x;
     let idx11: u32 = min(i_pos.y + 1, constants.resolution.y - 1) * constants.resolution.x + min(i_pos.x + 1, constants.resolution.x - 1);
 
-    let c00: vec3<f32> = PackedRgb9e5::unpack(in_temporal_demodulated_radiance[idx00]);
-    let c10: vec3<f32> = PackedRgb9e5::unpack(in_temporal_demodulated_radiance[idx10]);
-    let c01: vec3<f32> = PackedRgb9e5::unpack(in_temporal_demodulated_radiance[idx01]);
-    let c11: vec3<f32> = PackedRgb9e5::unpack(in_temporal_demodulated_radiance[idx11]);
+    let c00: vec3<f32> = PackedRgb9e5::unpack(history_demodulated_radiance[idx00]);
+    let c10: vec3<f32> = PackedRgb9e5::unpack(history_demodulated_radiance[idx10]);
+    let c01: vec3<f32> = PackedRgb9e5::unpack(history_demodulated_radiance[idx01]);
+    let c11: vec3<f32> = PackedRgb9e5::unpack(history_demodulated_radiance[idx11]);
 
     let c0: vec3<f32> = mix(c00, c10, f_pos.x);
     let c1: vec3<f32> = mix(c01, c11, f_pos.x);
@@ -119,7 +117,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
             temporal_radiance = sample_temporal_demodulated_radiance(prev_point_ss);
             temporal_moments = sample_temporal_moments(prev_point_ss);
 
-            frame_count = min(temporal_frame_count[flat_id] + 1, MAX_TEMPORAL_FRAMES);
+            frame_count = min(temporal_frame_count[flat_id] + 1, constants.max_history_frames);
         }
     }
 
