@@ -89,7 +89,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
         throughput *= contribution;
         payload.throughput = PackedRgb9e5::new(throughput);
 
-        let out_ray = Ray::new(hit_point_ws + w_in_worldspace * 0.0001, w_in_worldspace);
+        let out_ray = Ray::new(hit_point_ws, w_in_worldspace);
         in_rays[id] = out_ray;
     } else {
         payload.t = -1.0;

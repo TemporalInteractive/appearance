@@ -27,7 +27,7 @@ fn InlinePathTracer::trace(_origin: vec3<f32>, _direction: vec3<f32>, max_bounce
             }
 
             var rq: ray_query;
-            rayQueryInitialize(&rq, scene, RayDesc(0u, 0xFFu, 0.0, 1000.0, safe_origin(origin, safe_origin_normal), direction));
+            rayQueryInitialize(&rq, scene, RayDesc(0u, 0xFFu, 0.0, safe_distance(1000.0), safe_origin(origin, safe_origin_normal), direction));
             rayQueryProceed(&rq);
 
             let intersection = rayQueryGetCommittedIntersection(&rq);
@@ -82,7 +82,7 @@ fn InlinePathTracer::trace(_origin: vec3<f32>, _direction: vec3<f32>, max_bounce
                 let hit_tangent_ws: vec3<f32> = normalize((local_to_world_inv_trans * vec4<f32>(tbn[0], 1.0)).xyz);
                 let hit_bitangent_ws: vec3<f32> = normalize((local_to_world_inv_trans * vec4<f32>(tbn[1], 1.0)).xyz);
                 var hit_normal_ws: vec3<f32> = normalize((local_to_world_inv_trans * vec4<f32>(tbn[2], 1.0)).xyz);
-                let hit_point_ws = origin + direction * intersection.t;
+                let hit_point_ws = origin + direction * safely_traced_t(intersection.t);
 
                 let hit_tangent_to_world = mat3x3<f32>(
                     hit_tangent_ws,
@@ -173,7 +173,7 @@ fn InlinePathTracer::trace(_origin: vec3<f32>, _direction: vec3<f32>, max_bounce
                     var specular: bool;
                     let reflectance: vec3<f32> = DisneyBsdf::sample(disney_bsdf,
                         front_facing_shading_normal_ws, tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
-                        w_out_worldspace, intersection.t, back_face,
+                        w_out_worldspace, safely_traced_t(intersection.t), back_face,
                         random_uniform_float(rng), random_uniform_float(rng), random_uniform_float(rng),
                         &w_in_worldspace, &pdf, &specular
                     );
@@ -184,7 +184,7 @@ fn InlinePathTracer::trace(_origin: vec3<f32>, _direction: vec3<f32>, max_bounce
                         let contribution: vec3<f32> = (1.0 / pdf) * reflectance * cos_in;
                         (*throughput) *= contribution;
 
-                        origin = hit_point_ws + w_in_worldspace * 0.0001;
+                        origin = hit_point_ws;
                         direction = w_in_worldspace;
                     } else {
                         return accumulated;
