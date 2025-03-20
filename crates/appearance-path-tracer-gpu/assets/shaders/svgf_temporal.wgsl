@@ -4,10 +4,12 @@
 
 @include appearance-path-tracer-gpu::shared/gbuffer_bindings
 
+const MAX_TEMPORAL_FRAMES: u32 = 24;
+
 struct Constants {
     resolution: vec2<u32>,
     history_influence: f32,
-    _padding0: u32,
+    seed: u32,
 }
 
 @group(0)
@@ -28,10 +30,18 @@ var<storage, read_write> out_temporal_demodulated_radiance: array<PackedRgb9e5>;
 
 @group(0)
 @binding(4)
-var<storage, read_write> temporal_frame_count: array<u32>;
+var<storage, read> in_temporal_moments: array<vec2<f32>>;
 
 @group(0)
 @binding(5)
+var<storage, read_write> out_temporal_moments: array<vec2<f32>>;
+
+@group(0)
+@binding(6)
+var<storage, read_write> temporal_frame_count: array<u32>;
+
+@group(0)
+@binding(7)
 var velocity_texture: texture_storage_2d<rgba32float, read>;
 
 fn bilinear(tx: f32, ty: f32, c00: vec3<f32>, c10: vec3<f32>, c01: vec3<f32>, c11: vec3<f32>) -> vec3<f32> {
@@ -54,27 +64,24 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
         return;
     }
 
+    var rng: u32 = pcg_hash(flat_id ^ xor_shift_u32(constants.seed));
+
     let radiance: vec3<f32> = PackedRgb9e5::unpack(demodulated_radiance[flat_id]);
-    var temporal_radiance: vec3<f32> = radiance;
+    var moments: vec2<f32>;
+    moments.x = linear_to_luma(radiance);
+    moments.y = sqr(moments.x);
+
+    var temporal_radiance = vec3<f32>(0.0);
+    var temporal_moments = vec2<f32>(0.0);
     var frame_count: u32 = 0;
 
     let velocity: vec2<f32> = textureLoad(velocity_texture, vec2<i32>(id)).xy;
-    var prev_point_ss = vec2<f32>(id) - (vec2<f32>(constants.resolution) * velocity);
+    let prev_point_ss = vec2<f32>(id) - (vec2<f32>(constants.resolution) * velocity) + (vec2<f32>(random_uniform_float(&rng), random_uniform_float(&rng)) * 0.5);
+    //var prev_point_ss = vec2<f32>(id) - (vec2<f32>(constants.resolution) * velocity);
     var prev_id: u32;
     if (all(prev_point_ss >= vec2<f32>(0.0)) && all(prev_point_ss <= vec2<f32>(constants.resolution - 1))) {
         let prev_id_2d = vec2<u32>(floor(prev_point_ss));
         prev_id = prev_id_2d.y * constants.resolution.x + prev_id_2d.x;
-
-        let prev_id00: u32 = min(u32(floor(prev_point_ss.y)), constants.resolution.y - 1) * constants.resolution.x + min(u32(floor(prev_point_ss.x)), constants.resolution.x - 1);
-        let history00: vec3<f32> = PackedRgb9e5::unpack(in_temporal_demodulated_radiance[prev_id00]);
-        let prev_id10: u32 = min(u32(ceil(prev_point_ss.y)), constants.resolution.y - 1) * constants.resolution.x + min(u32(floor(prev_point_ss.x)), constants.resolution.x - 1);
-        let history10: vec3<f32> = PackedRgb9e5::unpack(in_temporal_demodulated_radiance[prev_id10]);
-        let prev_id01: u32 = min(u32(floor(prev_point_ss.y)), constants.resolution.y - 1) * constants.resolution.x + min(u32(ceil(prev_point_ss.x)), constants.resolution.x - 1);
-        let history01: vec3<f32> = PackedRgb9e5::unpack(in_temporal_demodulated_radiance[prev_id01]);
-        let prev_id11: u32 = min(u32(ceil(prev_point_ss.y)), constants.resolution.y - 1) * constants.resolution.x + min(u32(ceil(prev_point_ss.x)), constants.resolution.x - 1);
-        let history11: vec3<f32> = PackedRgb9e5::unpack(in_temporal_demodulated_radiance[prev_id11]);
-
-        let reprojected_temporal_radiance: vec3<f32> = bilinear(fract(prev_point_ss.x), fract(prev_point_ss.y), history00, history10, history01, history11);
 
         let prev_gbuffer_texel: GBufferTexel = prev_gbuffer[prev_id];
         let current_depth_cs: f32 = GBufferTexel::depth_cs(current_gbuffer_texel, 0.001, 10000.0);
@@ -85,12 +92,27 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
         let valid_delta_normal: bool = dot(current_normal_ws, prev_normal_ws) > 0.906; // 25 degrees
 
         if (valid_delta_depth && valid_delta_normal) {
-            temporal_radiance = mix(radiance, reprojected_temporal_radiance, constants.history_influence);
-            frame_count = temporal_frame_count[flat_id] + 1;
+            // let prev_id00: u32 = min(u32(floor(prev_point_ss.y)), constants.resolution.y - 1) * constants.resolution.x + min(u32(floor(prev_point_ss.x)), constants.resolution.x - 1);
+            // let history00: vec3<f32> = PackedRgb9e5::unpack(in_temporal_demodulated_radiance[prev_id00]);
+            // let prev_id10: u32 = min(u32(ceil(prev_point_ss.y)), constants.resolution.y - 1) * constants.resolution.x + min(u32(floor(prev_point_ss.x)), constants.resolution.x - 1);
+            // let history10: vec3<f32> = PackedRgb9e5::unpack(in_temporal_demodulated_radiance[prev_id10]);
+            // let prev_id01: u32 = min(u32(floor(prev_point_ss.y)), constants.resolution.y - 1) * constants.resolution.x + min(u32(ceil(prev_point_ss.x)), constants.resolution.x - 1);
+            // let history01: vec3<f32> = PackedRgb9e5::unpack(in_temporal_demodulated_radiance[prev_id01]);
+            // let prev_id11: u32 = min(u32(ceil(prev_point_ss.y)), constants.resolution.y - 1) * constants.resolution.x + min(u32(ceil(prev_point_ss.x)), constants.resolution.x - 1);
+            // let history11: vec3<f32> = PackedRgb9e5::unpack(in_temporal_demodulated_radiance[prev_id11]);
+
+            // temporal_radiance = bilinear(fract(prev_point_ss.x), fract(prev_point_ss.y), history00, history10, history01, history11);
+            temporal_radiance = PackedRgb9e5::unpack(in_temporal_demodulated_radiance[prev_id]);
+            temporal_moments = in_temporal_moments[prev_id];
+
+            frame_count = min(temporal_frame_count[flat_id] + 1, MAX_TEMPORAL_FRAMES);
         }
     }
 
+    let alpha: f32 = 1.0 / (1.0 + f32(frame_count));
 
+    temporal_moments = mix(temporal_moments, moments, alpha);
+    temporal_radiance = mix(temporal_radiance, radiance, alpha);
 
     // let prev_gbuffer_texel: GBufferTexel = prev_gbuffer[prev_id];
     // let current_depth_cs: f32 = GBufferTexel::depth_cs(current_gbuffer_texel, 0.001, 10000.0);
@@ -107,6 +129,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     // }
 
     out_temporal_demodulated_radiance[flat_id] = PackedRgb9e5::new(temporal_radiance);
+    out_temporal_moments[flat_id] = temporal_moments;
     temporal_frame_count[flat_id] = frame_count;
 
 
