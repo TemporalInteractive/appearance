@@ -17,10 +17,13 @@ struct Frustum {
 #[repr(C)]
 struct GBufferConstants {
     prev_camera_frustum: Frustum,
+    resolution: UVec2,
+    _padding0: u32,
+    _padding1: u32,
 }
 
 #[repr(C)]
-pub struct GBufferTexel {
+pub struct PackedGBufferTexel {
     position_ws: Vec3,
     depth_ws: f32,
     normal_ws: PackedNormalizedXyz10,
@@ -31,6 +34,7 @@ pub struct GBufferTexel {
 
 pub struct GBuffer {
     gbuffer: [wgpu::Buffer; 2],
+    resolution: UVec2,
     frame_idx: u32,
     prev_camera_frustum: Frustum,
     bind_group_layout: wgpu::BindGroupLayout,
@@ -41,8 +45,9 @@ impl GBuffer {
         let gbuffer = std::array::from_fn(|i| {
             device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some(&format!("appearance-path-tracer-gpu::gbuffer {}", i)),
-                size: (std::mem::size_of::<GBufferTexel>() as u32 * resolution.x * resolution.y)
-                    as u64,
+                size: (std::mem::size_of::<PackedGBufferTexel>() as u32
+                    * resolution.x
+                    * resolution.y) as u64,
                 mapped_at_creation: false,
                 usage: wgpu::BufferUsages::STORAGE,
             })
@@ -86,6 +91,7 @@ impl GBuffer {
 
         Self {
             gbuffer,
+            resolution,
             frame_idx: 0,
             prev_camera_frustum: Frustum::default(),
             bind_group_layout,
@@ -101,6 +107,9 @@ impl GBuffer {
             label: Some("appearance-path-tracer-gpu::gbuffer constants"),
             contents: bytemuck::bytes_of(&GBufferConstants {
                 prev_camera_frustum: self.prev_camera_frustum,
+                resolution: self.resolution,
+                _padding0: 0,
+                _padding1: 0,
             }),
             usage: wgpu::BufferUsages::UNIFORM,
         });

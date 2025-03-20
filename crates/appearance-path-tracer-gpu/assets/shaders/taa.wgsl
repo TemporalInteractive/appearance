@@ -72,9 +72,9 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     if (any(id >= constants.resolution)) { return; }
     let flat_id: u32 = id.y * constants.resolution.x + id.x;
 
-    let current_gbuffer_texel: GBufferTexel = gbuffer[flat_id];
+    let current_gbuffer_texel: PackedGBufferTexel = gbuffer[flat_id];
 
-    if (GBufferTexel::is_sky(current_gbuffer_texel)) {
+    if (PackedGBufferTexel::is_sky(current_gbuffer_texel)) {
         return;
     }
 
@@ -140,9 +140,9 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
         prev_id = flat_id;
     }
 
-    let prev_gbuffer_texel: GBufferTexel = prev_gbuffer[prev_id];
-    let current_depth_cs: f32 = GBufferTexel::depth_cs(current_gbuffer_texel, 0.001, 10000.0);
-    let prev_depth_cs: f32 = GBufferTexel::depth_cs(prev_gbuffer_texel, 0.001, 10000.0);
+    let prev_gbuffer_texel: PackedGBufferTexel = prev_gbuffer[prev_id];
+    let current_depth_cs: f32 = PackedGBufferTexel::depth_cs(current_gbuffer_texel, 0.001, 10000.0);
+    let prev_depth_cs: f32 = PackedGBufferTexel::depth_cs(prev_gbuffer_texel, 0.001, 10000.0);
     let valid_delta_depth: bool = (abs(current_depth_cs - prev_depth_cs) / current_depth_cs) < 0.1;
     // let current_normal_ws: vec3<f32> = PackedNormalizedXyz10::unpack(current_gbuffer_texel.normal_ws, 0);
     // let prev_normal_ws: vec3<f32> = PackedNormalizedXyz10::unpack(prev_gbuffer_texel.normal_ws, 0);

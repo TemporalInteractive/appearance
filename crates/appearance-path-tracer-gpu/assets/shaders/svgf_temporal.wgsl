@@ -63,6 +63,25 @@ fn sample_temporal_demodulated_radiance(pos: vec2<f32>) -> vec3<f32> {
     return mix(c0, c1, f_pos.y);
 }
 
+fn sample_temporal_moments(pos: vec2<f32>) -> vec2<f32> {
+    let i_pos = vec2<u32>(floor(pos));
+    let f_pos: vec2<f32> = fract(pos);
+
+    let idx00: u32 = i_pos.y * constants.resolution.x + i_pos.x;
+    let idx10: u32 = i_pos.y * constants.resolution.x + min(i_pos.x + 1, constants.resolution.x - 1);
+    let idx01: u32 = min(i_pos.y + 1, constants.resolution.y - 1) * constants.resolution.x + i_pos.x;
+    let idx11: u32 = min(i_pos.y + 1, constants.resolution.y - 1) * constants.resolution.x + min(i_pos.x + 1, constants.resolution.x - 1);
+
+    let c00: vec2<f32> = in_temporal_moments[idx00];
+    let c10: vec2<f32> = in_temporal_moments[idx10];
+    let c01: vec2<f32> = in_temporal_moments[idx01];
+    let c11: vec2<f32> = in_temporal_moments[idx11];
+
+    let c0: vec2<f32> = mix(c00, c10, f_pos.x);
+    let c1: vec2<f32> = mix(c01, c11, f_pos.x);
+    return mix(c0, c1, f_pos.y);
+}
+
 @compute
 @workgroup_size(16, 16)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
@@ -71,7 +90,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     if (any(id >= constants.resolution)) { return; }
     let flat_id: u32 = id.y * constants.resolution.x + id.x;
 
-    let current_gbuffer_texel: GBufferTexel = gbuffer[flat_id];
+    let current_gbuffer_texel: GBufferTexel = PackedGBufferTexel::unpack(gbuffer[flat_id]);
 
     if (GBufferTexel::is_sky(current_gbuffer_texel)) {
         return;
@@ -95,17 +114,10 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
         let prev_id_2d = vec2<u32>(floor(prev_point_ss));
         prev_id = prev_id_2d.y * constants.resolution.x + prev_id_2d.x;
 
-        let prev_gbuffer_texel: GBufferTexel = prev_gbuffer[prev_id];
-        let current_depth_cs: f32 = GBufferTexel::depth_cs(current_gbuffer_texel, 0.001, 10000.0);
-        let prev_depth_cs: f32 = GBufferTexel::depth_cs(prev_gbuffer_texel, 0.001, 10000.0);
-        let valid_delta_depth: bool = (abs(current_depth_cs - prev_depth_cs) / current_depth_cs) < 0.1;
-        let current_normal_ws: vec3<f32> = PackedNormalizedXyz10::unpack(current_gbuffer_texel.normal_ws, 0);
-        let prev_normal_ws: vec3<f32> = PackedNormalizedXyz10::unpack(prev_gbuffer_texel.normal_ws, 0);
-        let valid_delta_normal: bool = dot(current_normal_ws, prev_normal_ws) > 0.906; // 25 degrees
-
-        if (valid_delta_depth && valid_delta_normal) {
+        let prev_gbuffer_texel: GBufferTexel = GBuffer::sample_prev_gbuffer(prev_point_ss);
+        if (all(GBufferTexel::is_disoccluded(current_gbuffer_texel, prev_gbuffer_texel))) {
             temporal_radiance = sample_temporal_demodulated_radiance(prev_point_ss);
-            temporal_moments = in_temporal_moments[prev_id];
+            temporal_moments = sample_temporal_moments(prev_point_ss);
 
             frame_count = min(temporal_frame_count[flat_id] + 1, MAX_TEMPORAL_FRAMES);
         }

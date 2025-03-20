@@ -254,7 +254,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
 
     // Write out all gbuffer data
     if (constants.bounce == 0) {
-        gbuffer[id] = GBufferTexel::new(
+        gbuffer[id] = PackedGBufferTexel::new(
             gbuffer_position_ws,
             gbuffer_depth_ws,
             gbuffer_normal_ws,

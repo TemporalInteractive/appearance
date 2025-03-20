@@ -25,9 +25,9 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     if (any(id >= constants.resolution)) { return; }
     let flat_id: u32 = id.y * constants.resolution.x + id.x;
 
-    let current_gbuffer_texel: GBufferTexel = gbuffer[flat_id];
+    let current_gbuffer_texel: PackedGBufferTexel = gbuffer[flat_id];
 
-    if (GBufferTexel::is_sky(current_gbuffer_texel)) {
+    if (PackedGBufferTexel::is_sky(current_gbuffer_texel)) {
         return;
     }
 
@@ -51,8 +51,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
             }
             let flat_sample_pixel: u32 = u32(sample_pixel.y) * constants.resolution.x + u32(sample_pixel.x);
 
-            let neighbor_gbuffer_texel: GBufferTexel = gbuffer[flat_sample_pixel];
-            if (GBufferTexel::is_sky(neighbor_gbuffer_texel)) {
+            let neighbor_gbuffer_texel: PackedGBufferTexel = gbuffer[flat_sample_pixel];
+            if (PackedGBufferTexel::is_sky(neighbor_gbuffer_texel)) {
                 continue;
             }
 
