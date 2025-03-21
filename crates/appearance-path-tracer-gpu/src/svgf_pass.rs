@@ -67,7 +67,7 @@ impl SvgfPass {
                 )),
                 size: (std::mem::size_of::<Vec2>() as u32 * resolution.x * resolution.y) as u64,
                 mapped_at_creation: false,
-                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+                usage: wgpu::BufferUsages::STORAGE,
             })
         });
 
@@ -79,7 +79,7 @@ impl SvgfPass {
                 )),
                 size: (std::mem::size_of::<f32>() as u32 * resolution.x * resolution.y) as u64,
                 mapped_at_creation: false,
-                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+                usage: wgpu::BufferUsages::STORAGE,
             })
         });
 
@@ -87,14 +87,14 @@ impl SvgfPass {
             label: Some("appearance-path-tracer-gpu::svgf_temporal history_demodulated_radiance"),
             size: (std::mem::size_of::<PackedRgb9e5>() as u32 * resolution.x * resolution.y) as u64,
             mapped_at_creation: false,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+            usage: wgpu::BufferUsages::STORAGE,
         });
 
         let temporal_frame_count = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("appearance-path-tracer-gpu::svgf_temporal temporal_frame_count"),
             size: (std::mem::size_of::<u32>() as u32 * resolution.x * resolution.y) as u64,
             mapped_at_creation: false,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+            usage: wgpu::BufferUsages::STORAGE,
         });
 
         Self {

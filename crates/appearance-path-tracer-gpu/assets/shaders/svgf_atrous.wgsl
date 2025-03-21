@@ -68,10 +68,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     let current_luma: f32 = linear_to_luma(radiance_sum);
     let current_variance: f32 = variance_sum;
 
-    // if (constants.pass_idx == 0) {
-    //     out_history_demodulated_radiance[flat_id] = PackedRgb9e5::new(radiance_sum);
-    // }
-
     for (var y: i32 = -2; y <= 2; y += 1) {
         for (var x: i32 = -2; x <= 2; x += 1) {
             if (y == 0 && x == 0) {
