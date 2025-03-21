@@ -68,9 +68,9 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     let current_luma: f32 = linear_to_luma(radiance_sum);
     let current_variance: f32 = variance_sum;
 
-    if (constants.pass_idx == 0) {
-        out_history_demodulated_radiance[flat_id] = PackedRgb9e5::new(radiance_sum);
-    }
+    // if (constants.pass_idx == 0) {
+    //     out_history_demodulated_radiance[flat_id] = PackedRgb9e5::new(radiance_sum);
+    // }
 
     for (var y: i32 = -2; y <= 2; y += 1) {
         for (var x: i32 = -2; x <= 2; x += 1) {
@@ -94,6 +94,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
 
             let normal_weight: f32 = pow(max(dot(current_gbuffer_texel.normal_ws, sample_gbuffer_texel.normal_ws), 0.0), PHI_NORMAL);
 
+            // This is slightly different compared to the SVGF paper, I didn't feel like calculating depth derivatives
             let depth_diff: f32 = abs(current_gbuffer_texel.depth_ws - sample_gbuffer_texel.depth_ws);
             let depth_weight: f32 = exp(-sqr(depth_diff) / (2.0 * sqr(PHI_DEPTH)));
 
@@ -114,7 +115,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
 
     out_temporal_demodulated_radiance[flat_id] = PackedRgb9e5::new(radiance_sum);
     out_variance[flat_id] = variance_sum;
-    // if (constants.pass_idx == 0) {
-    //     out_history_demodulated_radiance[flat_id] = PackedRgb9e5::new(radiance_sum);
-    // }
+    if (constants.pass_idx == 0) {
+        out_history_demodulated_radiance[flat_id] = PackedRgb9e5::new(radiance_sum);
+    }
 }

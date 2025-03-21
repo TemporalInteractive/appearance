@@ -94,13 +94,15 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
 
     let current_gbuffer_texel: GBufferTexel = PackedGBufferTexel::unpack(gbuffer[flat_id]);
 
+    let radiance: vec3<f32> = PackedRgb9e5::unpack(demodulated_radiance[flat_id]);
+
     if (GBufferTexel::is_sky(current_gbuffer_texel)) {
+        out_temporal_demodulated_radiance[flat_id] = PackedRgb9e5::new(radiance);
         return;
     }
 
     var rng: u32 = pcg_hash(flat_id ^ xor_shift_u32(constants.seed));
 
-    let radiance: vec3<f32> = PackedRgb9e5::unpack(demodulated_radiance[flat_id]);
     var moments: vec2<f32>;
     moments.x = linear_to_luma(radiance);
     moments.y = sqr(moments.x);
