@@ -18,8 +18,8 @@ struct Frustum {
 struct GBufferConstants {
     prev_camera_frustum: Frustum,
     resolution: UVec2,
+    camera_velocity: f32,
     _padding0: u32,
-    _padding1: u32,
 }
 
 #[repr(C)]
@@ -37,6 +37,7 @@ pub struct GBuffer {
     resolution: UVec2,
     frame_idx: u32,
     prev_camera_frustum: Frustum,
+    camera_velocity: f32,
     bind_group_layout: wgpu::BindGroupLayout,
 }
 
@@ -94,6 +95,7 @@ impl GBuffer {
             resolution,
             frame_idx: 0,
             prev_camera_frustum: Frustum::default(),
+            camera_velocity: 0.0,
             bind_group_layout,
         }
     }
@@ -108,8 +110,8 @@ impl GBuffer {
             contents: bytemuck::bytes_of(&GBufferConstants {
                 prev_camera_frustum: self.prev_camera_frustum,
                 resolution: self.resolution,
+                camera_velocity: self.camera_velocity,
                 _padding0: 0,
-                _padding1: 0,
             }),
             usage: wgpu::BufferUsages::UNIFORM,
         });
@@ -140,12 +142,16 @@ impl GBuffer {
     pub fn end_frame(&mut self, camera: &Camera) {
         self.frame_idx += 1;
 
-        let prev_camera_frustum = camera.build_prev_frustum();
-        self.prev_camera_frustum = Frustum {
-            left: prev_camera_frustum.get_plane(FrustumSide::Left).into(),
-            right: prev_camera_frustum.get_plane(FrustumSide::Right).into(),
-            top: prev_camera_frustum.get_plane(FrustumSide::Top).into(),
-            bottom: prev_camera_frustum.get_plane(FrustumSide::Bottom).into(),
-        };
+        let camera_translation = camera.transform.get_translation();
+        let (_, _, prev_camera_translation) = camera
+            .transform
+            .get_prev_matrix()
+            .to_scale_rotation_translation();
+        self.camera_velocity = camera_translation.distance(prev_camera_translation);
+
+        println!(
+            "{} {} {}",
+            self.camera_velocity, camera_translation, prev_camera_translation
+        );
     }
 }

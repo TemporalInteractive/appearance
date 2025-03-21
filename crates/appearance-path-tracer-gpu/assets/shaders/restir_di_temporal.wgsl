@@ -84,39 +84,24 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     let light_sample_ctx: LightSampleCtx = light_sample_ctxs[flat_id];
     var reservoir: DiReservoir = PackedDiReservoir::unpack(reservoirs_in[flat_id]);
 
-    var valid_prev_reservoir: bool = false;
-    var prev_id: u32;
-    var prev_gbuffer_texel: PackedGBufferTexel;
-
     let velocity: vec2<f32> = textureLoad(velocity_texture, vec2<i32>(id)).xy;
-    let prev_id_unclamped = vec2<i32>(vec2<f32>(id) - (vec2<f32>(constants.resolution) * velocity) + (vec2<f32>(random_uniform_float(&rng), random_uniform_float(&rng)) * 0.5));
-    if (all(prev_id_unclamped >= vec2<i32>(0)) && all(prev_id_unclamped < vec2<i32>(constants.resolution))) {
-        prev_id = u32(prev_id_unclamped.y) * constants.resolution.x + u32(prev_id_unclamped.x);
+    var prev_point_ss = vec2<f32>(id) - (vec2<f32>(constants.resolution) * velocity);
+    if (all(prev_point_ss >= vec2<f32>(0.0)) && all(prev_point_ss <= vec2<f32>(constants.resolution - 1))) {
+        let prev_id_2d = vec2<u32>(floor(prev_point_ss));
+        let prev_id: u32 = prev_id_2d.y * constants.resolution.x + prev_id_2d.x;
 
-        let current_gbuffer_texel: PackedGBufferTexel = gbuffer[flat_id];
-        prev_gbuffer_texel = prev_gbuffer[prev_id];
-        let prev_normal_ws: vec3<f32> = PackedNormalizedXyz10::unpack(prev_gbuffer_texel.normal_ws, 0);
-        if (constants.unbiased == 0) {
-            let current_depth_cs: f32 = PackedGBufferTexel::depth_cs(current_gbuffer_texel, 0.001, 10000.0);
-            let prev_depth_cs: f32 = PackedGBufferTexel::depth_cs(prev_gbuffer_texel, 0.001, 10000.0);
-            let valid_delta_depth: bool = (abs(current_depth_cs - prev_depth_cs) / current_depth_cs) < 0.1;
-            let current_normal_ws: vec3<f32> = PackedNormalizedXyz10::unpack(current_gbuffer_texel.normal_ws, 0);
-            let valid_delta_normal: bool = dot(current_normal_ws, prev_normal_ws) > 0.906; // 25 degrees
+        let current_gbuffer_texel: GBufferTexel = PackedGBufferTexel::unpack(gbuffer[flat_id]);
+        let prev_gbuffer_texel: GBufferTexel = GBuffer::sample_prev_gbuffer(prev_point_ss);
 
-            valid_prev_reservoir = valid_delta_depth && valid_delta_normal;
-        } else {
-            valid_prev_reservoir = true;
+        if (GBufferTexel::is_disoccluded(current_gbuffer_texel, prev_gbuffer_texel)) {
+            var prev_reservoir: DiReservoir = PackedDiReservoir::unpack(prev_reservoirs_in[prev_id]);
+            prev_reservoir.sample_count = min(prev_reservoir.sample_count, 20.0 * reservoir.sample_count);
+
+            let w_out_worldspace: vec3<f32> = -direction;
+            prev_reservoir.selected_phat = LightSample::phat(prev_reservoir.sample, light_sample_ctx, hit_point_ws, w_out_worldspace, constants.unbiased > 0, scene);
+
+            reservoir = DiReservoir::combine(reservoir, prev_reservoir, &rng);
         }
-    }
-
-    if (valid_prev_reservoir) {
-        var prev_reservoir: DiReservoir = PackedDiReservoir::unpack(prev_reservoirs_in[prev_id]);
-        prev_reservoir.sample_count = min(prev_reservoir.sample_count, 20.0 * reservoir.sample_count);
-
-        let w_out_worldspace: vec3<f32> = -direction;
-        prev_reservoir.selected_phat = LightSample::phat(prev_reservoir.sample, light_sample_ctx, hit_point_ws, w_out_worldspace, constants.unbiased > 0, scene);
-
-        reservoir = DiReservoir::combine(reservoir, prev_reservoir, &rng);
     }
 
     reservoirs_out[flat_id] = PackedDiReservoir::new(reservoir);

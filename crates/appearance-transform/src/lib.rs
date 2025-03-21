@@ -166,18 +166,6 @@ impl Transform {
         matrix.0
     }
 
-    pub fn get_view_matrix(&self) -> Mat4 {
-        let mut matrix = self.matrix.lock().unwrap();
-
-        if matrix.1 {
-            matrix.0 = Mat4::look_to_rh(self.translation, self.forward(), UP);
-            matrix.1 = false;
-            self.has_changed_this_frame.store(true, Ordering::Relaxed);
-        }
-
-        matrix.0
-    }
-
     pub fn get_prev_matrix(&self) -> Mat4 {
         self.prev_matrix
     }

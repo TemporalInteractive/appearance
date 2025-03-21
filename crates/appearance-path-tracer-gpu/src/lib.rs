@@ -215,9 +215,9 @@ impl Default for PathTracerGpuConfig {
         Self {
             max_bounces: 2,
             sample_count: 1,
-            restir_di: false,
+            restir_di: true,
             restir_gi: false,
-            svgf: true,
+            svgf: false,
             firefly_filter: false,
             taa: false,
         }
@@ -312,11 +312,11 @@ impl PathTracerGpu {
 
         self.camera
             .set_aspect_ratio(resolution.x as f32 / resolution.y as f32);
-        let inv_view = self.camera.transform.get_view_matrix().inverse();
+        let inv_view = self.camera.transform.get_matrix();
         let inv_proj = self.camera.get_matrix().inverse();
-        let view_proj = self.camera.get_matrix() * self.camera.transform.get_view_matrix();
+        let view_proj = self.camera.get_matrix() * self.camera.transform.get_matrix().inverse();
         let prev_view_proj =
-            self.camera.get_prev_matrix() * self.camera.transform.get_prev_matrix();
+            self.camera.get_prev_matrix() * self.camera.transform.get_prev_matrix().inverse();
 
         let mut command_encoder = ctx
             .device

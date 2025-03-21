@@ -3,6 +3,8 @@
 struct GBufferConstants {
     prev_camera_frustum: Frustum,
     resolution: vec2<u32>,
+    camera_velocity: f32,
+    _padding0: u32,
 }
 
 @group(4)
@@ -51,7 +53,10 @@ fn GBuffer::sample_prev_gbuffer(pos: vec2<f32>) -> GBufferTexel {
 }
 
 fn GBufferTexel::is_disoccluded(_self: GBufferTexel, prev_bilinear: GBufferTexel) -> bool {
-    let depth_similar: bool = abs(_self.depth_ws - prev_bilinear.depth_ws) <= 0.1 * prev_bilinear.depth_ws;
+    let depth_threshold = 0.1 + 0.3 * smoothstep(0.0, 1.0, gbuffer_constants.camera_velocity / 0.2) + 0.2 * smoothstep(1.0, 0.0, prev_bilinear.depth_ws);
+    let depth_similar: bool = abs(_self.depth_ws - prev_bilinear.depth_ws) <= depth_threshold * prev_bilinear.depth_ws;
+
     let normal_similar: bool = dot(_self.normal_ws, prev_bilinear.normal_ws) > 0.906; // 25 degrees
-    return depth_similar && normal_similar;
+
+    return depth_similar && normal_similar && !GBufferTexel::is_sky(prev_bilinear);
 }
