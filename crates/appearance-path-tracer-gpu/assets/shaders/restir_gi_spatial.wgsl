@@ -90,8 +90,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     let light_sample_ctx: LightSampleCtx = light_sample_ctxs[flat_id];
     var reservoir: GiReservoir = PackedGiReservoir::unpack(in_reservoirs[flat_id]);
 
-    let center_gbuffer_texel: GBufferTexel = gbuffer[flat_id];
-    let center_depth_cs: f32 = GBufferTexel::depth_cs(center_gbuffer_texel, 0.001, 10000.0);
+    let center_gbuffer_texel: PackedGBufferTexel = gbuffer[flat_id];
+    let center_depth_cs: f32 = PackedGBufferTexel::depth_cs(center_gbuffer_texel, 0.001, 10000.0);
     let center_normal_ws: vec3<f32> = PackedNormalizedXyz10::unpack(center_gbuffer_texel.normal_ws, 0);
 
     let center_id = vec2<i32>(i32(id.x), i32(id.y));
@@ -119,12 +119,12 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
 
         var valid_neighbour_reservoir: bool = true;
 
-        let neighbour_gbuffer_texel: GBufferTexel = gbuffer[flat_neighbour_id];
-        if (GBufferTexel::is_sky(neighbour_gbuffer_texel)) {
+        let neighbour_gbuffer_texel: PackedGBufferTexel = gbuffer[flat_neighbour_id];
+        if (PackedGBufferTexel::is_sky(neighbour_gbuffer_texel)) {
             valid_neighbour_reservoir = false;
         } else {
             let neighbour_normal_ws: vec3<f32> = PackedNormalizedXyz10::unpack(neighbour_gbuffer_texel.normal_ws, 0);
-            let neighbour_depth_cs: f32 = GBufferTexel::depth_cs(neighbour_gbuffer_texel, 0.001, 10000.0);
+            let neighbour_depth_cs: f32 = PackedGBufferTexel::depth_cs(neighbour_gbuffer_texel, 0.001, 10000.0);
             let valid_delta_depth: bool = (abs(center_depth_cs - neighbour_depth_cs) / center_depth_cs) < 0.1;
             let valid_delta_normal: bool = dot(center_normal_ws, neighbour_normal_ws) > 0.906; // 25 degrees
 

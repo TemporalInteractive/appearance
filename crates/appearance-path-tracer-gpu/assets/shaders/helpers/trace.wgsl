@@ -4,8 +4,8 @@
 /// appearance-path-tracer-gpu::shared/material/material_pool_bindings
 ///
 
-const MAX_NON_OPAQUE_DEPTH: u32 = 6;
-const MAX_NON_OPAQUE_SHADOW_DEPTH: u32 = 6;
+const MAX_NON_OPAQUE_DEPTH: u32 = 1;
+const MAX_NON_OPAQUE_SHADOW_DEPTH: u32 = 1;
 
 const TRACE_EPSILON: f32 = 1e-4;
 
