@@ -480,7 +480,7 @@ impl PathTracerGpu {
             self.sized_resources.svgf_pass.encode(
                 &SvgfPassParameters {
                     resolution: self.local_resolution,
-                    max_history_frames: 24,
+                    max_history_frames: 12,
                     atrous_pass_count: 5,
                     demodulated_radiance,
                     gbuffer: &self.sized_resources.gbuffer,
