@@ -17,7 +17,7 @@ fn LightSample::intensity(_self: LightSample, hit_point_ws: vec3<f32>) -> f32 {
     let distance: f32 = distance(_self.point, hit_point_ws);
 
     if (_self.triangle_area == 0.0) {
-        return Sky::sun_intensity(direction.y);
+        return Sky::sun_intensity(direction);
     } else {
         return Triangle::solid_angle(_self.triangle_normal, direction, distance) * 10.0;
     }
@@ -85,9 +85,6 @@ fn Nee::sample_uniform(r0: f32, r1: f32, r2: f32, r34: vec2<f32>, sample_point: 
     } else {
         sun_pick_probability = 1.0;
     }
-
-    // TODO: including sun makes the m_i = 1 / M weight invalid, use MIS?
-    sun_pick_probability = 0.0;
 
     if (r0 < sun_pick_probability) {
         return Nee::sample_sun(r34, sun_pick_probability, pdf);
@@ -287,7 +284,7 @@ fn Nee::sample_ris(hit_point_ws: vec3<f32>, w_out_worldspace: vec3<f32>, front_f
                         bsdf_light_sample = LightSample::new_triangle_sample(point, material.emission, triangle);
                     }
                 } else {
-                    //bsdf_light_sample = LightSample::new_sun_sample(w_in_worldspace * SUN_DISTANCE, sky_constants.sun_color);
+                    bsdf_light_sample = LightSample::new_sun_sample(w_in_worldspace * SUN_DISTANCE, sky_constants.sun_color);
                 }
 
                 if (!LightSample::is_empty(bsdf_light_sample)) {
