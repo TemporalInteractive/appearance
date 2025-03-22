@@ -130,7 +130,7 @@ fn InlinePathTracer::trace(_origin: vec3<f32>, _direction: vec3<f32>, max_bounce
 
                 let di_reservoir: DiReservoir = Nee::sample_ris(hit_point_ws, w_out_worldspace, front_facing_shading_normal_ws,
                     tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
-                    disney_bsdf, rng, scene);
+                    disney_bsdf, safely_traced_t(intersection.t), back_face, rng, scene);
                 let light_sample: LightSample = di_reservoir.sample;
                 if (di_reservoir.contribution_weight > 0.0) {
                     let shadow_direction: vec3<f32> = normalize(light_sample.point - hit_point_ws);

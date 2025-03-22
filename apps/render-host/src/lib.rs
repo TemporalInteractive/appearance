@@ -130,18 +130,18 @@ impl RenderLoop for HostRenderLoop {
         let _ = world.create_entity(
             "Sponza",
             Transform::new(Vec3::new(3.0, 0.0, 0.0), Quat::IDENTITY, Vec3::splat(1.0)),
-            |builder| builder.with(ModelComponent::new("::SponzaSheen.glb")),
+            |builder| builder.with(ModelComponent::new("::SponzaGlossy.glb")),
         );
         // let _ = world.create_entity(
         //     "CornellBox",
         //     Transform::new(Vec3::new(0.0, 0.0, 0.0), Quat::IDENTITY, Vec3::splat(1.0)),
         //     |builder| builder.with(ModelComponent::new("::CornellBoxConor.glb")),
         // );
-        // let _ = world.create_entity(
-        //     "Orbs",
-        //     Transform::new(Vec3::new(3.0, 0.0, 0.0), Quat::IDENTITY, Vec3::splat(1.0)),
-        //     |builder| builder.with(ModelComponent::new("::SponzaOrbs.glb")),
-        // );
+        let _ = world.create_entity(
+            "Orbs",
+            Transform::new(Vec3::new(3.0, 0.0, 0.0), Quat::IDENTITY, Vec3::splat(1.0)),
+            |builder| builder.with(ModelComponent::new("::SponzaOrbs.glb")),
+        );
         // let _ = world.create_entity(
         //     "NeonSigns",
         //     Transform::new(Vec3::new(3.0, 0.0, 0.0), Quat::IDENTITY, Vec3::splat(1.0)),

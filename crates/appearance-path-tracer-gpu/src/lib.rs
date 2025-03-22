@@ -213,11 +213,11 @@ pub struct PathTracerGpuConfig {
 impl Default for PathTracerGpuConfig {
     fn default() -> Self {
         Self {
-            max_bounces: 2,
-            sample_count: 1,
+            max_bounces: 1,
+            sample_count: 8,
             restir_di: false,
             restir_gi: false,
-            svgf: true,
+            svgf: false,
             firefly_filter: false,
             taa: false,
         }
@@ -359,7 +359,7 @@ impl PathTracerGpu {
             );
 
             for i in 0..self.config.max_bounces {
-                let seed = self.frame_idx * self.config.sample_count + sample;
+                let seed = 1337 * self.config.sample_count + sample; //self.frame_idx * self.config.sample_count + sample;
 
                 trace_pass::encode(
                     &TracePassParameters {
@@ -387,7 +387,7 @@ impl PathTracerGpu {
                         self.sized_resources.restir_di_pass.encode(
                             &RestirDiPassParameters {
                                 resolution: self.local_resolution,
-                                seed: self.frame_idx,
+                                seed,
                                 spatial_pass_count: 2,
                                 spatial_pixel_radius: 30.0,
                                 unbiased: true,
@@ -411,7 +411,7 @@ impl PathTracerGpu {
                         self.sized_resources.restir_gi_pass.encode(
                             &RestirGiPassParameters {
                                 resolution: self.local_resolution,
-                                seed: self.frame_idx,
+                                seed,
                                 spatial_pass_count: 1,
                                 spatial_pixel_radius: 30.0,
                                 unbiased: true,
@@ -554,6 +554,30 @@ impl PathTracerGpu {
         ctx.queue.submit(Some(command_encoder.finish()));
 
         let pixels = self.sized_resources.film.readback_pixels(&ctx.device);
+
+        const GT_PIXEL_VALUE: Vec3 = Vec3::new(0.2543353, 0.2544165, 0.25439543);
+        let mut avg_pixel_value = Vec3::ZERO;
+        for i in 0..(pixels.len() / 3) {
+            let f32_pixel = Vec3::new(
+                pixels[i * 3] as f32 / 255.0,
+                pixels[i * 3 + 1] as f32 / 255.0,
+                pixels[i * 3 + 2] as f32 / 255.0,
+            );
+
+            avg_pixel_value += f32_pixel;
+        }
+        avg_pixel_value /= (pixels.len() / 3) as f32;
+        let avg_err =
+            (GT_PIXEL_VALUE.element_sum() / 3.0 - avg_pixel_value.element_sum() / 3.0).powf(2.0);
+        let status_text = if avg_err < 1e-5 { "PASSED" } else { "FAILED" };
+        println!(
+            "\n\nERR: {} {}\nELEM-WISE ERR: {} AVG: {}",
+            avg_err,
+            status_text,
+            (GT_PIXEL_VALUE - avg_pixel_value).powf(2.0),
+            avg_pixel_value
+        );
+
         result_callback(&pixels);
 
         self.frame_idx += 1;

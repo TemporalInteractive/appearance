@@ -278,12 +278,12 @@ impl SceneResources {
         self.vertex_pool.end_frame();
 
         // TODO: this kind of logic shouldn't be here, just for testing
-        self.sky.sun_info.direction = Vec3::new(
-            (self.frame_idx as f32 / 100.0).cos() * -0.2,
-            -1.0,
-            (self.frame_idx as f32 / 100.0).sin() * 0.3,
-        )
-        .normalize();
+        // self.sky.sun_info.direction = Vec3::new(
+        //     (self.frame_idx as f32 / 100.0).cos() * -0.2,
+        //     -1.0,
+        //     (self.frame_idx as f32 / 100.0).sin() * 0.3,
+        // )
+        // .normalize();
     }
 
     fn model_instance_iter_rec<F: FnMut(&VertexPoolAlloc, Mat4, Mat4)>(

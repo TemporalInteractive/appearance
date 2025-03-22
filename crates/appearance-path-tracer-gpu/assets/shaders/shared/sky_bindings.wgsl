@@ -1,6 +1,8 @@
 @include ::math
 @include appearance-path-tracer-gpu::shared/sampling
 
+const SUN_DISTANCE: f32 = 1e+6;
+
 struct SkyConstants {
     sun_direction: vec3<f32>,
     sun_size: f32,

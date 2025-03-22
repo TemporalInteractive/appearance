@@ -8,7 +8,7 @@ struct VertexPoolConstants {
 }
 
 struct EmissiveTriangleInstance {
-    transform: mat4x4<f32>,
+    transform: mat4x4<f32>, // TODO: put in seperate buffer, also make 4x3
     vertex_pool_slice_idx: u32,
     num_triangles: u32,
     cdf: f32,

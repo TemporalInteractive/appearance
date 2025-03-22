@@ -5,7 +5,7 @@
 struct LightSample {
     point: vec3<f32>,
     emission: vec3<f32>,
-    triangle_area: f32,
+    triangle_area: f32, // TODO: remove?
     triangle_normal: vec3<f32>,
 }
 
@@ -42,7 +42,13 @@ fn LightSample::new_sun_sample(point: vec3<f32>, emission: vec3<f32>) -> LightSa
 }
 
 fn LightSample::empty() -> LightSample {
-    return LightSample(vec3<f32>(0.0), vec3<f32>(0.0), 0.0, UP);
+    return LightSample(vec3<f32>(0.0), vec3<f32>(0.0), -1.0, UP);
+}
+
+// TODO: is_sun check, rename empty to valid
+
+fn LightSample::is_empty(_self: LightSample) -> bool {
+    return _self.triangle_area < -0.0001;
 }
 
 fn PackedLightSample::new(light_sample: LightSample) -> PackedLightSample {
