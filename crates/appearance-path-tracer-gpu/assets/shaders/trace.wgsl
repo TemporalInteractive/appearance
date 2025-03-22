@@ -101,7 +101,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
 
         let intersection = rayQueryGetCommittedIntersection(&rq);
         if (intersection.kind == RAY_QUERY_INTERSECTION_TRIANGLE) {
-            depth_ws += safely_traced_t(intersection.t);
+            depth_ws += intersection.t;
 
             let vertex_pool_slice_index: u32 = intersection.instance_custom_data;
             let vertex_pool_slice: VertexPoolSlice = vertex_pool_slices[vertex_pool_slice_index];
@@ -129,7 +129,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
                     safe_origin_normal = normalize(cross(p01, p02));
 
                     // TODO: non-opaque geometry would be a better choice, not properly supported by wgpu yet
-                    origin += direction * safely_traced_t(intersection.t);
+                    origin += direction * intersection.t;
                     continue;
                 } else {
                     material_color.a = 1.0;
@@ -157,7 +157,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
             let hit_tangent_ws: vec3<f32> = normalize((local_to_world_inv_trans * vec4<f32>(tbn[0], 1.0)).xyz);
             let hit_bitangent_ws: vec3<f32> = normalize((local_to_world_inv_trans * vec4<f32>(tbn[1], 1.0)).xyz);
             var hit_normal_ws: vec3<f32> = normalize((local_to_world_inv_trans * vec4<f32>(tbn[2], 1.0)).xyz);
-            let hit_point_ws = origin + direction * safely_traced_t(intersection.t);
+            let hit_point_ws = origin + direction * intersection.t;
 
             let hit_tangent_to_world = mat3x3<f32>(
                 hit_tangent_ws,
@@ -212,7 +212,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
 
             let di_reservoir: DiReservoir = Nee::sample_ris(hit_point_ws, w_out_worldspace, front_facing_shading_normal_ws,
                 tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
-                disney_bsdf, safely_traced_t(intersection.t), back_face, &rng, scene);
+                disney_bsdf, intersection.t, back_face, &rng, scene);
             light_sample_reservoirs[id] = PackedDiReservoir::new(di_reservoir);
             light_sample_ctxs[id] = LightSampleCtx::new(tex_coord, material_idx, throughput, front_facing_shading_normal_ws, clearcoat_tangent_to_world[2]);
 
@@ -232,7 +232,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
 
                 var gi_reservoir: GiReservoir = InlinePathTracer::sample_ris(hit_point_ws, w_out_worldspace, front_facing_shading_normal_ws,
                     tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
-                    disney_bsdf, throughput, safely_traced_t(intersection.t), back_face, &rng, scene);
+                    disney_bsdf, throughput, intersection.t, back_face, &rng, scene);
                 gi_reservoirs[id] = PackedGiReservoir::new(gi_reservoir);
             }
         } else {

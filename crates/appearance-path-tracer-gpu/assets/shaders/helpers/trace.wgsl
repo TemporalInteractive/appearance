@@ -17,10 +17,6 @@ fn safe_distance(distance: f32) -> f32 {
     return distance - TRACE_EPSILON * 2.0;
 }
 
-fn safely_traced_t(t: f32) -> f32 {
-    return t + TRACE_EPSILON;
-}
-
 fn trace_shadow_ray_opaque(origin: vec3<f32>, direction: vec3<f32>, distance: f32, scene: acceleration_structure) -> bool {
     var shadow_rq: ray_query;
     rayQueryInitialize(&shadow_rq, scene, RayDesc(0x4, 0xFFu, 0.0, distance, origin + direction * 0.00001, direction));
@@ -74,8 +70,8 @@ fn trace_shadow_ray(_origin: vec3<f32>, direction: vec3<f32>, distance: f32, nor
                 safe_origin_normal = normalize(cross(p01, p02));
 
                 // TODO: non-opaque geometry would be a better choice, not properly supported by wgpu yet
-                origin += direction * safely_traced_t(intersection.t);
-                travelled_distance += safely_traced_t(intersection.t);
+                origin += direction * intersection.t;
+                travelled_distance += intersection.t;
                 continue; // check if last? return false if so
             }
 

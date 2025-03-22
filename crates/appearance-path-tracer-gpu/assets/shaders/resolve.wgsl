@@ -7,7 +7,7 @@ struct Constants {
     width: u32,
     height: u32,
     sample_count: u32,
-    _padding0: u32,
+    accum_frame_count: u32,
 }
 
 @group(0)
@@ -20,6 +20,10 @@ var<storage, read> radiance: array<PackedRgb9e5>;
 
 @group(0)
 @binding(2)
+var<storage, read_write> accum_radiance: array<vec4<f32>>;
+
+@group(0)
+@binding(3)
 var texture: texture_storage_2d<rgba8unorm, read_write>;
 
 fn hdr_to_sdr(hdr: vec3<f32>) -> vec3<f32> {
@@ -41,11 +45,15 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     if (id.x >= constants.width || id.y >= constants.height) { return; }
     var i: u32 = id.y * constants.width + id.x;
 
-    var accumulated: vec3<f32> = PackedRgb9e5::unpack(radiance[i]);
+    var radiance: vec3<f32> = PackedRgb9e5::unpack(radiance[i]);
+    radiance /= f32(constants.sample_count);
+    radiance = hdr_to_sdr(radiance);
 
-    accumulated /= f32(constants.sample_count);
-    accumulated = hdr_to_sdr(accumulated);
+    var accumulated_radiance: vec3<f32> = accum_radiance[i].rgb;
+    accumulated_radiance += radiance;
+    accum_radiance[i] = vec4<f32>(accumulated_radiance, 0.0);
 
     let block_id: vec2<u32> = linear_to_block_pixel_idx(id, constants.width);
-    textureStore(texture, vec2(i32(block_id.x), i32(block_id.y)), vec4(accumulated, 1.0));
+    textureStore(texture, vec2(i32(block_id.x), i32(block_id.y)), vec4(accumulated_radiance / f32(constants.accum_frame_count + 1), 1.0));
+    //textureStore(texture, vec2(i32(block_id.x), i32(block_id.y)), vec4(radiance, 1.0));
 }

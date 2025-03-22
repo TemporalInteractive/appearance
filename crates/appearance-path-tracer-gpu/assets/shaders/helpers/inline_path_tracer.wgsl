@@ -58,7 +58,7 @@ fn InlinePathTracer::trace(_origin: vec3<f32>, _direction: vec3<f32>, max_bounce
                         safe_origin_normal = normalize(cross(p01, p02));
     
                         // TODO: non-opaque geometry would be a better choice, not properly supported by wgpu yet
-                        origin += direction * safely_traced_t(intersection.t);
+                        origin += direction * intersection.t;
                         continue;
                     } else {
                         material_color.a = 1.0;
@@ -82,7 +82,7 @@ fn InlinePathTracer::trace(_origin: vec3<f32>, _direction: vec3<f32>, max_bounce
                 let hit_tangent_ws: vec3<f32> = normalize((local_to_world_inv_trans * vec4<f32>(tbn[0], 1.0)).xyz);
                 let hit_bitangent_ws: vec3<f32> = normalize((local_to_world_inv_trans * vec4<f32>(tbn[1], 1.0)).xyz);
                 var hit_normal_ws: vec3<f32> = normalize((local_to_world_inv_trans * vec4<f32>(tbn[2], 1.0)).xyz);
-                let hit_point_ws = origin + direction * safely_traced_t(intersection.t);
+                let hit_point_ws = origin + direction * intersection.t;
 
                 let hit_tangent_to_world = mat3x3<f32>(
                     hit_tangent_ws,
@@ -130,7 +130,7 @@ fn InlinePathTracer::trace(_origin: vec3<f32>, _direction: vec3<f32>, max_bounce
 
                 let di_reservoir: DiReservoir = Nee::sample_ris(hit_point_ws, w_out_worldspace, front_facing_shading_normal_ws,
                     tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
-                    disney_bsdf, safely_traced_t(intersection.t), back_face, rng, scene);
+                    disney_bsdf, intersection.t, back_face, rng, scene);
                 let light_sample: LightSample = di_reservoir.sample;
                 if (di_reservoir.contribution_weight > 0.0) {
                     let shadow_direction: vec3<f32> = normalize(light_sample.point - hit_point_ws);
@@ -173,7 +173,7 @@ fn InlinePathTracer::trace(_origin: vec3<f32>, _direction: vec3<f32>, max_bounce
                     var specular: bool;
                     let reflectance: vec3<f32> = DisneyBsdf::sample(disney_bsdf,
                         front_facing_shading_normal_ws, tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
-                        w_out_worldspace, safely_traced_t(intersection.t), back_face,
+                        w_out_worldspace, intersection.t, back_face,
                         random_uniform_float(rng), random_uniform_float(rng), random_uniform_float(rng),
                         &w_in_worldspace, &pdf, &specular
                     );

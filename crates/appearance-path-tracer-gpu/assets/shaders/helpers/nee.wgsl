@@ -216,16 +216,16 @@ fn Nee::sample_ris(hit_point_ws: vec3<f32>, w_out_worldspace: vec3<f32>, front_f
                 vec2<f32>(random_uniform_float(rng), random_uniform_float(rng)), hit_point_ws, &area_sample_pdf);
 
             let w_in_worldspace: vec3<f32> = normalize(area_light_sample.point - hit_point_ws);
-            let n_dot_l: f32 = dot(w_in_worldspace, front_facing_shading_normal_ws);
+            let wi_dot_n: f32 = dot(w_in_worldspace, front_facing_shading_normal_ws);
 
-            if (n_dot_l > 0.0 && area_sample_pdf > 0.0) {
+            if (wi_dot_n > 0.0 && area_sample_pdf > 0.0) {
                 var shading_pdf: f32;
                 let reflectance: vec3<f32> = DisneyBsdf::evaluate(disney_bsdf, front_facing_shading_normal_ws,
                     tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
                     w_out_worldspace, w_in_worldspace, &shading_pdf);
                 
                 if (shading_pdf > 0.0) {
-                    let contribution: vec3<f32> = n_dot_l * reflectance;
+                    let contribution: vec3<f32> = wi_dot_n * reflectance;
                     let sample_emission: vec3<f32> = LightSample::intensity(area_light_sample, hit_point_ws) * area_light_sample.emission;
                     area_phat = linear_to_luma(contribution * sample_emission);
                 }
@@ -279,7 +279,7 @@ fn Nee::sample_ris(hit_point_ws: vec3<f32>, w_out_worldspace: vec3<f32>, front_f
                             (intersection.object_to_world * vec4<f32>(v1.position, 1.0)).xyz,
                             (intersection.object_to_world * vec4<f32>(v2.position, 1.0)).xyz
                         );
-                        let point: vec3<f32> = hit_point_ws + w_in_worldspace * safely_traced_t(intersection.t - 0.01);
+                        let point: vec3<f32> = hit_point_ws + w_in_worldspace * intersection.t;
 
                         bsdf_light_sample = LightSample::new_triangle_sample(point, material.emission, triangle);
                     }
@@ -293,22 +293,27 @@ fn Nee::sample_ris(hit_point_ws: vec3<f32>, w_out_worldspace: vec3<f32>, front_f
                 }
             }
         }
-
         
         if (i < NUM_AREA_SAMPLES) {
-            let mis_weight: f32 = balance_heuristic(area_sample_pdf, f32(NUM_AREA_SAMPLES), bsdf_sample_pdf, f32(NUM_BSDF_SAMPLES));
+            var area_weight: f32 = 0.0;
+            if (area_sample_pdf > 0.0) {
+                let mis_weight: f32 = balance_heuristic(area_sample_pdf, f32(NUM_AREA_SAMPLES), bsdf_sample_pdf, f32(NUM_BSDF_SAMPLES));
+                // 𝑤_𝑖 ← 𝑚_𝑖(𝑋_𝑖) 𝑝ˆ(𝑋_𝑖) 𝑊_𝑋_𝑖
+                area_weight = mis_weight * area_phat * (1.0 / max(area_sample_pdf, 1e-8));
+            }
 
-            // 𝑤_𝑖 ← 𝑚_𝑖(𝑋_𝑖) 𝑝ˆ(𝑋_𝑖) 𝑊_𝑋_𝑖
-            let weight: f32 = mis_weight * area_phat * (1.0 / max(area_sample_pdf, 1e-8));
-            DiReservoir::update(&di_reservoir, weight, rng, area_light_sample, area_phat);
+            DiReservoir::update(&di_reservoir, area_weight, rng, area_light_sample, area_phat);
         }
 
         if (i < NUM_BSDF_SAMPLES) {
-            let mis_weight: f32 = balance_heuristic(bsdf_sample_pdf, f32(NUM_BSDF_SAMPLES), area_sample_pdf, f32(NUM_AREA_SAMPLES));
+            var bsdf_weight: f32 = 0.0;
+            if (bsdf_sample_pdf > 0.0) {
+                let mis_weight: f32 = balance_heuristic(bsdf_sample_pdf, f32(NUM_BSDF_SAMPLES), area_sample_pdf, f32(NUM_AREA_SAMPLES));
+                // 𝑤_𝑖 ← 𝑚_𝑖(𝑋_𝑖) 𝑝ˆ(𝑋_𝑖) 𝑊_𝑋_𝑖
+                bsdf_weight = mis_weight * bsdf_phat * (1.0 / max(bsdf_sample_pdf, 1e-8));
+            }
 
-            // 𝑤_𝑖 ← 𝑚_𝑖(𝑋_𝑖) 𝑝ˆ(𝑋_𝑖) 𝑊_𝑋_𝑖
-            let weight: f32 = mis_weight * bsdf_phat * (1.0 / max(bsdf_sample_pdf, 1e-8));
-            DiReservoir::update(&di_reservoir, weight, rng, bsdf_light_sample, bsdf_phat);
+            DiReservoir::update(&di_reservoir, bsdf_weight, rng, bsdf_light_sample, bsdf_phat);
         }
     }
 
