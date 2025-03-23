@@ -2,7 +2,8 @@
 @include appearance-packing::shared/packing
 
 // Used for sampling lights in the world, can both sample emissive triangles or the sun, indicated by triangle_area = 0
-struct LightSample {
+struct LightSample { // TODO: this will need to be represented as a triangle idx (and some way we can query it's transform), also barycentric coords (usefull for both triangle and sun)
+                     // this will better support moving lights
     point: vec3<f32>,
     emission: vec3<f32>,
     triangle_area: f32, // TODO: remove?

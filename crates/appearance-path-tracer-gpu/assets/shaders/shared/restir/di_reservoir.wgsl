@@ -78,17 +78,17 @@ fn LightSample::phat(_self: LightSample, light_sample_ctx: LightSampleCtx, hit_p
         visibility = trace_shadow_ray(hit_point_ws, w_in_worldspace, distance, front_facing_shading_normal_ws, scene);
     }
 
-    let n_dot_l: f32 = dot(w_in_worldspace, front_facing_shading_normal_ws);
-    if (n_dot_l > 0.0 && visibility) {
-        let sample_intensity = LightSample::intensity(_self, hit_point_ws);
+    let wi_dot_n: f32 = dot(w_in_worldspace, front_facing_shading_normal_ws);
+    if (wi_dot_n > 0.0 && visibility) {
+        let sample_intensity = LightSample::intensity(_self, hit_point_ws) * _self.emission;
 
         var shading_pdf: f32;
         let reflectance: vec3<f32> = DisneyBsdf::evaluate(disney_bsdf, front_facing_shading_normal_ws,
             tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
             w_out_worldspace, w_in_worldspace, &shading_pdf);
-        let contribution: vec3<f32> = n_dot_l * reflectance;
 
-        return linear_to_luma(contribution * sample_intensity);
+        // 𝑝ˆ(𝑥) = 𝑓_𝑠(𝑥) 𝐺(𝑥) 𝑉(𝑥) 𝐿_𝑒(𝑥)
+        return linear_to_luma(reflectance * wi_dot_n * sample_intensity);
     }
 
     return 0.0;

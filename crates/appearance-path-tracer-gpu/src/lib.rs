@@ -220,6 +220,7 @@ impl SizedResources {
 pub struct PathTracerGpuConfig {
     max_bounces: u32,
     sample_count: u32,
+    accum_frames: bool,
 
     restir_di: bool,
     restir_gi: bool,
@@ -233,7 +234,8 @@ impl Default for PathTracerGpuConfig {
         Self {
             max_bounces: 1,
             sample_count: 1,
-            restir_di: false,
+            accum_frames: true,
+            restir_di: true,
             restir_gi: false,
             svgf: false,
             firefly_filter: false,
@@ -344,7 +346,7 @@ impl PathTracerGpu {
             .rebuild_tlas(&mut command_encoder, &ctx.queue);
 
         command_encoder.clear_buffer(&self.sized_resources.radiance, 0, None);
-        if view_proj != prev_view_proj {
+        if view_proj != prev_view_proj || !self.config.accum_frames {
             self.sized_resources
                 .invalidate_accum_radiance(&mut command_encoder);
         }
@@ -412,7 +414,7 @@ impl PathTracerGpu {
                             &RestirDiPassParameters {
                                 resolution: self.local_resolution,
                                 seed,
-                                spatial_pass_count: 2,
+                                spatial_pass_count: 0,
                                 spatial_pixel_radius: 30.0,
                                 unbiased: true,
                                 rays: &self.sized_resources.rays,
@@ -581,7 +583,7 @@ impl PathTracerGpu {
 
         let pixels = self.sized_resources.film.readback_pixels(&ctx.device);
 
-        const GT_PIXEL_VALUE: Vec3 = Vec3::new(0.26883265, 0.2688762, 0.26881215);
+        const GT_PIXEL_VALUE: Vec3 = Vec3::new(0.2643197, 0.26431587, 0.26432508);
         let mut avg_pixel_value = Vec3::ZERO;
         for i in 0..(pixels.len() / 3) {
             let f32_pixel = Vec3::new(

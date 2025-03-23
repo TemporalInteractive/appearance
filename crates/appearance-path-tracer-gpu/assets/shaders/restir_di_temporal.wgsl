@@ -91,32 +91,39 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     let velocity: vec2<f32> = textureLoad(velocity_texture, vec2<i32>(id)).xy;
     let prev_id_unclamped = vec2<i32>(vec2<f32>(id) - (vec2<f32>(constants.resolution) * velocity) + (vec2<f32>(random_uniform_float(&rng), random_uniform_float(&rng)) * 0.5));
     if (all(prev_id_unclamped >= vec2<i32>(0)) && all(prev_id_unclamped < vec2<i32>(constants.resolution))) {
-        prev_id = u32(prev_id_unclamped.y) * constants.resolution.x + u32(prev_id_unclamped.x);
+        // TODO: reprojection will break p_hat_prev, investigate how this should be done
+        prev_id = flat_id;//u32(prev_id_unclamped.y) * constants.resolution.x + u32(prev_id_unclamped.x);
 
         let current_gbuffer_texel: PackedGBufferTexel = gbuffer[flat_id];
         prev_gbuffer_texel = prev_gbuffer[prev_id];
         let prev_normal_ws: vec3<f32> = PackedNormalizedXyz10::unpack(prev_gbuffer_texel.normal_ws, 0);
-        if (constants.unbiased == 0) {
-            let current_depth_cs: f32 = PackedGBufferTexel::depth_cs(current_gbuffer_texel, 0.001, 10000.0);
-            let prev_depth_cs: f32 = PackedGBufferTexel::depth_cs(prev_gbuffer_texel, 0.001, 10000.0);
-            let valid_delta_depth: bool = (abs(current_depth_cs - prev_depth_cs) / current_depth_cs) < 0.1;
-            let current_normal_ws: vec3<f32> = PackedNormalizedXyz10::unpack(current_gbuffer_texel.normal_ws, 0);
-            let valid_delta_normal: bool = dot(current_normal_ws, prev_normal_ws) > 0.906; // 25 degrees
+        let current_depth_cs: f32 = PackedGBufferTexel::depth_cs(current_gbuffer_texel, 0.001, 10000.0);
+        let prev_depth_cs: f32 = PackedGBufferTexel::depth_cs(prev_gbuffer_texel, 0.001, 10000.0);
+        let valid_delta_depth: bool = (abs(current_depth_cs - prev_depth_cs) / current_depth_cs) < 0.1;
+        let current_normal_ws: vec3<f32> = PackedNormalizedXyz10::unpack(current_gbuffer_texel.normal_ws, 0);
+        let valid_delta_normal: bool = dot(current_normal_ws, prev_normal_ws) > 0.906; // 25 degrees
 
-            valid_prev_reservoir = valid_delta_depth && valid_delta_normal;
-        } else {
-            valid_prev_reservoir = true;
-        }
+        valid_prev_reservoir = valid_delta_depth && valid_delta_normal;
     }
 
     if (valid_prev_reservoir) {
         var prev_reservoir: DiReservoir = PackedDiReservoir::unpack(prev_reservoirs_in[prev_id]);
-        prev_reservoir.sample_count = min(prev_reservoir.sample_count, 20.0 * reservoir.sample_count);
+        // prev_reservoir.sample_count = min(prev_reservoir.sample_count, 200.0 * reservoir.sample_count);
 
-        let w_out_worldspace: vec3<f32> = -direction;
-        prev_reservoir.selected_phat = LightSample::phat(prev_reservoir.sample, light_sample_ctx, hit_point_ws, w_out_worldspace, constants.unbiased > 0, scene);
+        // let w_out_worldspace: vec3<f32> = -direction;
+        // prev_reservoir.selected_phat = LightSample::phat(prev_reservoir.sample, light_sample_ctx, hit_point_ws, w_out_worldspace, false, scene);
 
-        reservoir = DiReservoir::combine(reservoir, prev_reservoir, &rng);
+        // reservoir = DiReservoir::combine(reservoir, prev_reservoir, &rng);
+
+        // pˆ of previous reservoir in the previous pixels context
+        let p_hat_prev: f32 = LightSample::phat(prev_reservoir.sample, light_sample_ctx, hit_point_ws, w_out_worldspace, false, scene);// TODO: this should be done with prev scene state, but for static scene this is valid
+        // pˆ of previous reservoir in the current pixels context
+        let p_hat_current: f32 = LightSample::phat(prev_reservoir.sample, light_sample_ctx, hit_point_ws, w_out_worldspace, false, scene);
+        
+        // 𝑚𝑖(𝑥) = 𝑝ˆ𝑖(𝑥) / ∑(𝑀, 𝑗=1, 𝑝ˆ𝑗(𝑥))
+        let mis_weight: f32 = p_hat_current / p_hat_prev;
+
+
     }
 
     reservoirs_out[flat_id] = PackedDiReservoir::new(reservoir);
