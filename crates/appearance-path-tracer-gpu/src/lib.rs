@@ -368,11 +368,15 @@ impl PathTracerGpu {
         );
 
         for sample in 0..self.config.sample_count {
+            //let seed = 1337 * self.config.sample_count + sample;
+            let seed = self.frame_idx * self.config.sample_count + sample;
+
             raygen_pass::encode(
                 &RaygenPassParameters {
                     inv_view,
                     inv_proj,
                     resolution: self.local_resolution,
+                    seed,
                     rays: &self.sized_resources.rays,
                 },
                 &ctx.device,
@@ -381,9 +385,6 @@ impl PathTracerGpu {
             );
 
             for i in 0..self.config.max_bounces {
-                //let seed = 1337 * self.config.sample_count + sample;
-                let seed = self.frame_idx * self.config.sample_count + sample;
-
                 trace_pass::encode(
                     &TracePassParameters {
                         ray_count: self.local_resolution.x * self.local_resolution.y,
