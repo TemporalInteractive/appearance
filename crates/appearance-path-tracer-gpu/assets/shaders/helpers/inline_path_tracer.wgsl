@@ -133,8 +133,10 @@ fn InlinePathTracer::trace(_origin: vec3<f32>, _direction: vec3<f32>, max_bounce
                     disney_bsdf, intersection.t, back_face, rng, scene);
                 let light_sample: LightSample = di_reservoir.sample;
                 if (di_reservoir.contribution_weight > 0.0) {
-                    let shadow_direction: vec3<f32> = normalize(light_sample.point - hit_point_ws);
-                    let shadow_distance: f32 = distance(light_sample.point, hit_point_ws);
+                    let light_sample_eval_data = LightSample::load_eval_data(light_sample, hit_point_ws);
+
+                    let shadow_direction: vec3<f32> = normalize(light_sample_eval_data.point_ws - hit_point_ws);
+                    let shadow_distance: f32 = distance(light_sample_eval_data.point_ws, hit_point_ws);
                     let n_dot_l: f32 = dot(shadow_direction, front_facing_shading_normal_ws);
 
                     if (n_dot_l > 0.0) {
@@ -145,9 +147,7 @@ fn InlinePathTracer::trace(_origin: vec3<f32>, _direction: vec3<f32>, max_bounce
                             let reflectance: vec3<f32> = DisneyBsdf::evaluate(disney_bsdf, front_facing_shading_normal_ws, tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
                                 w_out_worldspace, w_in_worldspace, &shading_pdf);
 
-                            let light_intensity: vec3<f32> = LightSample::intensity(light_sample, hit_point_ws) * light_sample.emission;
-
-                            let contribution: vec3<f32> = (*throughput) * reflectance * light_intensity * n_dot_l * di_reservoir.contribution_weight;
+                            let contribution: vec3<f32> = (*throughput) * reflectance * light_sample_eval_data.emission * n_dot_l * di_reservoir.contribution_weight;
                             accumulated += contribution;
                         };
                     }

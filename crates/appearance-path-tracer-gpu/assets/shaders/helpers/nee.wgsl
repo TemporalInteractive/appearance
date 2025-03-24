@@ -1,4 +1,5 @@
 @include ::color
+@include ::triangle
 @include appearance-path-tracer-gpu::shared/ray
 @include appearance-path-tracer-gpu::shared/restir/di_reservoir
 @include appearance-path-tracer-gpu::shared/material/disney_bsdf
@@ -12,16 +13,76 @@
 /// appearance-path-tracer-gpu::shared/sky_bindings
 ///
 
-fn LightSample::intensity(_self: LightSample, hit_point_ws: vec3<f32>) -> f32 {
-    let direction: vec3<f32> = normalize(_self.point - hit_point_ws);
-    let distance: f32 = distance(_self.point, hit_point_ws);
+fn LightSample::load_eval_data(_self: LightSample, hit_point_ws: vec3<f32>) -> LightSampleEvalData {
+    if (LightSample::is_sun(_self)) {
+        let direction: vec3<f32> =  Sky::direction_to_sun(_self.uv);
+        let point_ws: vec3<f32> = direction * SUN_DISTANCE;
+        
+        let emission: vec3<f32> =  Sky::sun_intensity(direction) * sky_constants.sun_color;
 
-    if (_self.triangle_area == 0.0) {
-        return Sky::sun_intensity(direction);
+        return LightSampleEvalData::new(emission, point_ws);
     } else {
-        return Triangle::solid_angle(_self.triangle_normal, direction, distance) * 10.0;
+        let emissive_triangle_instance: EmissiveTriangleInstance = emissive_triangle_instances[_self.emissive_triangle_instance_idx]; // TODO: speedup
+        let vertex_pool_slice: VertexPoolSlice = vertex_pool_slices[emissive_triangle_instance.vertex_pool_slice_idx];
+        let first_index: u32 = vertex_pool_slice.first_index + (_self.local_triangle_idx * 3);
+
+        let i0: u32 = vertex_indices[first_index + 0];
+        let i1: u32 = vertex_indices[first_index + 1];
+        let i2: u32 = vertex_indices[first_index + 2];
+
+        let v0: Vertex = PackedVertex::unpack(vertices[vertex_pool_slice.first_vertex + i0]);
+        let v1: Vertex = PackedVertex::unpack(vertices[vertex_pool_slice.first_vertex + i1]);
+        let v2: Vertex = PackedVertex::unpack(vertices[vertex_pool_slice.first_vertex + i2]);
+
+        let barycentrics = vec3<f32>(1.0 - _self.uv.x - _self.uv.y, _self.uv);
+        let tex_coord: vec2<f32> = v0.tex_coord * barycentrics.x + v1.tex_coord * barycentrics.y + v2.tex_coord * barycentrics.z;
+
+        var triangle = Triangle::new(v0.position, v1.position, v2.position);
+        triangle = Triangle::transform(triangle, emissive_triangle_instance.transform);
+
+        let point_ws: vec3<f32> = triangle.p0 * barycentrics.x + triangle.p1 * barycentrics.y + triangle.p2 * barycentrics.z;
+        let direction: vec3<f32> = normalize(point_ws - hit_point_ws);
+        let distance: f32 = distance(point_ws, hit_point_ws);
+
+        let p01: vec3<f32> = triangle.p1 - triangle.p0;
+        let p02: vec3<f32> = triangle.p2 - triangle.p0;
+        let triangle_normal: vec3<f32> = normalize(cross(p01, p02));
+
+        let material_idx: u32 = vertex_pool_slice.material_idx + triangle_material_indices[vertex_pool_slice.first_index / 3 + _self.local_triangle_idx];
+        let material_descriptor: MaterialDescriptor = material_descriptors[material_idx];
+        let emission: vec3<f32> = MaterialDescriptor::emission(material_descriptor, tex_coord) * Triangle::solid_angle(triangle_normal, direction, distance) * 10.0;
+
+        return LightSampleEvalData::new(emission, point_ws);
     }
 }
+
+// fn LightSample::point(_self: LightSample) -> vec3<f32> {
+//     if (LightSample::is_sun(_self)) {
+//         let direction: vec3<f32> =  Sky::direction_to_sun(_self.uv);
+//         return direction * SUN_DISTANCE;
+//     } else {
+        
+//     }
+// }
+
+// fn LightSample::emission(_self: LightSample) -> vec3<f32> {
+//     if (LightSample::is_sun(_self)) {
+//         return sky_constants.sun_color;
+//     } else {
+        
+//     }
+// }
+
+// fn LightSample::intensity(_self: LightSample, hit_point_ws: vec3<f32>) -> f32 {
+//     let direction: vec3<f32> = normalize(_self.point - hit_point_ws);
+//     let distance: f32 = distance(_self.point, hit_point_ws);
+
+//     if (LightSample::is_sun(_self)) {
+//         return Sky::sun_intensity(direction);
+//     } else {
+//         return Triangle::solid_angle(_self.triangle_normal, direction, distance) * 10.0;
+//     }
+// }
 
 fn Nee::sample_emissive_triangle(r0: f32, r1: f32, r23: vec2<f32>, sample_point: vec3<f32>, sun_pick_probability: f32, pdf: ptr<function, f32>) -> LightSample {
     for (var i: u32 = 0; i < vertex_pool_constants.num_emissive_triangle_instances; i += 1) {
@@ -36,17 +97,18 @@ fn Nee::sample_emissive_triangle(r0: f32, r1: f32, r23: vec2<f32>, sample_point:
             let i1: u32 = vertex_indices[first_index + 1];
             let i2: u32 = vertex_indices[first_index + 2];
 
-            let barycentrics = vec3<f32>(1.0 - r23.x - r23.y, r23);
+            let uv: vec2<f32> = r23;
+            //let barycentrics = vec3<f32>(1.0 - uv.x - uv.y, uv);
 
             let v0: Vertex = PackedVertex::unpack(vertices[vertex_pool_slice.first_vertex + i0]);
             let v1: Vertex = PackedVertex::unpack(vertices[vertex_pool_slice.first_vertex + i1]);
             let v2: Vertex = PackedVertex::unpack(vertices[vertex_pool_slice.first_vertex + i2]);
 
-            let tex_coord: vec2<f32> = v0.tex_coord * barycentrics.x + v1.tex_coord * barycentrics.y + v2.tex_coord * barycentrics.z;
+            //let tex_coord: vec2<f32> = v0.tex_coord * barycentrics.x + v1.tex_coord * barycentrics.y + v2.tex_coord * barycentrics.z;
 
             var triangle = Triangle::new(v0.position, v1.position, v2.position);
             triangle = Triangle::transform(triangle, emissive_triangle_instance.transform);
-            let point: vec3<f32> = triangle.p0 * barycentrics.x + triangle.p1 * barycentrics.y + triangle.p2 * barycentrics.z;
+            //let point: vec3<f32> = triangle.p0 * barycentrics.x + triangle.p1 * barycentrics.y + triangle.p2 * barycentrics.z;
 
             let p01: vec3<f32> = triangle.p1 - triangle.p0;
             let p02: vec3<f32> = triangle.p2 - triangle.p0;
@@ -56,26 +118,26 @@ fn Nee::sample_emissive_triangle(r0: f32, r1: f32, r23: vec2<f32>, sample_point:
             *pdf /= triangle_area;
             *pdf = max(1e-6, (*pdf) * (1.0 - sun_pick_probability));
 
-            let material_idx: u32 = vertex_pool_slice.material_idx + triangle_material_indices[vertex_pool_slice.first_index / 3 + local_triangle_idx];
-            let material_descriptor: MaterialDescriptor = material_descriptors[material_idx];
-            let emission: vec3<f32> = MaterialDescriptor::emission(material_descriptor, tex_coord);
+            // let material_idx: u32 = vertex_pool_slice.material_idx + triangle_material_indices[vertex_pool_slice.first_index / 3 + local_triangle_idx];
+            // let material_descriptor: MaterialDescriptor = material_descriptors[material_idx];
+            // let emission: vec3<f32> = MaterialDescriptor::emission(material_descriptor, tex_coord);
 
-            return LightSample::new_triangle_sample(point, emission, triangle);
+            return LightSample::new_triangle_sample(uv, i, local_triangle_idx);
         }
     }
 
-    // TODO: double check if this every happens, it should never!
+    // TODO: double check if this ever happens, it should never!
     *pdf = 0.0;
     return LightSample::empty();
 }
 
 fn Nee::sample_sun(r01: vec2<f32>, sun_pick_probability: f32, pdf: ptr<function, f32>) -> LightSample {
-    let direction: vec3<f32> =  Sky::direction_to_sun(r01);
+    //let direction: vec3<f32> =  Sky::direction_to_sun(r01);
     *pdf = sun_pick_probability;
-    let emission = sky_constants.sun_color;
-    let point: vec3<f32> = direction * SUN_DISTANCE;
+    // let emission = sky_constants.sun_color;
+    // let point: vec3<f32> = direction * SUN_DISTANCE;
 
-    return LightSample::new_sun_sample(point, emission);
+    return LightSample::new_sun_sample(r01);
 }
 
 fn Nee::sample_uniform(r0: f32, r1: f32, r2: f32, r34: vec2<f32>, sample_point: vec3<f32>, pdf: ptr<function, f32>) -> LightSample {
@@ -206,16 +268,20 @@ fn Nee::sample_ris(hit_point_ws: vec3<f32>, w_out_worldspace: vec3<f32>, front_f
     const NUM_BSDF_SAMPLES: u32 = 1;
 
     var di_reservoir = DiReservoir::new();
+    var selected_sample_eval_data = LightSampleEvalData::empty();
     
     for (var i: u32 = 0; i < max(NUM_AREA_SAMPLES, NUM_BSDF_SAMPLES); i += 1) {
         var area_sample_pdf: f32 = 0.0;
         var area_light_sample: LightSample;
+        var area_sample_eval_data: LightSampleEvalData;
         var area_phat: f32 = 0.0;
         if (i < NUM_AREA_SAMPLES) {
             area_light_sample = Nee::sample_uniform(random_uniform_float(rng), random_uniform_float(rng), random_uniform_float(rng),
                 vec2<f32>(random_uniform_float(rng), random_uniform_float(rng)), hit_point_ws, &area_sample_pdf);
 
-            let w_in_worldspace: vec3<f32> = normalize(area_light_sample.point - hit_point_ws);
+            area_sample_eval_data = LightSample::load_eval_data(area_light_sample, hit_point_ws);
+
+            let w_in_worldspace: vec3<f32> = normalize(area_sample_eval_data.point_ws - hit_point_ws);
             let wi_dot_n: f32 = dot(w_in_worldspace, front_facing_shading_normal_ws);
 
             if (wi_dot_n > 0.0 && area_sample_pdf > 0.0) {
@@ -225,74 +291,73 @@ fn Nee::sample_ris(hit_point_ws: vec3<f32>, w_out_worldspace: vec3<f32>, front_f
                     w_out_worldspace, w_in_worldspace, &shading_pdf);
                 
                 if (shading_pdf > 0.0) {
-                    let contribution: vec3<f32> = wi_dot_n * reflectance;
-                    let sample_emission: vec3<f32> = LightSample::intensity(area_light_sample, hit_point_ws) * area_light_sample.emission;
-                    area_phat = linear_to_luma(contribution * sample_emission);
+                    area_phat = linear_to_luma(reflectance * wi_dot_n * area_sample_eval_data.emission);
                 }
             }
         }
 
         var bsdf_sample_pdf: f32 = 0.0;
         var bsdf_light_sample = LightSample::empty();
+        var bsdf_sample_eval_data: LightSampleEvalData;
         var bsdf_phat: f32 = 0.0;
-        if (i < NUM_BSDF_SAMPLES) {
-            var w_in_worldspace: vec3<f32>;
-            var specular: bool;
-            let reflectance: vec3<f32> = DisneyBsdf::sample(disney_bsdf,
-                front_facing_shading_normal_ws, tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
-                w_out_worldspace, t, back_face,
-                random_uniform_float(rng), random_uniform_float(rng), random_uniform_float(rng),
-                &w_in_worldspace, &bsdf_sample_pdf, &specular
-            );
+        // if (i < NUM_BSDF_SAMPLES) {
+        //     var w_in_worldspace: vec3<f32>;
+        //     var specular: bool;
+        //     let reflectance: vec3<f32> = DisneyBsdf::sample(disney_bsdf,
+        //         front_facing_shading_normal_ws, tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
+        //         w_out_worldspace, t, back_face,
+        //         random_uniform_float(rng), random_uniform_float(rng), random_uniform_float(rng),
+        //         &w_in_worldspace, &bsdf_sample_pdf, &specular
+        //     );
 
-            let wi_dot_n: f32 = abs(dot(w_in_worldspace, front_facing_shading_normal_ws));
-            let contribution: vec3<f32> = wi_dot_n * reflectance;
+        //     let wi_dot_n: f32 = abs(dot(w_in_worldspace, front_facing_shading_normal_ws));
+        //     let contribution: vec3<f32> = wi_dot_n * reflectance;
 
-            if (dot(contribution, contribution) > 0.0) {
-                // TODO: non-opaques
-                var rq: ray_query;
-                rayQueryInitialize(&rq, scene, RayDesc(0u, 0xFFu, 0.0, 1000.0, safe_origin(hit_point_ws, front_facing_shading_normal_ws), w_in_worldspace));
-                rayQueryProceed(&rq);
-                let intersection = rayQueryGetCommittedIntersection(&rq);
-                if (intersection.kind == RAY_QUERY_INTERSECTION_TRIANGLE) {
-                    let vertex_pool_slice_index: u32 = intersection.instance_custom_data;
-                    let vertex_pool_slice: VertexPoolSlice = vertex_pool_slices[vertex_pool_slice_index];
+        //     if (dot(contribution, contribution) > 0.0) {
+        //         // TODO: non-opaques
+        //         var rq: ray_query;
+        //         rayQueryInitialize(&rq, scene, RayDesc(0u, 0xFFu, 0.0, 1000.0, safe_origin(hit_point_ws, front_facing_shading_normal_ws), w_in_worldspace));
+        //         rayQueryProceed(&rq);
+        //         let intersection = rayQueryGetCommittedIntersection(&rq);
+        //         if (intersection.kind == RAY_QUERY_INTERSECTION_TRIANGLE) {
+        //             let vertex_pool_slice_index: u32 = intersection.instance_custom_data;
+        //             let vertex_pool_slice: VertexPoolSlice = vertex_pool_slices[vertex_pool_slice_index];
 
-                    let barycentrics = vec3<f32>(1.0 - intersection.barycentrics.x - intersection.barycentrics.y, intersection.barycentrics);
+        //             let barycentrics = vec3<f32>(1.0 - intersection.barycentrics.x - intersection.barycentrics.y, intersection.barycentrics);
 
-                    let i0: u32 = vertex_indices[vertex_pool_slice.first_index + intersection.primitive_index * 3 + 0];
-                    let i1: u32 = vertex_indices[vertex_pool_slice.first_index + intersection.primitive_index * 3 + 1];
-                    let i2: u32 = vertex_indices[vertex_pool_slice.first_index + intersection.primitive_index * 3 + 2];
+        //             let i0: u32 = vertex_indices[vertex_pool_slice.first_index + intersection.primitive_index * 3 + 0];
+        //             let i1: u32 = vertex_indices[vertex_pool_slice.first_index + intersection.primitive_index * 3 + 1];
+        //             let i2: u32 = vertex_indices[vertex_pool_slice.first_index + intersection.primitive_index * 3 + 2];
 
-                    let v0: Vertex = PackedVertex::unpack(vertices[vertex_pool_slice.first_vertex + i0]);
-                    let v1: Vertex = PackedVertex::unpack(vertices[vertex_pool_slice.first_vertex + i1]);
-                    let v2: Vertex = PackedVertex::unpack(vertices[vertex_pool_slice.first_vertex + i2]);
+        //             let v0: Vertex = PackedVertex::unpack(vertices[vertex_pool_slice.first_vertex + i0]);
+        //             let v1: Vertex = PackedVertex::unpack(vertices[vertex_pool_slice.first_vertex + i1]);
+        //             let v2: Vertex = PackedVertex::unpack(vertices[vertex_pool_slice.first_vertex + i2]);
 
-                    let tex_coord: vec2<f32> = v0.tex_coord * barycentrics.x + v1.tex_coord * barycentrics.y + v2.tex_coord * barycentrics.z;
+        //             let tex_coord: vec2<f32> = v0.tex_coord * barycentrics.x + v1.tex_coord * barycentrics.y + v2.tex_coord * barycentrics.z;
 
-                    let material_idx: u32 = vertex_pool_slice.material_idx + triangle_material_indices[vertex_pool_slice.first_index / 3 + intersection.primitive_index];
-                    let material_descriptor: MaterialDescriptor = material_descriptors[material_idx];
-                    let material: Material = Material::from_material_descriptor(material_descriptor, tex_coord);
-                    if (dot(material.emission, material.emission) > 0.0 || true) {
-                        var triangle = Triangle::new(
-                            (intersection.object_to_world * vec4<f32>(v0.position, 1.0)).xyz,
-                            (intersection.object_to_world * vec4<f32>(v1.position, 1.0)).xyz,
-                            (intersection.object_to_world * vec4<f32>(v2.position, 1.0)).xyz
-                        );
-                        let point: vec3<f32> = hit_point_ws + w_in_worldspace * intersection.t;
+        //             let material_idx: u32 = vertex_pool_slice.material_idx + triangle_material_indices[vertex_pool_slice.first_index / 3 + intersection.primitive_index];
+        //             let material_descriptor: MaterialDescriptor = material_descriptors[material_idx];
+        //             let material: Material = Material::from_material_descriptor(material_descriptor, tex_coord);
+        //             if (dot(material.emission, material.emission) > 0.0 || true) {
+        //                 var triangle = Triangle::new(
+        //                     (intersection.object_to_world * vec4<f32>(v0.position, 1.0)).xyz,
+        //                     (intersection.object_to_world * vec4<f32>(v1.position, 1.0)).xyz,
+        //                     (intersection.object_to_world * vec4<f32>(v2.position, 1.0)).xyz
+        //                 );
+        //                 let point: vec3<f32> = hit_point_ws + w_in_worldspace * intersection.t;
 
-                        bsdf_light_sample = LightSample::new_triangle_sample(point, material.emission, triangle);
-                    }
-                } else {
-                    bsdf_light_sample = LightSample::new_sun_sample(w_in_worldspace * SUN_DISTANCE, sky_constants.sun_color);
-                }
+        //                 bsdf_light_sample = LightSample::new_triangle_sample(point, material.emission, triangle);
+        //             }
+        //         } else {
+        //             bsdf_light_sample = LightSample::new_sun_sample(w_in_worldspace * SUN_DISTANCE, sky_constants.sun_color);
+        //         }
 
-                if (!LightSample::is_empty(bsdf_light_sample)) {
-                    let sample_emission: vec3<f32> = LightSample::intensity(bsdf_light_sample, hit_point_ws) * bsdf_light_sample.emission;
-                    bsdf_phat = linear_to_luma(contribution * sample_emission);
-                }
-            }
-        }
+        //         if (!LightSample::is_empty(bsdf_light_sample)) {
+        //             let sample_emission: vec3<f32> = LightSample::intensity(bsdf_light_sample, hit_point_ws) * bsdf_light_sample.emission;
+        //             bsdf_phat = linear_to_luma(contribution * sample_emission);
+        //         }
+        //     }
+        // }
         
         if (i < NUM_AREA_SAMPLES) {
             var area_weight: f32 = 0.0;
@@ -302,7 +367,9 @@ fn Nee::sample_ris(hit_point_ws: vec3<f32>, w_out_worldspace: vec3<f32>, front_f
                 area_weight = mis_weight * area_phat * (1.0 / max(area_sample_pdf, 1e-8));
             }
 
-            DiReservoir::update(&di_reservoir, area_weight, rng, area_light_sample, area_phat);
+            if (DiReservoir::update(&di_reservoir, area_weight, rng, area_light_sample, area_phat)) {
+                selected_sample_eval_data = area_sample_eval_data;
+            }
         }
 
         if (i < NUM_BSDF_SAMPLES) {
@@ -313,13 +380,15 @@ fn Nee::sample_ris(hit_point_ws: vec3<f32>, w_out_worldspace: vec3<f32>, front_f
                 bsdf_weight = mis_weight * bsdf_phat * (1.0 / max(bsdf_sample_pdf, 1e-8));
             }
 
-            DiReservoir::update(&di_reservoir, bsdf_weight, rng, bsdf_light_sample, bsdf_phat);
+            if (DiReservoir::update(&di_reservoir, bsdf_weight, rng, bsdf_light_sample, bsdf_phat)) {
+                selected_sample_eval_data = bsdf_sample_eval_data;
+            }
         }
     }
 
     if (di_reservoir.selected_phat > RESTIR_DI_EPSILON) {
-        let direction: vec3<f32> = normalize(di_reservoir.sample.point - hit_point_ws);
-        let distance: f32 = distance(di_reservoir.sample.point, hit_point_ws);
+        let direction: vec3<f32> = normalize(selected_sample_eval_data.point_ws - hit_point_ws);
+        let distance: f32 = distance(selected_sample_eval_data.point_ws, hit_point_ws);
 
         if (trace_shadow_ray(hit_point_ws, direction, distance, front_facing_shading_normal_ws, scene)) {
             // 𝑟.𝑊_𝑌 ← (1 / 𝑝ˆ(𝑟.𝑌)) 𝑟.𝑤_sum
