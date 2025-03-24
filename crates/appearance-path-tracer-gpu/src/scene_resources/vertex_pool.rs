@@ -1,7 +1,7 @@
 use appearance_model::mesh::PackedVertex;
 use appearance_wgpu::wgpu::{self, util::DeviceExt};
 use bytemuck::{Pod, Zeroable};
-use glam::Mat4;
+use glam::{Mat3A, Mat4};
 
 pub const MAX_VERTEX_POOL_VERTICES: usize = 1024 * 1024 * 32;
 
@@ -59,11 +59,11 @@ struct VertexPoolConstants {
 #[derive(Pod, Clone, Copy, Zeroable)]
 #[repr(C)]
 struct EmissiveTriangleInstance {
-    transform: Mat4,
+    transform: [f32; 12],
     vertex_pool_slice_idx: u32,
     num_triangles: u32,
-    cdf: f32,
     _padding0: u32,
+    _padding1: u32,
 }
 
 #[derive(Pod, Clone, Copy, Zeroable)]
@@ -80,6 +80,7 @@ pub struct VertexPool {
     index_buffer: wgpu::Buffer,
     triangle_material_index_buffer: wgpu::Buffer,
     emissive_triangle_instance_buffer: wgpu::Buffer,
+    emissive_triangle_instance_cdf_buffer: wgpu::Buffer,
     blas_instances_buffer: wgpu::Buffer,
     slices_buffer: wgpu::Buffer,
 
@@ -124,6 +125,15 @@ impl VertexPool {
             label: Some("appearance-path-tracer-gpu::vertex_pool emissive_triangle_instances"),
             mapped_at_creation: false,
             size: (std::mem::size_of::<EmissiveTriangleInstance>() * 1024) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let emissive_triangle_instance_cdf_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some(
+                "appearance-path-tracer-gpu::vertex_pool emissive_triangle_instance_cdf_buffer",
+            ),
+            mapped_at_creation: false,
+            size: (std::mem::size_of::<f32>() * 1024) as u64,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
 
@@ -214,6 +224,16 @@ impl VertexPool {
                     },
                     count: None,
                 },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 7,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
             ],
         });
 
@@ -222,6 +242,7 @@ impl VertexPool {
             index_buffer,
             triangle_material_index_buffer,
             emissive_triangle_instance_buffer,
+            emissive_triangle_instance_cdf_buffer,
             blas_instances_buffer,
             slices_buffer,
             emissive_triangle_instances: Vec::new(),
@@ -258,8 +279,6 @@ impl VertexPool {
     }
 
     pub fn write_slices(&mut self, queue: &wgpu::Queue) {
-        self.calculate_emissive_slice_instance_cdfs();
-
         queue.write_buffer(
             &self.slices_buffer,
             0,
@@ -270,6 +289,12 @@ impl VertexPool {
             &self.emissive_triangle_instance_buffer,
             0,
             bytemuck::cast_slice(self.emissive_triangle_instances.as_slice()),
+        );
+
+        queue.write_buffer(
+            &self.emissive_triangle_instance_cdf_buffer,
+            0,
+            bytemuck::cast_slice(self.calculate_emissive_slice_instance_cdfs().as_slice()),
         );
 
         queue.write_buffer(
@@ -284,12 +309,16 @@ impl VertexPool {
 
         if is_emissive {
             let num_triangles = self.slices[index as usize].num_indices / 3;
+            let transform4x3 = transform.transpose().to_cols_array()[..12]
+                .try_into()
+                .unwrap();
+
             let instance = EmissiveTriangleInstance {
-                transform,
+                transform: transform4x3,
                 vertex_pool_slice_idx: index,
                 num_triangles,
-                cdf: 0.0,
                 _padding0: 0,
+                _padding1: 0,
             };
             self.emissive_triangle_instances.push(instance);
             self.emissive_triangle_count += num_triangles;
@@ -306,14 +335,17 @@ impl VertexPool {
         self.blas_instances.push(instance);
     }
 
-    fn calculate_emissive_slice_instance_cdfs(&mut self) {
+    fn calculate_emissive_slice_instance_cdfs(&self) -> Vec<f32> {
+        let mut cdfs = vec![];
+
         let mut cdf = 0.0;
-        for instance in &mut self.emissive_triangle_instances {
+        for instance in &self.emissive_triangle_instances {
             let pdf = instance.num_triangles as f32 / self.emissive_triangle_count as f32;
             cdf += pdf;
-
-            instance.cdf = cdf;
+            cdfs.push(cdf);
         }
+
+        cdfs
     }
 
     pub fn alloc(
@@ -449,6 +481,12 @@ impl VertexPool {
                 },
                 wgpu::BindGroupEntry {
                     binding: 6,
+                    resource: self
+                        .emissive_triangle_instance_cdf_buffer
+                        .as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 7,
                     resource: self.blas_instances_buffer.as_entire_binding(),
                 },
             ],
