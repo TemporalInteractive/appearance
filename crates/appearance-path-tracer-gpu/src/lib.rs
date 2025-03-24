@@ -414,7 +414,7 @@ impl PathTracerGpu {
                             &RestirDiPassParameters {
                                 resolution: self.local_resolution,
                                 seed,
-                                spatial_pass_count: 2,
+                                spatial_pass_count: 1,
                                 spatial_pixel_radius: 30.0,
                                 unbiased: true,
                                 rays: &self.sized_resources.rays,
