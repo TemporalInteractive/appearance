@@ -114,14 +114,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
         prev_reservoir.selected_phat = LightSample::phat(prev_reservoir.sample, light_sample_ctx, hit_point_ws, w_out_worldspace, constants.unbiased > 0, scene);
 
         reservoir = DiReservoir::combine(reservoir, prev_reservoir, &rng);
-
-        // // pˆ of previous reservoir in the previous pixels context
-        // let p_hat_prev: f32 = LightSample::phat(prev_reservoir.sample, light_sample_ctx, hit_point_ws, w_out_worldspace, false, scene);// TODO: this should be done with prev scene state, but for static scene this is valid
-        // // pˆ of previous reservoir in the current pixels context
-        // let p_hat_current: f32 = LightSample::phat(prev_reservoir.sample, light_sample_ctx, hit_point_ws, w_out_worldspace, false, scene);
-        
-        // // 𝑚𝑖(𝑥) = 𝑝ˆ𝑖(𝑥) / ∑(𝑀, 𝑗=1, 𝑝ˆ𝑗(𝑥))
-        // let mis_weight: f32 = p_hat_current / p_hat_prev;
     }
 
     reservoirs_out[flat_id] = PackedDiReservoir::new(reservoir);

@@ -5,7 +5,7 @@ use appearance_model::Model;
 use appearance_texture::Texture;
 use appearance_wgpu::wgpu::{self, TlasPackage};
 use appearance_world::visible_world_action::VisibleWorldActionType;
-use glam::{Mat4, Vec3};
+use glam::Mat4;
 use material_pool::MaterialPool;
 use scene_model::SceneModel;
 use sky::Sky;
