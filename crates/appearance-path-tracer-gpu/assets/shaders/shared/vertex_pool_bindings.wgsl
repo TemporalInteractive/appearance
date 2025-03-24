@@ -34,6 +34,10 @@ var<storage, read> emissive_triangle_instances: array<EmissiveTriangleInstance>;
 
 @group(1)
 @binding(6)
+var<storage, read> emissive_triangle_instance_cdf: array<f32>;
+
+@group(1)
+@binding(7)
 var<storage, read> blas_instances: array<BlasInstance>;
 
 fn _calculate_bitangent(normal: vec3<f32>, tangent: vec4<f32>) -> vec3<f32> {

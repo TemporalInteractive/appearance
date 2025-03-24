@@ -15,8 +15,8 @@ struct EmissiveTriangleInstance { // EmissiveBlasInstance
     transform: mat4x4<f32>, // TODO: put in separate buffer, also make 4x3
     vertex_pool_slice_idx: u32,
     num_triangles: u32,
-    cdf: f32,
     _padding0: u32,
+    _padding1: u32,
 }
 
 struct BlasInstance {

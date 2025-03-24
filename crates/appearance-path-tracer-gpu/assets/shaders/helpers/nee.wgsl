@@ -86,8 +86,8 @@ fn LightSample::load_eval_data(_self: LightSample, hit_point_ws: vec3<f32>) -> L
 
 fn Nee::sample_emissive_triangle(r0: f32, r1: f32, r23: vec2<f32>, sample_point: vec3<f32>, sun_pick_probability: f32, pdf: ptr<function, f32>) -> LightSample {
     for (var i: u32 = 0; i < vertex_pool_constants.num_emissive_triangle_instances; i += 1) {
-        let emissive_triangle_instance: EmissiveTriangleInstance = emissive_triangle_instances[i]; // TODO: speedup
-        if (r0 <= emissive_triangle_instance.cdf) {
+        if (r0 <= emissive_triangle_instance_cdf[i]) {
+            let emissive_triangle_instance: EmissiveTriangleInstance = emissive_triangle_instances[i];
             let vertex_pool_slice: VertexPoolSlice = vertex_pool_slices[emissive_triangle_instance.vertex_pool_slice_idx];
 
             let local_triangle_idx: u32 = u32(r1 * f32(emissive_triangle_instance.num_triangles));
