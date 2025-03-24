@@ -92,7 +92,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     let prev_id_unclamped = vec2<i32>(vec2<f32>(id) - (vec2<f32>(constants.resolution) * velocity) + (vec2<f32>(random_uniform_float(&rng), random_uniform_float(&rng)) * 0.5));
     if (all(prev_id_unclamped >= vec2<i32>(0)) && all(prev_id_unclamped < vec2<i32>(constants.resolution))) {
         // TODO: reprojection will break p_hat_prev, investigate how this should be done
-        prev_id = flat_id;//u32(prev_id_unclamped.y) * constants.resolution.x + u32(prev_id_unclamped.x);
+        prev_id = u32(prev_id_unclamped.y) * constants.resolution.x + u32(prev_id_unclamped.x);
 
         let current_gbuffer_texel: PackedGBufferTexel = gbuffer[flat_id];
         prev_gbuffer_texel = prev_gbuffer[prev_id];
@@ -108,22 +108,20 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
 
     if (valid_prev_reservoir) {
         var prev_reservoir: DiReservoir = PackedDiReservoir::unpack(prev_reservoirs_in[prev_id]);
-        // prev_reservoir.sample_count = min(prev_reservoir.sample_count, 200.0 * reservoir.sample_count);
+        prev_reservoir.sample_count = min(prev_reservoir.sample_count, 200.0 * reservoir.sample_count);
 
-        // let w_out_worldspace: vec3<f32> = -direction;
-        // prev_reservoir.selected_phat = LightSample::phat(prev_reservoir.sample, light_sample_ctx, hit_point_ws, w_out_worldspace, false, scene);
+        let w_out_worldspace: vec3<f32> = -direction;
+        prev_reservoir.selected_phat = LightSample::phat(prev_reservoir.sample, light_sample_ctx, hit_point_ws, w_out_worldspace, constants.unbiased > 0, scene);
 
-        // reservoir = DiReservoir::combine(reservoir, prev_reservoir, &rng);
+        reservoir = DiReservoir::combine(reservoir, prev_reservoir, &rng);
 
-        // pˆ of previous reservoir in the previous pixels context
-        let p_hat_prev: f32 = LightSample::phat(prev_reservoir.sample, light_sample_ctx, hit_point_ws, w_out_worldspace, false, scene);// TODO: this should be done with prev scene state, but for static scene this is valid
-        // pˆ of previous reservoir in the current pixels context
-        let p_hat_current: f32 = LightSample::phat(prev_reservoir.sample, light_sample_ctx, hit_point_ws, w_out_worldspace, false, scene);
+        // // pˆ of previous reservoir in the previous pixels context
+        // let p_hat_prev: f32 = LightSample::phat(prev_reservoir.sample, light_sample_ctx, hit_point_ws, w_out_worldspace, false, scene);// TODO: this should be done with prev scene state, but for static scene this is valid
+        // // pˆ of previous reservoir in the current pixels context
+        // let p_hat_current: f32 = LightSample::phat(prev_reservoir.sample, light_sample_ctx, hit_point_ws, w_out_worldspace, false, scene);
         
-        // 𝑚𝑖(𝑥) = 𝑝ˆ𝑖(𝑥) / ∑(𝑀, 𝑗=1, 𝑝ˆ𝑗(𝑥))
-        let mis_weight: f32 = p_hat_current / p_hat_prev;
-
-
+        // // 𝑚𝑖(𝑥) = 𝑝ˆ𝑖(𝑥) / ∑(𝑀, 𝑗=1, 𝑝ˆ𝑗(𝑥))
+        // let mis_weight: f32 = p_hat_current / p_hat_prev;
     }
 
     reservoirs_out[flat_id] = PackedDiReservoir::new(reservoir);
