@@ -1,34 +1,17 @@
 @include appearance-packing::shared/packing
 
-// Used for sampling lights in the world, can both sample emissive triangles or the sun, indicated by triangle_area = 0
-// struct LightSample { // TODO: this will need to be represented as a triangle idx (and some way we can query it's transform), also barycentric coords (usefull for both triangle and sun)
-//                      // this will better support moving lights
-//     point: vec3<f32>,
-//     emission: vec3<f32>,
-//     triangle_area: f32, // TODO: remove?
-//     triangle_normal: vec3<f32>,
-// }
-
+// Data required to evaluate a light sample from any given hit position in the world, this must be reevaluated every frame as triangle can move over time & their intensity can change
 struct LightSampleEvalData {
     emission: vec3<f32>,
     point_ws: vec3<f32>,
 }
 
+// Used for sampling lights in the world, can both sample emissive triangles or the sun
 struct LightSample {
     uv: vec2<f32>,
     emissive_triangle_instance_idx: u32,
     local_triangle_idx: u32,
 }
-
-// Packed representation of LightSample
-// struct PackedLightSample {
-//     point: vec3<f32>,
-//     emission: PackedRgb9e5,
-//     triangle_area: f32,
-//     triangle_normal: PackedNormalizedXyz10,
-//     _padding0: u32,
-//     _padding1: u32,
-// }
 
 struct PackedLightSample {
     uv: vec2<f32>,
@@ -44,15 +27,6 @@ struct LightSampleCtx {
     front_facing_shading_normal_ws: PackedNormalizedXyz10,
     front_facing_clearcoat_normal_ws: PackedNormalizedXyz10,
 }
-
-// fn LightSample::new_triangle_sample(point: vec3<f32>, emission: vec3<f32>, triangle: Triangle) -> LightSample {
-//     let p01: vec3<f32> = triangle.p1 - triangle.p0;
-//     let p02: vec3<f32> = triangle.p2 - triangle.p0;
-//     let triangle_area: f32 = Triangle::area_from_edges(p01, p02);
-//     let triangle_normal: vec3<f32> = normalize(cross(p01, p02));
-
-//     return LightSample(point, emission, triangle_area, triangle_normal);
-// }
 
 fn LightSampleEvalData::new(emission: vec3<f32>, point_ws: vec3<f32>) -> LightSampleEvalData {
     return LightSampleEvalData(emission, point_ws);
@@ -81,26 +55,6 @@ fn LightSample::is_empty(_self: LightSample) -> bool {
 fn LightSample::is_sun(_self: LightSample) -> bool {
     return _self.emissive_triangle_instance_idx == U32_MAX - 1;
 }
-
-// fn PackedLightSample::new(light_sample: LightSample) -> PackedLightSample {
-//     return PackedLightSample(
-//         light_sample.point,
-//         PackedRgb9e5::new(light_sample.emission),
-//         light_sample.triangle_area,
-//         PackedNormalizedXyz10::new(light_sample.triangle_normal, 0),
-//         0,
-//         0
-//     );
-// }
-
-// fn PackedLightSample::unpack(_self: PackedLightSample) -> LightSample {
-//     return LightSample(
-//         _self.point,
-//         PackedRgb9e5::unpack(_self.emission),
-//         _self.triangle_area,
-//         PackedNormalizedXyz10::unpack(_self.triangle_normal, 0)
-//     );
-// }
 
 fn PackedLightSample::new(light_sample: LightSample) -> PackedLightSample {
     return PackedLightSample(
