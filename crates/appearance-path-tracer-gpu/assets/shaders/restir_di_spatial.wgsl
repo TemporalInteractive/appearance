@@ -131,7 +131,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
 
         if (valid_neighbour_reservoir) {
             var neighbour_reservoir: DiReservoir = PackedDiReservoir::unpack(in_reservoirs[flat_neighbour_id]);
-            //neighbour_reservoir.sample_count = min(neighbour_reservoir.sample_count, 20.0);
 
             let w_out_worldspace: vec3<f32> = -direction;
 

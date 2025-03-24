@@ -119,7 +119,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
         prev_id = prev_id_2d.y * constants.resolution.x + prev_id_2d.x;
 
         let prev_gbuffer_texel: GBufferTexel = GBuffer::sample_prev_gbuffer(prev_point_ss);
-        if (all(GBufferTexel::is_disoccluded(current_gbuffer_texel, prev_gbuffer_texel))) {
+        if (GBufferTexel::is_disoccluded(current_gbuffer_texel, prev_gbuffer_texel)) {
             temporal_radiance = sample_temporal_demodulated_radiance(prev_point_ss);
             temporal_moments = sample_temporal_moments(prev_point_ss);
 
