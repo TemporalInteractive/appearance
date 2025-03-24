@@ -264,7 +264,7 @@ fn Nee::sample_ris(hit_point_ws: vec3<f32>, w_out_worldspace: vec3<f32>, front_f
     //     DiReservoir::update(&di_reservoir, weight, rng, sample, phat);
     // }
 
-    const NUM_AREA_SAMPLES: u32 = 0;
+    const NUM_AREA_SAMPLES: u32 = 4;
     const NUM_BSDF_SAMPLES: u32 = 1;
 
     var di_reservoir = DiReservoir::new();
@@ -325,30 +325,6 @@ fn Nee::sample_ris(hit_point_ws: vec3<f32>, w_out_worldspace: vec3<f32>, front_f
                     if (BlasInstance::is_emissive(blas_instance)) {
                         bsdf_light_sample = LightSample::new_triangle_sample(intersection.barycentrics, blas_instance.emissive_blas_instance_idx, intersection.primitive_index);
                     }
-
-                    // let i0: u32 = vertex_indices[vertex_pool_slice.first_index + intersection.primitive_index * 3 + 0];
-                    // let i1: u32 = vertex_indices[vertex_pool_slice.first_index + intersection.primitive_index * 3 + 1];
-                    // let i2: u32 = vertex_indices[vertex_pool_slice.first_index + intersection.primitive_index * 3 + 2];
-
-                    // let v0: Vertex = PackedVertex::unpack(vertices[vertex_pool_slice.first_vertex + i0]);
-                    // let v1: Vertex = PackedVertex::unpack(vertices[vertex_pool_slice.first_vertex + i1]);
-                    // let v2: Vertex = PackedVertex::unpack(vertices[vertex_pool_slice.first_vertex + i2]);
-
-                    // let tex_coord: vec2<f32> = v0.tex_coord * barycentrics.x + v1.tex_coord * barycentrics.y + v2.tex_coord * barycentrics.z;
-
-                    // let material_idx: u32 = vertex_pool_slice.material_idx + triangle_material_indices[vertex_pool_slice.first_index / 3 + intersection.primitive_index];
-                    // let material_descriptor: MaterialDescriptor = material_descriptors[material_idx];
-                    // let material: Material = Material::from_material_descriptor(material_descriptor, tex_coord);
-                    // if (dot(material.emission, material.emission) > 0.0 || true) {
-                    //     var triangle = Triangle::new(
-                    //         (intersection.object_to_world * vec4<f32>(v0.position, 1.0)).xyz,
-                    //         (intersection.object_to_world * vec4<f32>(v1.position, 1.0)).xyz,
-                    //         (intersection.object_to_world * vec4<f32>(v2.position, 1.0)).xyz
-                    //     );
-                    //     let point: vec3<f32> = hit_point_ws + w_in_worldspace * intersection.t;
-
-                    //     bsdf_light_sample = LightSample::new_triangle_sample(point, material.emission, triangle);
-                    // }
                 } else {
                     let uv: vec2<f32> = Sky::inverse_direction_to_sun(w_in_worldspace);
                     bsdf_light_sample = LightSample::new_sun_sample(uv);

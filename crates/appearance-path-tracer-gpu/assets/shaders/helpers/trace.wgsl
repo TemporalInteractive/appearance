@@ -17,9 +17,9 @@ fn safe_distance(distance: f32) -> f32 {
     return distance - TRACE_EPSILON * 2.0;
 }
 
-fn trace_shadow_ray_opaque(origin: vec3<f32>, direction: vec3<f32>, distance: f32, scene: acceleration_structure) -> bool {
+fn trace_shadow_ray_opaque(origin: vec3<f32>, direction: vec3<f32>, distance: f32, normal: vec3<f32>, scene: acceleration_structure) -> bool {
     var shadow_rq: ray_query;
-    rayQueryInitialize(&shadow_rq, scene, RayDesc(0x4, 0xFFu, 0.0, distance, origin + direction * 0.00001, direction));
+    rayQueryInitialize(&shadow_rq, scene, RayDesc(0x4, 0xFFu, 0.0, safe_distance(distance), safe_origin(origin, normal), direction));
     rayQueryProceed(&shadow_rq);
     let intersection = rayQueryGetCommittedIntersection(&shadow_rq);
     return intersection.kind != RAY_QUERY_INTERSECTION_TRIANGLE;
@@ -29,7 +29,7 @@ fn trace_shadow_ray(_origin: vec3<f32>, direction: vec3<f32>, distance: f32, nor
     var origin: vec3<f32> = _origin;
 
     if (MAX_NON_OPAQUE_SHADOW_DEPTH == 1) {
-        return trace_shadow_ray_opaque(origin, direction, distance, scene);
+        return trace_shadow_ray_opaque(origin, direction, distance, normal, scene);
     }
 
     var travelled_distance: f32 = 0.0;
