@@ -41,6 +41,26 @@ fn Sky::direction_to_sun(uv: vec2<f32>) -> vec3<f32> {
     return normalize(perturb_direction_vector(uv, -sky_constants.sun_direction, sky_constants.sun_size * 0.1));
 }
 
+fn Sky::inverse_direction_to_sun(direction: vec3<f32>) -> vec2<f32> {
+    let sun_dir: vec3<f32> = -sky_constants.sun_direction;
+    let bitangent: vec3<f32> = get_perpendicular_vector(sun_dir);
+    let tangent: vec3<f32> = cross(bitangent, sun_dir);
+
+    // Project direction onto basis vectors
+    let z: f32 = dot(direction, sun_dir);
+    let x: f32 = dot(direction, bitangent);
+    let y: f32 = dot(direction, tangent);
+
+    // Compute uv coordinates
+    let sin_t: f32 = sqrt(1.0 - z * z);
+    let phi: f32 = atan2(y, x);
+    
+    let uv_x: f32 = (phi / (2.0 * PI)) % 1.0; // Normalize phi to [0,1]
+    let uv_y: f32 = (z - cos(sky_constants.sun_size * 0.1)) / (1.0 - cos(sky_constants.sun_size * 0.1)); 
+
+    return vec2<f32>(uv_x, uv_y);
+}
+
 fn Sky::sun_solid_angle() -> f32 {
     return TWO_PI * (1.0 - cos(sky_constants.sun_size * 0.1));
 }

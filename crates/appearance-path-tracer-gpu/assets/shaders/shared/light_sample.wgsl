@@ -67,19 +67,19 @@ fn LightSample::new_triangle_sample(uv: vec2<f32>, emissive_triangle_instance_id
 }
 
 fn LightSample::new_sun_sample(uv: vec2<f32>) -> LightSample {
-    return LightSample(uv, U32_MAX, 0);
+    return LightSample(uv, U32_MAX - 1, 0);
 }
 
 fn LightSample::empty() -> LightSample {
-    return LightSample(vec2<f32>(-1.0), 0, 0);
+    return LightSample(vec2<f32>(0.0), U32_MAX, 0);
 }
 
 fn LightSample::is_empty(_self: LightSample) -> bool {
-    return _self.uv.x < -0.0001;
+    return _self.emissive_triangle_instance_idx == U32_MAX;
 }
 
 fn LightSample::is_sun(_self: LightSample) -> bool {
-    return _self.emissive_triangle_instance_idx == U32_MAX;
+    return _self.emissive_triangle_instance_idx == U32_MAX - 1;
 }
 
 // fn PackedLightSample::new(light_sample: LightSample) -> PackedLightSample {

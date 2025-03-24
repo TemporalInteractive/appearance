@@ -35,12 +35,9 @@ struct SpatialConstants {
 
 #[repr(C)]
 pub struct PackedLightSample {
-    point: Vec3,
-    emission: u32,
-    triangle_area: f32,
-    triangle_normal: u32,
-    _padding0: u32,
-    _padding1: u32,
+    uv: Vec2,
+    emissive_triangle_instance_idx: u32,
+    local_triangle_idx: u32,
 }
 
 #[repr(C)]

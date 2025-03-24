@@ -97,7 +97,7 @@ fn Nee::sample_emissive_triangle(r0: f32, r1: f32, r23: vec2<f32>, sample_point:
             let i1: u32 = vertex_indices[first_index + 1];
             let i2: u32 = vertex_indices[first_index + 2];
 
-            let uv: vec2<f32> = r23;
+            //let uv: vec2<f32> = r23;
             //let barycentrics = vec3<f32>(1.0 - uv.x - uv.y, uv);
 
             let v0: Vertex = PackedVertex::unpack(vertices[vertex_pool_slice.first_vertex + i0]);
@@ -122,7 +122,7 @@ fn Nee::sample_emissive_triangle(r0: f32, r1: f32, r23: vec2<f32>, sample_point:
             // let material_descriptor: MaterialDescriptor = material_descriptors[material_idx];
             // let emission: vec3<f32> = MaterialDescriptor::emission(material_descriptor, tex_coord);
 
-            return LightSample::new_triangle_sample(uv, i, local_triangle_idx);
+            return LightSample::new_triangle_sample(r23, i, local_triangle_idx);
         }
     }
 
@@ -264,7 +264,7 @@ fn Nee::sample_ris(hit_point_ws: vec3<f32>, w_out_worldspace: vec3<f32>, front_f
     //     DiReservoir::update(&di_reservoir, weight, rng, sample, phat);
     // }
 
-    const NUM_AREA_SAMPLES: u32 = 4;
+    const NUM_AREA_SAMPLES: u32 = 0;
     const NUM_BSDF_SAMPLES: u32 = 1;
 
     var di_reservoir = DiReservoir::new();
@@ -298,66 +298,69 @@ fn Nee::sample_ris(hit_point_ws: vec3<f32>, w_out_worldspace: vec3<f32>, front_f
 
         var bsdf_sample_pdf: f32 = 0.0;
         var bsdf_light_sample = LightSample::empty();
-        var bsdf_sample_eval_data: LightSampleEvalData;
+        var bsdf_sample_eval_data = LightSampleEvalData::empty();
         var bsdf_phat: f32 = 0.0;
-        // if (i < NUM_BSDF_SAMPLES) {
-        //     var w_in_worldspace: vec3<f32>;
-        //     var specular: bool;
-        //     let reflectance: vec3<f32> = DisneyBsdf::sample(disney_bsdf,
-        //         front_facing_shading_normal_ws, tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
-        //         w_out_worldspace, t, back_face,
-        //         random_uniform_float(rng), random_uniform_float(rng), random_uniform_float(rng),
-        //         &w_in_worldspace, &bsdf_sample_pdf, &specular
-        //     );
+        if (i < NUM_BSDF_SAMPLES) {
+            var w_in_worldspace: vec3<f32>;
+            var specular: bool;
+            let reflectance: vec3<f32> = DisneyBsdf::sample(disney_bsdf,
+                front_facing_shading_normal_ws, tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
+                w_out_worldspace, t, back_face,
+                random_uniform_float(rng), random_uniform_float(rng), random_uniform_float(rng),
+                &w_in_worldspace, &bsdf_sample_pdf, &specular
+            );
 
-        //     let wi_dot_n: f32 = abs(dot(w_in_worldspace, front_facing_shading_normal_ws));
-        //     let contribution: vec3<f32> = wi_dot_n * reflectance;
+            let wi_dot_n: f32 = abs(dot(w_in_worldspace, front_facing_shading_normal_ws));
+            let contribution: vec3<f32> = wi_dot_n * reflectance;
 
-        //     if (dot(contribution, contribution) > 0.0) {
-        //         // TODO: non-opaques
-        //         var rq: ray_query;
-        //         rayQueryInitialize(&rq, scene, RayDesc(0u, 0xFFu, 0.0, 1000.0, safe_origin(hit_point_ws, front_facing_shading_normal_ws), w_in_worldspace));
-        //         rayQueryProceed(&rq);
-        //         let intersection = rayQueryGetCommittedIntersection(&rq);
-        //         if (intersection.kind == RAY_QUERY_INTERSECTION_TRIANGLE) {
-        //             let vertex_pool_slice_index: u32 = intersection.instance_custom_data;
-        //             let vertex_pool_slice: VertexPoolSlice = vertex_pool_slices[vertex_pool_slice_index];
+            if (dot(contribution, contribution) > 0.0) {
+                // TODO: non-opaques
+                var rq: ray_query;
+                rayQueryInitialize(&rq, scene, RayDesc(0u, 0xFFu, 0.0, 1000.0, safe_origin(hit_point_ws, front_facing_shading_normal_ws), w_in_worldspace));
+                rayQueryProceed(&rq);
+                let intersection = rayQueryGetCommittedIntersection(&rq);
+                if (intersection.kind == RAY_QUERY_INTERSECTION_TRIANGLE) {
+                    let blas_instance: BlasInstance = blas_instances[intersection.instance_custom_data];
 
-        //             let barycentrics = vec3<f32>(1.0 - intersection.barycentrics.x - intersection.barycentrics.y, intersection.barycentrics);
+                    if (BlasInstance::is_emissive(blas_instance)) {
+                        bsdf_light_sample = LightSample::new_triangle_sample(intersection.barycentrics, blas_instance.emissive_blas_instance_idx, intersection.primitive_index);
+                    }
 
-        //             let i0: u32 = vertex_indices[vertex_pool_slice.first_index + intersection.primitive_index * 3 + 0];
-        //             let i1: u32 = vertex_indices[vertex_pool_slice.first_index + intersection.primitive_index * 3 + 1];
-        //             let i2: u32 = vertex_indices[vertex_pool_slice.first_index + intersection.primitive_index * 3 + 2];
+                    // let i0: u32 = vertex_indices[vertex_pool_slice.first_index + intersection.primitive_index * 3 + 0];
+                    // let i1: u32 = vertex_indices[vertex_pool_slice.first_index + intersection.primitive_index * 3 + 1];
+                    // let i2: u32 = vertex_indices[vertex_pool_slice.first_index + intersection.primitive_index * 3 + 2];
 
-        //             let v0: Vertex = PackedVertex::unpack(vertices[vertex_pool_slice.first_vertex + i0]);
-        //             let v1: Vertex = PackedVertex::unpack(vertices[vertex_pool_slice.first_vertex + i1]);
-        //             let v2: Vertex = PackedVertex::unpack(vertices[vertex_pool_slice.first_vertex + i2]);
+                    // let v0: Vertex = PackedVertex::unpack(vertices[vertex_pool_slice.first_vertex + i0]);
+                    // let v1: Vertex = PackedVertex::unpack(vertices[vertex_pool_slice.first_vertex + i1]);
+                    // let v2: Vertex = PackedVertex::unpack(vertices[vertex_pool_slice.first_vertex + i2]);
 
-        //             let tex_coord: vec2<f32> = v0.tex_coord * barycentrics.x + v1.tex_coord * barycentrics.y + v2.tex_coord * barycentrics.z;
+                    // let tex_coord: vec2<f32> = v0.tex_coord * barycentrics.x + v1.tex_coord * barycentrics.y + v2.tex_coord * barycentrics.z;
 
-        //             let material_idx: u32 = vertex_pool_slice.material_idx + triangle_material_indices[vertex_pool_slice.first_index / 3 + intersection.primitive_index];
-        //             let material_descriptor: MaterialDescriptor = material_descriptors[material_idx];
-        //             let material: Material = Material::from_material_descriptor(material_descriptor, tex_coord);
-        //             if (dot(material.emission, material.emission) > 0.0 || true) {
-        //                 var triangle = Triangle::new(
-        //                     (intersection.object_to_world * vec4<f32>(v0.position, 1.0)).xyz,
-        //                     (intersection.object_to_world * vec4<f32>(v1.position, 1.0)).xyz,
-        //                     (intersection.object_to_world * vec4<f32>(v2.position, 1.0)).xyz
-        //                 );
-        //                 let point: vec3<f32> = hit_point_ws + w_in_worldspace * intersection.t;
+                    // let material_idx: u32 = vertex_pool_slice.material_idx + triangle_material_indices[vertex_pool_slice.first_index / 3 + intersection.primitive_index];
+                    // let material_descriptor: MaterialDescriptor = material_descriptors[material_idx];
+                    // let material: Material = Material::from_material_descriptor(material_descriptor, tex_coord);
+                    // if (dot(material.emission, material.emission) > 0.0 || true) {
+                    //     var triangle = Triangle::new(
+                    //         (intersection.object_to_world * vec4<f32>(v0.position, 1.0)).xyz,
+                    //         (intersection.object_to_world * vec4<f32>(v1.position, 1.0)).xyz,
+                    //         (intersection.object_to_world * vec4<f32>(v2.position, 1.0)).xyz
+                    //     );
+                    //     let point: vec3<f32> = hit_point_ws + w_in_worldspace * intersection.t;
 
-        //                 bsdf_light_sample = LightSample::new_triangle_sample(point, material.emission, triangle);
-        //             }
-        //         } else {
-        //             bsdf_light_sample = LightSample::new_sun_sample(w_in_worldspace * SUN_DISTANCE, sky_constants.sun_color);
-        //         }
+                    //     bsdf_light_sample = LightSample::new_triangle_sample(point, material.emission, triangle);
+                    // }
+                } else {
+                    let uv: vec2<f32> = Sky::inverse_direction_to_sun(w_in_worldspace);
+                    bsdf_light_sample = LightSample::new_sun_sample(uv);
+                }
 
-        //         if (!LightSample::is_empty(bsdf_light_sample)) {
-        //             let sample_emission: vec3<f32> = LightSample::intensity(bsdf_light_sample, hit_point_ws) * bsdf_light_sample.emission;
-        //             bsdf_phat = linear_to_luma(contribution * sample_emission);
-        //         }
-        //     }
-        // }
+                if (!LightSample::is_empty(bsdf_light_sample)) {
+                    bsdf_sample_eval_data = LightSample::load_eval_data(bsdf_light_sample, hit_point_ws);
+
+                    bsdf_phat = linear_to_luma(contribution * bsdf_sample_eval_data.emission);
+                }
+            }
+        }
         
         if (i < NUM_AREA_SAMPLES) {
             var area_weight: f32 = 0.0;

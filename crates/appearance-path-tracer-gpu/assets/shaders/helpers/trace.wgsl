@@ -45,8 +45,8 @@ fn trace_shadow_ray(_origin: vec3<f32>, direction: vec3<f32>, distance: f32, nor
 
         let intersection = rayQueryGetCommittedIntersection(&rq);
         if (intersection.kind == RAY_QUERY_INTERSECTION_TRIANGLE) {
-            let vertex_pool_slice_index: u32 = intersection.instance_custom_data;
-            let vertex_pool_slice: VertexPoolSlice = vertex_pool_slices[vertex_pool_slice_index];
+            let blas_instance: BlasInstance = blas_instances[intersection.instance_custom_data];
+            let vertex_pool_slice: VertexPoolSlice = vertex_pool_slices[blas_instance.vertex_pool_slice_index];
 
             let barycentrics = vec3<f32>(1.0 - intersection.barycentrics.x - intersection.barycentrics.y, intersection.barycentrics);
 

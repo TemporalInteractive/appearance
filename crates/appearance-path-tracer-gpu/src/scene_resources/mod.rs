@@ -186,13 +186,15 @@ impl SceneResources {
             blas_instances.push(wgpu::TlasInstance::new(
                 blas,
                 transform4x3,
-                vertex_slice_index,
+                blas_instances.len() as u32,
                 0xff,
             ));
 
-            if model.is_emissive[*mesh_idx as usize] {
-                vertex_pool.submit_emissive_slice_instance(vertex_slice_index, transform);
-            }
+            vertex_pool.submit_slice_instance(
+                vertex_slice_index,
+                transform,
+                model.is_emissive[*mesh_idx as usize],
+            );
 
             blas_idx += 1;
         }

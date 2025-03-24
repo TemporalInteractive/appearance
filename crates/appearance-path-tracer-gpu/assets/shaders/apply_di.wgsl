@@ -61,7 +61,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
 
     let di_reservoir: DiReservoir = PackedDiReservoir::unpack(light_sample_reservoirs[id]);
     let light_sample: LightSample = di_reservoir.sample;
-    if (di_reservoir.contribution_weight == 0.0) { return; }
+    if (di_reservoir.contribution_weight == 0.0) { return; } //  || LightSample::is_empty(light_sample)
 
     let light_sample_ctx: LightSampleCtx = light_sample_ctxs[id];
 
