@@ -11,7 +11,7 @@ use film::Film;
 use firefly_filter_pass::FireflyFilterPassParameters;
 use gbuffer::GBuffer;
 use gbuffer_pass::GbufferPassParameters;
-use glam::{UVec2, Vec3};
+use glam::{UVec2, Vec3, Vec4};
 use raygen_pass::RaygenPassParameters;
 use resolve_pass::ResolvePassParameters;
 use restir_di_pass::{LightSampleCtx, PackedDiReservoir, RestirDiPass, RestirDiPassParameters};
@@ -56,6 +56,8 @@ struct SizedResources {
     rays: wgpu::Buffer,
     payloads: wgpu::Buffer,
     radiance: wgpu::Buffer,
+    accum_radiance: wgpu::Buffer,
+    accum_frame_count: u32,
     demodulated_radiance: [wgpu::Buffer; 2],
     light_sample_reservoirs: wgpu::Buffer,
     light_sample_ctxs: wgpu::Buffer,
@@ -90,6 +92,13 @@ impl SizedResources {
         let radiance = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("appearance-path-tracer-gpu radiance"),
             size: (std::mem::size_of::<PackedRgb9e5>() as u32 * resolution.x * resolution.y) as u64,
+            mapped_at_creation: false,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let accum_radiance = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("appearance-path-tracer-gpu accum_radiance"),
+            size: (std::mem::size_of::<Vec4>() as u32 * resolution.x * resolution.y) as u64,
             mapped_at_creation: false,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
@@ -177,6 +186,8 @@ impl SizedResources {
             rays,
             payloads,
             radiance,
+            accum_radiance,
+            accum_frame_count: 0,
             demodulated_radiance,
             light_sample_reservoirs,
             light_sample_ctxs,
@@ -190,11 +201,18 @@ impl SizedResources {
         }
     }
 
+    fn invalidate_accum_radiance(&mut self, command_encoder: &mut wgpu::CommandEncoder) {
+        self.accum_frame_count = 0;
+        command_encoder.clear_buffer(&self.accum_radiance, 0, None);
+    }
+
     fn end_frame(&mut self, camera: &Camera) {
         self.gbuffer.end_frame(camera);
         self.restir_di_pass.end_frame();
         self.restir_gi_pass.end_frame();
         self.svgf_pass.end_frame();
+
+        self.accum_frame_count += 1;
     }
 }
 
@@ -202,6 +220,7 @@ impl SizedResources {
 pub struct PathTracerGpuConfig {
     max_bounces: u32,
     sample_count: u32,
+    accum_frames: bool,
 
     restir_di: bool,
     restir_gi: bool,
@@ -213,11 +232,12 @@ pub struct PathTracerGpuConfig {
 impl Default for PathTracerGpuConfig {
     fn default() -> Self {
         Self {
-            max_bounces: 2,
+            max_bounces: 1,
             sample_count: 1,
-            restir_di: false,
+            accum_frames: false,
+            restir_di: true,
             restir_gi: false,
-            svgf: true,
+            svgf: false,
             firefly_filter: false,
             taa: false,
         }
@@ -325,12 +345,16 @@ impl PathTracerGpu {
         self.scene_resources
             .rebuild_tlas(&mut command_encoder, &ctx.queue);
 
+        command_encoder.clear_buffer(&self.sized_resources.radiance, 0, None);
+        if view_proj != prev_view_proj || !self.config.accum_frames {
+            self.sized_resources
+                .invalidate_accum_radiance(&mut command_encoder);
+        }
+
         let demodulated_radiance =
             &self.sized_resources.demodulated_radiance[(self.frame_idx as usize) % 2];
         let prev_demodulated_radiance =
             &self.sized_resources.demodulated_radiance[(self.frame_idx as usize + 1) % 2];
-
-        command_encoder.clear_buffer(&self.sized_resources.radiance, 0, None);
 
         gbuffer_pass::encode(
             &GbufferPassParameters {
@@ -346,11 +370,15 @@ impl PathTracerGpu {
         );
 
         for sample in 0..self.config.sample_count {
+            //let seed = 1337 * self.config.sample_count + sample;
+            let seed = self.frame_idx * self.config.sample_count + sample;
+
             raygen_pass::encode(
                 &RaygenPassParameters {
                     inv_view,
                     inv_proj,
                     resolution: self.local_resolution,
+                    seed,
                     rays: &self.sized_resources.rays,
                 },
                 &ctx.device,
@@ -359,8 +387,6 @@ impl PathTracerGpu {
             );
 
             for i in 0..self.config.max_bounces {
-                let seed = self.frame_idx * self.config.sample_count + sample;
-
                 trace_pass::encode(
                     &TracePassParameters {
                         ray_count: self.local_resolution.x * self.local_resolution.y,
@@ -387,7 +413,7 @@ impl PathTracerGpu {
                         self.sized_resources.restir_di_pass.encode(
                             &RestirDiPassParameters {
                                 resolution: self.local_resolution,
-                                seed: self.frame_idx,
+                                seed,
                                 spatial_pass_count: 2,
                                 spatial_pixel_radius: 30.0,
                                 unbiased: true,
@@ -411,7 +437,7 @@ impl PathTracerGpu {
                         self.sized_resources.restir_gi_pass.encode(
                             &RestirGiPassParameters {
                                 resolution: self.local_resolution,
-                                seed: self.frame_idx,
+                                seed,
                                 spatial_pass_count: 1,
                                 spatial_pixel_radius: 30.0,
                                 unbiased: true,
@@ -538,7 +564,9 @@ impl PathTracerGpu {
             &ResolvePassParameters {
                 resolution: self.local_resolution,
                 sample_count: self.config.sample_count,
+                accum_frame_count: self.sized_resources.accum_frame_count,
                 radiance: &self.sized_resources.radiance,
+                accum_radiance: &self.sized_resources.accum_radiance,
                 gbuffer: &self.sized_resources.gbuffer,
                 target_view: self.sized_resources.film.texture_view(),
             },
@@ -554,6 +582,30 @@ impl PathTracerGpu {
         ctx.queue.submit(Some(command_encoder.finish()));
 
         let pixels = self.sized_resources.film.readback_pixels(&ctx.device);
+
+        const GT_PIXEL_VALUE: Vec3 = Vec3::new(0.2643197, 0.26431587, 0.26432508);
+        let mut avg_pixel_value = Vec3::ZERO;
+        for i in 0..(pixels.len() / 3) {
+            let f32_pixel = Vec3::new(
+                pixels[i * 3] as f32 / 255.0,
+                pixels[i * 3 + 1] as f32 / 255.0,
+                pixels[i * 3 + 2] as f32 / 255.0,
+            );
+
+            avg_pixel_value += f32_pixel;
+        }
+        avg_pixel_value /= (pixels.len() / 3) as f32;
+        let avg_err =
+            (GT_PIXEL_VALUE.element_sum() / 3.0 - avg_pixel_value.element_sum() / 3.0).powf(2.0);
+        let status_text = if avg_err < 1e-5 { "PASSED" } else { "FAILED" };
+        println!(
+            "\n\nERR: {} {}\nELEM-WISE ERR: {} AVG: {}",
+            avg_err,
+            status_text,
+            (GT_PIXEL_VALUE - avg_pixel_value).powf(2.0),
+            avg_pixel_value
+        );
+
         result_callback(&pixels);
 
         self.frame_idx += 1;

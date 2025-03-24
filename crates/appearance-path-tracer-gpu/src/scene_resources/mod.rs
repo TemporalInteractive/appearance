@@ -190,9 +190,11 @@ impl SceneResources {
                 0xff,
             ));
 
-            if model.is_emissive[*mesh_idx as usize] {
-                vertex_pool.submit_emissive_slice_instance(vertex_slice_index, transform);
-            }
+            vertex_pool.submit_slice_instance(
+                vertex_slice_index,
+                transform,
+                model.is_emissive[*mesh_idx as usize],
+            );
 
             blas_idx += 1;
         }

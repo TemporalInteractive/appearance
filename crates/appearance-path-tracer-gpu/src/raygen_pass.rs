@@ -14,14 +14,15 @@ struct Constants {
     inv_proj: Mat4,
     width: u32,
     height: u32,
+    seed: u32,
     _padding0: u32,
-    _padding1: u32,
 }
 
 pub struct RaygenPassParameters<'a> {
     pub inv_view: Mat4,
     pub inv_proj: Mat4,
     pub resolution: UVec2,
+    pub seed: u32,
     pub rays: &'a wgpu::Buffer,
 }
 
@@ -83,8 +84,8 @@ pub fn encode(
             inv_proj: parameters.inv_proj,
             width: parameters.resolution.x,
             height: parameters.resolution.y,
+            seed: parameters.seed,
             _padding0: 0,
-            _padding1: 0,
         }),
         usage: wgpu::BufferUsages::UNIFORM,
     });

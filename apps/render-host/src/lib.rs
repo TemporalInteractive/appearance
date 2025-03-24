@@ -63,7 +63,7 @@ pub struct HostRenderLoop {
     camera_controller: CameraController,
     world: World,
     // duck_entity: Option<specs::Entity>,
-    // toy_car_entity: specs::Entity,
+    toy_car_entity: specs::Entity,
 }
 
 impl RenderLoop for HostRenderLoop {
@@ -130,18 +130,18 @@ impl RenderLoop for HostRenderLoop {
         let _ = world.create_entity(
             "Sponza",
             Transform::new(Vec3::new(3.0, 0.0, 0.0), Quat::IDENTITY, Vec3::splat(1.0)),
-            |builder| builder.with(ModelComponent::new("::SponzaSheen.glb")),
+            |builder| builder.with(ModelComponent::new("::SponzaGlossy.glb")),
         );
         // let _ = world.create_entity(
         //     "CornellBox",
         //     Transform::new(Vec3::new(0.0, 0.0, 0.0), Quat::IDENTITY, Vec3::splat(1.0)),
         //     |builder| builder.with(ModelComponent::new("::CornellBoxConor.glb")),
         // );
-        // let _ = world.create_entity(
-        //     "Orbs",
-        //     Transform::new(Vec3::new(3.0, 0.0, 0.0), Quat::IDENTITY, Vec3::splat(1.0)),
-        //     |builder| builder.with(ModelComponent::new("::SponzaOrbs.glb")),
-        // );
+        let toy_car_entity = world.create_entity(
+            "Orbs",
+            Transform::new(Vec3::new(3.0, 0.0, 0.0), Quat::IDENTITY, Vec3::splat(1.0)),
+            |builder| builder.with(ModelComponent::new("::SponzaOrbs.glb")),
+        );
         // let _ = world.create_entity(
         //     "NeonSigns",
         //     Transform::new(Vec3::new(3.0, 0.0, 0.0), Quat::IDENTITY, Vec3::splat(1.0)),
@@ -208,7 +208,7 @@ impl RenderLoop for HostRenderLoop {
             camera_controller: CameraController::new(),
             world,
             // duck_entity: Some(duck_entity),
-            // toy_car_entity,
+            toy_car_entity,
         }
     }
 
@@ -272,13 +272,13 @@ impl RenderLoop for HostRenderLoop {
         //     duck_transform.transform.translate(RIGHT * delta_time * 0.5);
         // }
 
-        // {
-        //     let mut transforms_mut = self.world.entities_mut::<TransformComponent>();
-        //     let transform = transforms_mut.get_mut(self.toy_car_entity).unwrap();
-        //     transform
-        //         .transform
-        //         .rotate(Quat::from_axis_angle(UP, delta_time * 0.3));
-        // }
+        {
+            let mut transforms_mut = self.world.entities_mut::<TransformComponent>();
+            let transform = transforms_mut.get_mut(self.toy_car_entity).unwrap();
+            transform
+                .transform
+                .rotate(Quat::from_axis_angle(UP, delta_time * 0.3));
+        }
 
         // if self.input_handler.key(KeyCode::KeyX) {
         //     if let Some(duck_entity) = self.duck_entity.take() {

@@ -25,6 +25,7 @@ pub struct CameraController {
     pub look_sensitivity: f32,
     vertical_rotation: Quat,
     horizontal_rotation: Quat,
+    locked: bool,
 }
 
 impl Clone for Camera {
@@ -64,6 +65,7 @@ impl Default for CameraController {
             look_sensitivity: 0.3,
             vertical_rotation: Quat::IDENTITY,
             horizontal_rotation: Quat::from_axis_angle(UP, (-90.0f32).to_radians()),
+            locked: true,
         }
     }
 }
@@ -175,46 +177,53 @@ impl CameraController {
     pub fn update(&mut self, camera: &Camera, input: &InputHandler, delta_time: f32) -> Transform {
         let mut transform = camera.transform.clone();
 
-        let mut velocity = Vec3::ZERO;
-        if input.key(KeyCode::KeyW) {
-            velocity += transform.forward();
-        }
-        if input.key(KeyCode::KeyS) {
-            velocity -= transform.forward();
-        }
-        if input.key(KeyCode::KeyD) {
-            velocity += transform.right();
-        }
-        if input.key(KeyCode::KeyA) {
-            velocity -= transform.right();
-        }
-        if input.key(KeyCode::KeyE) {
-            velocity += transform.up();
-        }
-        if input.key(KeyCode::KeyQ) {
-            velocity -= transform.up();
+        if input.key_down(KeyCode::F1) {
+            self.locked = !self.locked;
         }
 
-        self.vertical_rotation *= Quat::from_axis_angle(
-            UP,
-            (-input.mouse_motion().x * self.look_sensitivity).to_radians(),
-        );
-        self.horizontal_rotation *= Quat::from_axis_angle(
-            RIGHT,
-            (-input.mouse_motion().y * self.look_sensitivity).to_radians(),
-        );
+        if !self.locked {
+            let mut velocity = Vec3::ZERO;
+            if input.key(KeyCode::KeyW) {
+                velocity += transform.forward();
+            }
+            if input.key(KeyCode::KeyS) {
+                velocity -= transform.forward();
+            }
+            if input.key(KeyCode::KeyD) {
+                velocity += transform.right();
+            }
+            if input.key(KeyCode::KeyA) {
+                velocity -= transform.right();
+            }
+            if input.key(KeyCode::KeyE) {
+                velocity += transform.up();
+            }
+            if input.key(KeyCode::KeyQ) {
+                velocity -= transform.up();
+            }
+
+            if velocity.length() > 0.0 {
+                let translation_speed = if input.key(KeyCode::Space) {
+                    self.translation_speed * 5.0
+                } else if input.key(KeyCode::ControlLeft) {
+                    self.translation_speed * 0.2
+                } else {
+                    self.translation_speed
+                };
+                transform.translate(velocity.normalize() * delta_time * translation_speed);
+            }
+
+            self.vertical_rotation *= Quat::from_axis_angle(
+                UP,
+                (-input.mouse_motion().x * self.look_sensitivity).to_radians(),
+            );
+            self.horizontal_rotation *= Quat::from_axis_angle(
+                RIGHT,
+                (-input.mouse_motion().y * self.look_sensitivity).to_radians(),
+            );
+        }
+
         transform.set_rotation(self.vertical_rotation * self.horizontal_rotation);
-
-        if velocity.length() > 0.0 {
-            let translation_speed = if input.key(KeyCode::Space) {
-                self.translation_speed * 5.0
-            } else if input.key(KeyCode::ControlLeft) {
-                self.translation_speed * 0.2
-            } else {
-                self.translation_speed
-            };
-            transform.translate(velocity.normalize() * delta_time * translation_speed);
-        }
 
         transform
     }

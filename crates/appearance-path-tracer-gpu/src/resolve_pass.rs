@@ -15,13 +15,15 @@ struct Constants {
     width: u32,
     height: u32,
     sample_count: u32,
-    _padding0: u32,
+    accum_frame_count: u32,
 }
 
 pub struct ResolvePassParameters<'a> {
     pub resolution: UVec2,
     pub sample_count: u32,
+    pub accum_frame_count: u32,
     pub radiance: &'a wgpu::Buffer,
+    pub accum_radiance: &'a wgpu::Buffer,
     pub gbuffer: &'a GBuffer,
     pub target_view: &'a wgpu::TextureView,
 }
@@ -72,6 +74,16 @@ pub fn encode(
                             wgpu::BindGroupLayoutEntry {
                                 binding: 2,
                                 visibility: wgpu::ShaderStages::COMPUTE,
+                                ty: wgpu::BindingType::Buffer {
+                                    ty: wgpu::BufferBindingType::Storage { read_only: false },
+                                    has_dynamic_offset: false,
+                                    min_binding_size: None,
+                                },
+                                count: None,
+                            },
+                            wgpu::BindGroupLayoutEntry {
+                                binding: 3,
+                                visibility: wgpu::ShaderStages::COMPUTE,
                                 ty: wgpu::BindingType::StorageTexture {
                                     access: wgpu::StorageTextureAccess::ReadWrite,
                                     format: wgpu::TextureFormat::Rgba8Unorm,
@@ -97,7 +109,7 @@ pub fn encode(
             width: parameters.resolution.x,
             height: parameters.resolution.y,
             sample_count: parameters.sample_count,
-            _padding0: 0,
+            accum_frame_count: parameters.accum_frame_count,
         }),
         usage: wgpu::BufferUsages::UNIFORM,
     });
@@ -117,6 +129,10 @@ pub fn encode(
             },
             wgpu::BindGroupEntry {
                 binding: 2,
+                resource: parameters.accum_radiance.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 3,
                 resource: wgpu::BindingResource::TextureView(parameters.target_view),
             },
         ],

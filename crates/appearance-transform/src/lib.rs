@@ -170,7 +170,7 @@ impl Transform {
         let mut matrix = self.matrix.lock().unwrap();
 
         if matrix.1 {
-            matrix.0 = Mat4::look_to_rh(self.translation, self.forward(), UP);
+            matrix.0 = Mat4::look_to_rh(self.translation, self.forward(), self.up());
             matrix.1 = false;
             self.has_changed_this_frame.store(true, Ordering::Relaxed);
         }
