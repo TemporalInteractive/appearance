@@ -23,7 +23,7 @@ fn Triangle::solid_angle(normal: vec3<f32>, direction: vec3<f32>, distance: f32)
     return min(TWO_PI, cos_out / (sqr(distance) + 0.0001));
 }
 
-fn Triangle::transform(_self: Triangle, transform: mat4x4<f32>) -> Triangle {
+fn Triangle::transform(_self: Triangle, transform: mat4x3<f32>) -> Triangle {
     return Triangle::new(
         (transform * vec4<f32>(_self.p0, 1.0)).xyz,
         (transform * vec4<f32>(_self.p1, 1.0)).xyz,

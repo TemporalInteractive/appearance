@@ -12,7 +12,7 @@ struct VertexPoolSlice {
 };
 
 struct EmissiveTriangleInstance { // EmissiveBlasInstance
-    transform: mat4x4<f32>, // TODO: put in separate buffer, also make 4x3
+    trans_transform: mat3x4<f32>, // Transposed for memory alignment
     vertex_pool_slice_idx: u32,
     num_triangles: u32,
     _padding0: u32,

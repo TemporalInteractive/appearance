@@ -1,7 +1,7 @@
 use appearance_model::mesh::PackedVertex;
 use appearance_wgpu::wgpu::{self, util::DeviceExt};
 use bytemuck::{Pod, Zeroable};
-use glam::Mat4;
+use glam::{Mat3A, Mat4};
 
 pub const MAX_VERTEX_POOL_VERTICES: usize = 1024 * 1024 * 32;
 
@@ -59,7 +59,7 @@ struct VertexPoolConstants {
 #[derive(Pod, Clone, Copy, Zeroable)]
 #[repr(C)]
 struct EmissiveTriangleInstance {
-    transform: Mat4,
+    transform: [f32; 12],
     vertex_pool_slice_idx: u32,
     num_triangles: u32,
     _padding0: u32,
@@ -309,8 +309,12 @@ impl VertexPool {
 
         if is_emissive {
             let num_triangles = self.slices[index as usize].num_indices / 3;
+            let transform4x3 = transform.transpose().to_cols_array()[..12]
+                .try_into()
+                .unwrap();
+
             let instance = EmissiveTriangleInstance {
-                transform,
+                transform: transform4x3,
                 vertex_pool_slice_idx: index,
                 num_triangles,
                 _padding0: 0,

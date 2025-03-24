@@ -38,7 +38,7 @@ fn LightSample::load_eval_data(_self: LightSample, hit_point_ws: vec3<f32>) -> L
         let tex_coord: vec2<f32> = v0.tex_coord * barycentrics.x + v1.tex_coord * barycentrics.y + v2.tex_coord * barycentrics.z;
 
         var triangle = Triangle::new(v0.position, v1.position, v2.position);
-        triangle = Triangle::transform(triangle, emissive_triangle_instance.transform);
+        triangle = Triangle::transform(triangle, transpose(emissive_triangle_instance.trans_transform));
 
         let point_ws: vec3<f32> = triangle.p0 * barycentrics.x + triangle.p1 * barycentrics.y + triangle.p2 * barycentrics.z;
         let direction: vec3<f32> = normalize(point_ws - hit_point_ws);
@@ -107,7 +107,7 @@ fn Nee::sample_emissive_triangle(r0: f32, r1: f32, r23: vec2<f32>, sample_point:
             //let tex_coord: vec2<f32> = v0.tex_coord * barycentrics.x + v1.tex_coord * barycentrics.y + v2.tex_coord * barycentrics.z;
 
             var triangle = Triangle::new(v0.position, v1.position, v2.position);
-            triangle = Triangle::transform(triangle, emissive_triangle_instance.transform);
+            triangle = Triangle::transform(triangle, transpose(emissive_triangle_instance.trans_transform));
             //let point: vec3<f32> = triangle.p0 * barycentrics.x + triangle.p1 * barycentrics.y + triangle.p2 * barycentrics.z;
 
             let p01: vec3<f32> = triangle.p1 - triangle.p0;
