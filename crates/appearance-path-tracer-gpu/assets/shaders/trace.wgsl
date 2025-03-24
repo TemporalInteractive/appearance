@@ -103,8 +103,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
         if (intersection.kind == RAY_QUERY_INTERSECTION_TRIANGLE) {
             depth_ws += intersection.t;
 
-            let blas_instance: BlasInstance = blas_instances[intersection.instance_custom_data];
-            let vertex_pool_slice: VertexPoolSlice = vertex_pool_slices[blas_instance.vertex_pool_slice_index];
+            let vertex_pool_slice: VertexPoolSlice = vertex_pool_slices[intersection.instance_custom_data];
 
             let barycentrics = vec3<f32>(1.0 - intersection.barycentrics.x - intersection.barycentrics.y, intersection.barycentrics);
 

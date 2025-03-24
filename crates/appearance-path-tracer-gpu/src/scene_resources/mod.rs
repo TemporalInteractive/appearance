@@ -186,7 +186,7 @@ impl SceneResources {
             blas_instances.push(wgpu::TlasInstance::new(
                 blas,
                 transform4x3,
-                blas_instances.len() as u32,
+                vertex_slice_index,
                 0xff,
             ));
 

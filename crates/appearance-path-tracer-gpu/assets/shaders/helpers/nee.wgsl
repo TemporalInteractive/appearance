@@ -320,7 +320,7 @@ fn Nee::sample_ris(hit_point_ws: vec3<f32>, w_out_worldspace: vec3<f32>, front_f
                 rayQueryProceed(&rq);
                 let intersection = rayQueryGetCommittedIntersection(&rq);
                 if (intersection.kind == RAY_QUERY_INTERSECTION_TRIANGLE) {
-                    let blas_instance: BlasInstance = blas_instances[intersection.instance_custom_data];
+                    let blas_instance: BlasInstance = blas_instances[intersection.instance_index];
 
                     if (BlasInstance::is_emissive(blas_instance)) {
                         bsdf_light_sample = LightSample::new_triangle_sample(intersection.barycentrics, blas_instance.emissive_blas_instance_idx, intersection.primitive_index);
