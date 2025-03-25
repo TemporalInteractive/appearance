@@ -27,6 +27,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/target/release/render-host.exe",
             "args": [
+                "--no-gpu-validation"
             ],
             "cwd": "${workspaceFolder}/target/release/",
             "preLaunchTask": "rust: cargo build host -r"

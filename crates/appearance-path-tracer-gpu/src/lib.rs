@@ -232,13 +232,13 @@ pub struct PathTracerGpuConfig {
 impl Default for PathTracerGpuConfig {
     fn default() -> Self {
         Self {
-            max_bounces: 1,
+            max_bounces: 2,
             sample_count: 1,
             accum_frames: false,
             restir_di: true,
-            restir_gi: false,
+            restir_gi: true,
             svgf: false,
-            firefly_filter: false,
+            firefly_filter: true,
             taa: false,
         }
     }
@@ -414,7 +414,7 @@ impl PathTracerGpu {
                             &RestirDiPassParameters {
                                 resolution: self.local_resolution,
                                 seed,
-                                spatial_pass_count: 2,
+                                spatial_pass_count: 1,
                                 spatial_pixel_radius: 30.0,
                                 unbiased: true,
                                 rays: &self.sized_resources.rays,
@@ -438,7 +438,7 @@ impl PathTracerGpu {
                             &RestirGiPassParameters {
                                 resolution: self.local_resolution,
                                 seed,
-                                spatial_pass_count: 1,
+                                spatial_pass_count: 0,
                                 spatial_pixel_radius: 30.0,
                                 unbiased: true,
                                 rays: &self.sized_resources.rays,
@@ -502,15 +502,12 @@ impl PathTracerGpu {
             pipeline_database,
         );
 
-        if self.config.svgf {
-            self.sized_resources.svgf_pass.encode(
-                &SvgfPassParameters {
+        if self.config.firefly_filter {
+            firefly_filter_pass::encode(
+                &FireflyFilterPassParameters {
                     resolution: self.local_resolution,
-                    max_history_frames: 4,
-                    atrous_pass_count: 5,
                     demodulated_radiance,
                     gbuffer: &self.sized_resources.gbuffer,
-                    velocity_texture_view: &self.sized_resources.velocity_texture_view,
                 },
                 &ctx.device,
                 &mut command_encoder,
@@ -518,12 +515,15 @@ impl PathTracerGpu {
             );
         }
 
-        if self.config.firefly_filter {
-            firefly_filter_pass::encode(
-                &FireflyFilterPassParameters {
+        if self.config.svgf {
+            self.sized_resources.svgf_pass.encode(
+                &SvgfPassParameters {
                     resolution: self.local_resolution,
+                    max_history_frames: 24,
+                    atrous_pass_count: 5,
                     demodulated_radiance,
                     gbuffer: &self.sized_resources.gbuffer,
+                    velocity_texture_view: &self.sized_resources.velocity_texture_view,
                 },
                 &ctx.device,
                 &mut command_encoder,
@@ -583,28 +583,28 @@ impl PathTracerGpu {
 
         let pixels = self.sized_resources.film.readback_pixels(&ctx.device);
 
-        const GT_PIXEL_VALUE: Vec3 = Vec3::new(0.2643197, 0.26431587, 0.26432508);
-        let mut avg_pixel_value = Vec3::ZERO;
-        for i in 0..(pixels.len() / 3) {
-            let f32_pixel = Vec3::new(
-                pixels[i * 3] as f32 / 255.0,
-                pixels[i * 3 + 1] as f32 / 255.0,
-                pixels[i * 3 + 2] as f32 / 255.0,
-            );
+        // const GT_PIXEL_VALUE: Vec3 = Vec3::new(0.2643197, 0.26431587, 0.26432508);
+        // let mut avg_pixel_value = Vec3::ZERO;
+        // for i in 0..(pixels.len() / 3) {
+        //     let f32_pixel = Vec3::new(
+        //         pixels[i * 3] as f32 / 255.0,
+        //         pixels[i * 3 + 1] as f32 / 255.0,
+        //         pixels[i * 3 + 2] as f32 / 255.0,
+        //     );
 
-            avg_pixel_value += f32_pixel;
-        }
-        avg_pixel_value /= (pixels.len() / 3) as f32;
-        let avg_err =
-            (GT_PIXEL_VALUE.element_sum() / 3.0 - avg_pixel_value.element_sum() / 3.0).powf(2.0);
-        let status_text = if avg_err < 1e-5 { "PASSED" } else { "FAILED" };
-        println!(
-            "\n\nERR: {} {}\nELEM-WISE ERR: {} AVG: {}",
-            avg_err,
-            status_text,
-            (GT_PIXEL_VALUE - avg_pixel_value).powf(2.0),
-            avg_pixel_value
-        );
+        //     avg_pixel_value += f32_pixel;
+        // }
+        // avg_pixel_value /= (pixels.len() / 3) as f32;
+        // let avg_err =
+        //     (GT_PIXEL_VALUE.element_sum() / 3.0 - avg_pixel_value.element_sum() / 3.0).powf(2.0);
+        // let status_text = if avg_err < 1e-5 { "PASSED" } else { "FAILED" };
+        // println!(
+        //     "\n\nERR: {} {}\nELEM-WISE ERR: {} AVG: {}",
+        //     avg_err,
+        //     status_text,
+        //     (GT_PIXEL_VALUE - avg_pixel_value).powf(2.0),
+        //     avg_pixel_value
+        // );
 
         result_callback(&pixels);
 

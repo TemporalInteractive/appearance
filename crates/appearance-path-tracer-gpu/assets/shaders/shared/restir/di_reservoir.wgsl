@@ -74,21 +74,23 @@ fn LightSample::phat(_self: LightSample, light_sample_ctx: LightSampleCtx, hit_p
 
     let w_in_worldspace: vec3<f32> = normalize(light_sample_eval_data.point_ws - hit_point_ws);
 
-    var visibility: bool = true;
-    if (visibility_test) {
-        let distance: f32 = distance(light_sample_eval_data.point_ws, hit_point_ws);
-        visibility = trace_shadow_ray(hit_point_ws, w_in_worldspace, distance, front_facing_shading_normal_ws, scene);
-    }
-
     let wi_dot_n: f32 = dot(w_in_worldspace, front_facing_shading_normal_ws);
-    if (wi_dot_n > 0.0 && visibility) {
-        var shading_pdf: f32;
-        let reflectance: vec3<f32> = DisneyBsdf::evaluate(disney_bsdf, front_facing_shading_normal_ws,
-            tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
-            w_out_worldspace, w_in_worldspace, &shading_pdf);
+    if (wi_dot_n > 0.0) {
+        var visibility: bool = true;
+        if (visibility_test) {
+            let distance: f32 = distance(light_sample_eval_data.point_ws, hit_point_ws);
+            visibility = trace_shadow_ray(hit_point_ws, w_in_worldspace, distance, front_facing_shading_normal_ws, scene);
+        }
 
-        // 𝑝ˆ(𝑥) = 𝑓_𝑠(𝑥) 𝐺(𝑥) 𝑉(𝑥) 𝐿_𝑒(𝑥)
-        return linear_to_luma(reflectance * wi_dot_n * light_sample_eval_data.emission);
+        if (visibility) {
+            var shading_pdf: f32;
+            let reflectance: vec3<f32> = DisneyBsdf::evaluate(disney_bsdf, front_facing_shading_normal_ws,
+                tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
+                w_out_worldspace, w_in_worldspace, &shading_pdf);
+
+            // 𝑝ˆ(𝑥) = 𝑓_𝑠(𝑥) 𝐺(𝑥) 𝑉(𝑥) 𝐿_𝑒(𝑥)
+            return linear_to_luma(reflectance * wi_dot_n * light_sample_eval_data.emission);
+        }
     }
 
     return 0.0;

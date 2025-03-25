@@ -12,7 +12,7 @@
 
 @include appearance-path-tracer-gpu::helpers/nee
 
-const NUM_SAMPLES: u32 = 5;
+const NUM_SAMPLES: u32 = 3;
 
 struct Constants {
     resolution: vec2<u32>,
