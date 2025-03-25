@@ -232,11 +232,11 @@ pub struct PathTracerGpuConfig {
 impl Default for PathTracerGpuConfig {
     fn default() -> Self {
         Self {
-            max_bounces: 1,
+            max_bounces: 2,
             sample_count: 1,
             accum_frames: false,
             restir_di: true,
-            restir_gi: false,
+            restir_gi: true,
             svgf: false,
             firefly_filter: false,
             taa: false,
@@ -438,7 +438,7 @@ impl PathTracerGpu {
                             &RestirGiPassParameters {
                                 resolution: self.local_resolution,
                                 seed,
-                                spatial_pass_count: 1,
+                                spatial_pass_count: 0,
                                 spatial_pixel_radius: 30.0,
                                 unbiased: true,
                                 rays: &self.sized_resources.rays,

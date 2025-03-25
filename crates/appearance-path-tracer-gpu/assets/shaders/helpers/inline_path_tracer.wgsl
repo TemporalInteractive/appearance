@@ -12,14 +12,49 @@
 /// appearance-path-tracer-gpu::shared/sky_bindings
 ///
 
+struct InlinePathTracerConfig {
+    max_bounces: u32,
+    russian_roulette: bool,
+    skip_normal_mapping: bool,
+    di_ris: bool,
+}
+
+fn InlinePathTracerConfig::full() -> InlinePathTracerConfig {
+    return InlinePathTracerConfig (
+        3,
+        true,
+        false,
+        true
+    );
+}
+
+fn InlinePathTracerConfig::fast() -> InlinePathTracerConfig {
+    return InlinePathTracerConfig (
+        1,
+        true,
+        false,
+        false
+    );
+}
+
+fn InlinePathTracerConfig::approx() -> InlinePathTracerConfig {
+    return InlinePathTracerConfig (
+        1,
+        true,
+        true,
+        false
+    );
+}
+
+
 /// Returns radiance traced along the path starting at origin
-fn InlinePathTracer::trace(_origin: vec3<f32>, _direction: vec3<f32>, max_bounces: u32, throughput: ptr<function, vec3<f32>>, first_hit_ws: ptr<function, vec3<f32>>, rng: ptr<function, u32>, scene: acceleration_structure) -> vec3<f32> {
+fn InlinePathTracer::trace(_origin: vec3<f32>, _direction: vec3<f32>, config: InlinePathTracerConfig, throughput: ptr<function, vec3<f32>>, first_hit_ws: ptr<function, vec3<f32>>, rng: ptr<function, u32>, scene: acceleration_structure) -> vec3<f32> {
     var origin: vec3<f32> = _origin;
     var direction: vec3<f32> = _direction;
 
     var accumulated = vec3<f32>(0.0);
 
-    for (var bounce: u32 = 0; bounce < max_bounces; bounce += 1) {
+    for (var bounce: u32 = 0; bounce < config.max_bounces; bounce += 1) {
         var safe_origin_normal: vec3<f32> = direction;
         for (var step: u32 = 0; step < MAX_NON_OPAQUE_DEPTH; step += 1) {
             if (dot(safe_origin_normal, direction) < 0.0) {
@@ -91,7 +126,12 @@ fn InlinePathTracer::trace(_origin: vec3<f32>, _direction: vec3<f32>, max_bounce
 
                 // Apply normal mapping when available, unlike the name suggest, still not front facing
                 var front_facing_normal_ws: vec3<f32> = hit_normal_ws;
-                var front_facing_shading_normal_ws: vec3<f32> = MaterialDescriptor::apply_normal_mapping(material_descriptor, tex_coord, hit_normal_ws, hit_tangent_to_world);
+                var front_facing_shading_normal_ws: vec3<f32>;
+                if (!config.skip_normal_mapping) {
+                    front_facing_shading_normal_ws = MaterialDescriptor::apply_normal_mapping(material_descriptor, tex_coord, hit_normal_ws, hit_tangent_to_world);
+                } else {
+                    front_facing_shading_normal_ws = front_facing_normal_ws;
+                }
 
                 let w_out_worldspace: vec3<f32> = -direction;
 
@@ -127,9 +167,18 @@ fn InlinePathTracer::trace(_origin: vec3<f32>, _direction: vec3<f32>, max_bounce
 
                 let disney_bsdf = DisneyBsdf::from_material(material);
 
-                let di_reservoir: DiReservoir = Nee::sample_ris(hit_point_ws, w_out_worldspace, front_facing_shading_normal_ws,
-                    tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
-                    disney_bsdf, intersection.t, back_face, rng, scene);
+                var di_reservoir: DiReservoir;
+                if (config.di_ris) {
+                    di_reservoir = Nee::sample_ris(hit_point_ws, w_out_worldspace, front_facing_shading_normal_ws,
+                        tangent_to_world, world_to_tangent, clearcoat_tangent_to_world, clearcoat_world_to_tangent,
+                        disney_bsdf, intersection.t, back_face, rng, scene);
+                } else {
+                    var pdf: f32;
+                    let light_sample: LightSample = Nee::sample_uniform(random_uniform_float(rng), random_uniform_float(rng), random_uniform_float(rng),
+                        vec2<f32>(random_uniform_float(rng), random_uniform_float(rng)), hit_point_ws, &pdf);
+                    di_reservoir = DiReservoir(1.0, 1.0 / pdf, 1.0, 1.0, light_sample);
+                }
+
                 let light_sample: LightSample = di_reservoir.sample;
                 if (di_reservoir.contribution_weight > 0.0) {
                     let light_sample_eval_data = LightSample::load_eval_data(light_sample, hit_point_ws);
@@ -156,8 +205,8 @@ fn InlinePathTracer::trace(_origin: vec3<f32>, _direction: vec3<f32>, max_bounce
                     *first_hit_ws = hit_point_ws;
                 }
                 
-                if (bounce + 1 < max_bounces) {
-                    if (bounce > 1) {
+                if (bounce + 1 < config.max_bounces) {
+                    if (bounce > 1 && config.russian_roulette) {
                         let russian_roulette: f32 = max((*throughput).r, max((*throughput).g, (*throughput).b));
 
                         if (russian_roulette < random_uniform_float(rng)) {
@@ -228,13 +277,10 @@ fn InlinePathTracer::sample_ris(hit_point_ws: vec3<f32>, w_out_worldspace: vec3<
             let cos_in: f32 = abs(dot(w_in_worldspace, front_facing_shading_normal_ws));
             let local_throughput: vec3<f32> = cos_in * reflectance;
 
-            let gi_origin: vec3<f32> = hit_point_ws + w_in_worldspace * 0.0001;
-            let gi_direction: vec3<f32> = w_in_worldspace;
-
             var throughput_result: vec3<f32> = throughput * local_throughput;
             let phat_rng: u32 = *rng;
             var sample_point_ws: vec3<f32>;
-            let contribution: vec3<f32> = InlinePathTracer::trace(gi_origin, gi_direction, RESTIR_GI_PHAT_MAX_BOUNCES, &throughput_result, &sample_point_ws, rng, scene);
+            let contribution: vec3<f32> = InlinePathTracer::trace(hit_point_ws, w_in_worldspace, InlinePathTracerConfig::approx(), &throughput_result, &sample_point_ws, rng, scene);
 
             let phat: f32 = linear_to_luma(contribution);
             let weight: f32 = phat / pdf;
@@ -280,7 +326,7 @@ fn GiReservoir::phat(_self: GiReservoir, light_sample_ctx: LightSampleCtx, throu
     var throughput_result: vec3<f32> = throughput * local_throughput;
     var phat_rng: u32 = _self.phat_rng;
     var sample_point_ws: vec3<f32>;
-    let contribution: vec3<f32> = InlinePathTracer::trace(gi_origin, gi_direction, RESTIR_GI_PHAT_MAX_BOUNCES, &throughput_result, &sample_point_ws, &phat_rng, scene);
+    let contribution: vec3<f32> = InlinePathTracer::trace(gi_origin, gi_direction, InlinePathTracerConfig::approx(), &throughput_result, &sample_point_ws, &phat_rng, scene);
     return linear_to_luma(contribution);
 }
 

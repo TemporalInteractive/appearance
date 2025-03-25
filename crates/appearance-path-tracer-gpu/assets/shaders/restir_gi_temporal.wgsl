@@ -89,7 +89,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     let velocity: vec2<f32> = textureLoad(velocity_texture, vec2<i32>(id)).xy;
     var prev_point_ss = vec2<f32>(id) - (vec2<f32>(constants.resolution) * velocity);
     if (all(prev_point_ss >= vec2<f32>(0.0)) && all(prev_point_ss <= vec2<f32>(constants.resolution - 1))) {
-        let prev_id_2d = vec2<u32>(floor(prev_point_ss));
+        let prev_id_2d = vec2<u32>(floor(prev_point_ss + vec2<f32>(random_uniform_float(&rng), random_uniform_float(&rng))));
         let prev_id: u32 = prev_id_2d.y * constants.resolution.x + prev_id_2d.x;
 
         let current_gbuffer_texel: GBufferTexel = PackedGBufferTexel::unpack(gbuffer[flat_id]);

@@ -13,7 +13,7 @@
 @include appearance-path-tracer-gpu::helpers/nee
 @include appearance-path-tracer-gpu::helpers/trace
 
-const BILINEAR: bool = true;
+const BILINEAR: bool = false;
 
 struct Constants {
     resolution: vec2<u32>,
@@ -152,7 +152,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
                     reservoir = DiReservoir::combine(reservoir, prev_reservoir, &rng);
                 }
             } else {
-                let prev_id_2d = min(vec2<u32>(u32(floor(prev_point_ss.x)), u32(floor(prev_point_ss.y))), constants.resolution - 1);
+                let prev_id_2d = vec2<u32>(floor(prev_point_ss + vec2<f32>(random_uniform_float(&rng), random_uniform_float(&rng))));
                 let prev_id: u32 = prev_id_2d.y * constants.resolution.x + prev_id_2d.x;
 
                 var prev_reservoir: DiReservoir = PackedDiReservoir::unpack(prev_reservoirs_in[prev_id]);
