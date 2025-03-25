@@ -237,7 +237,7 @@ impl Default for PathTracerGpuConfig {
             accum_frames: false,
             restir_di: true,
             restir_gi: true,
-            svgf: true,
+            svgf: false,
             firefly_filter: true,
             taa: false,
         }
