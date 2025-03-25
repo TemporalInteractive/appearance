@@ -88,6 +88,7 @@ impl Surface {
             config.format = format;
             config.view_formats.push(format);
         };
+        config.present_mode = wgpu::PresentMode::AutoNoVsync;
 
         surface.configure(&context.device, &config);
         self.config = Some(config);

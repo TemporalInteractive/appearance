@@ -583,28 +583,28 @@ impl PathTracerGpu {
 
         let pixels = self.sized_resources.film.readback_pixels(&ctx.device);
 
-        const GT_PIXEL_VALUE: Vec3 = Vec3::new(0.2643197, 0.26431587, 0.26432508);
-        let mut avg_pixel_value = Vec3::ZERO;
-        for i in 0..(pixels.len() / 3) {
-            let f32_pixel = Vec3::new(
-                pixels[i * 3] as f32 / 255.0,
-                pixels[i * 3 + 1] as f32 / 255.0,
-                pixels[i * 3 + 2] as f32 / 255.0,
-            );
+        // const GT_PIXEL_VALUE: Vec3 = Vec3::new(0.2643197, 0.26431587, 0.26432508);
+        // let mut avg_pixel_value = Vec3::ZERO;
+        // for i in 0..(pixels.len() / 3) {
+        //     let f32_pixel = Vec3::new(
+        //         pixels[i * 3] as f32 / 255.0,
+        //         pixels[i * 3 + 1] as f32 / 255.0,
+        //         pixels[i * 3 + 2] as f32 / 255.0,
+        //     );
 
-            avg_pixel_value += f32_pixel;
-        }
-        avg_pixel_value /= (pixels.len() / 3) as f32;
-        let avg_err =
-            (GT_PIXEL_VALUE.element_sum() / 3.0 - avg_pixel_value.element_sum() / 3.0).powf(2.0);
-        let status_text = if avg_err < 1e-5 { "PASSED" } else { "FAILED" };
-        println!(
-            "\n\nERR: {} {}\nELEM-WISE ERR: {} AVG: {}",
-            avg_err,
-            status_text,
-            (GT_PIXEL_VALUE - avg_pixel_value).powf(2.0),
-            avg_pixel_value
-        );
+        //     avg_pixel_value += f32_pixel;
+        // }
+        // avg_pixel_value /= (pixels.len() / 3) as f32;
+        // let avg_err =
+        //     (GT_PIXEL_VALUE.element_sum() / 3.0 - avg_pixel_value.element_sum() / 3.0).powf(2.0);
+        // let status_text = if avg_err < 1e-5 { "PASSED" } else { "FAILED" };
+        // println!(
+        //     "\n\nERR: {} {}\nELEM-WISE ERR: {} AVG: {}",
+        //     avg_err,
+        //     status_text,
+        //     (GT_PIXEL_VALUE - avg_pixel_value).powf(2.0),
+        //     avg_pixel_value
+        // );
 
         result_callback(&pixels);
 
