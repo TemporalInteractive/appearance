@@ -206,8 +206,8 @@ impl SizedResources {
         command_encoder.clear_buffer(&self.accum_radiance, 0, None);
     }
 
-    fn end_frame(&mut self, camera: &Camera) {
-        self.gbuffer.end_frame(camera);
+    fn end_frame(&mut self) {
+        self.gbuffer.end_frame();
         self.restir_di_pass.end_frame();
         self.restir_gi_pass.end_frame();
         self.svgf_pass.end_frame();
@@ -235,8 +235,8 @@ impl Default for PathTracerGpuConfig {
             max_bounces: 2,
             sample_count: 1,
             accum_frames: false,
-            restir_di: true,
-            restir_gi: true,
+            restir_di: false,
+            restir_gi: false,
             svgf: true,
             firefly_filter: true,
             taa: false,
@@ -337,6 +337,10 @@ impl PathTracerGpu {
         let view_proj = self.camera.get_matrix() * self.camera.transform.get_view_matrix();
         let prev_view_proj =
             self.camera.get_prev_matrix() * self.camera.transform.get_prev_matrix();
+
+        self.sized_resources
+            .gbuffer
+            .write_constants(&self.camera, &ctx.queue);
 
         let mut command_encoder = ctx
             .device
@@ -610,7 +614,7 @@ impl PathTracerGpu {
 
         self.frame_idx += 1;
         self.scene_resources.end_frame();
-        self.sized_resources.end_frame(&self.camera);
+        self.sized_resources.end_frame();
         self.camera.end_frame();
     }
 }

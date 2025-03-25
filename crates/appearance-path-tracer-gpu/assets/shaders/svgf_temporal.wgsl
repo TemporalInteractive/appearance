@@ -84,6 +84,19 @@ fn sample_temporal_moments(pos: vec2<f32>) -> vec2<f32> {
     return mix(c0, c1, f_pos.y);
 }
 
+fn get_specular_accum_speed(roughness: f32, n_dot_v: f32, parallax: f32) -> f32 {
+    let acos01sq: f32 = 1.0 - n_dot_v;
+
+    let a: f32 = pow(saturate(acos01sq), 1.0);
+    let b: f32 = 1.1 + roughness * roughness;
+    let parallax_sensitivity: f32 = (b + a) / (b - a);
+    let power_scale: f32 = 1.0 + parallax * parallax_sensitivity;
+    var f: f32 = 1.0 - exp2(-200.0 * roughness * roughness);
+    f *= pow(saturate(roughness), 1.0 * power_scale);
+
+    return f32(constants.max_history_frames) * f;
+}
+
 @compute
 @workgroup_size(16, 16)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
@@ -110,6 +123,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
     var temporal_radiance = vec3<f32>(0.0);
     var temporal_moments = vec2<f32>(0.0);
     var frame_count: u32 = 0;
+    var parallax: f32 = 0.0;
 
     let velocity: vec2<f32> = textureLoad(velocity_texture, vec2<i32>(id)).xy;
     var prev_point_ss = vec2<f32>(id) - (vec2<f32>(constants.resolution) * velocity);
@@ -125,9 +139,21 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>,
 
             frame_count = min(temporal_frame_count[flat_id] + 1, constants.max_history_frames);
         }
+
+        parallax = GBufferTexel::parallax(current_gbuffer_texel, prev_gbuffer_texel);
     }
 
-    let alpha: f32 = 1.0 / (1.0 + f32(frame_count));
+    var alpha: f32 = 1.0 / (1.0 + f32(frame_count));
+    if (true) { // if specular
+        let roughness: f32 = 0.1;
+
+        let v: vec3<f32> = normalize(current_gbuffer_texel.position_ws - gbuffer_constants.camera_position);
+        let n_dot_v: f32 = dot(current_gbuffer_texel.normal_ws, v);
+
+        let specular_frame_count: f32 = min(f32(frame_count), get_specular_accum_speed(roughness, n_dot_v, parallax));
+        alpha = 1.0 / (1.0 + specular_frame_count);
+    }
+
     temporal_moments = mix(temporal_moments, moments, alpha);
     temporal_radiance = mix(temporal_radiance, radiance, alpha);
 

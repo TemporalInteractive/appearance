@@ -1,7 +1,7 @@
 use appearance_model::mesh::PackedVertex;
 use appearance_wgpu::wgpu::{self, util::DeviceExt};
 use bytemuck::{Pod, Zeroable};
-use glam::{Mat3A, Mat4};
+use glam::Mat4;
 
 pub const MAX_VERTEX_POOL_VERTICES: usize = 1024 * 1024 * 32;
 

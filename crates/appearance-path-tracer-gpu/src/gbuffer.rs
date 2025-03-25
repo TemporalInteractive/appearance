@@ -1,25 +1,19 @@
-use appearance_camera::{frustum::FrustumSide, Camera};
+use appearance_camera::Camera;
 use appearance_packing::{PackedNormalizedXyz10, PackedRgb9e5};
 use appearance_wgpu::wgpu::{self, util::DeviceExt};
 use bytemuck::{Pod, Zeroable};
-use glam::{UVec2, Vec3, Vec4};
-
-#[derive(Pod, Clone, Copy, Zeroable, Default)]
-#[repr(C)]
-struct Frustum {
-    left: Vec4,
-    right: Vec4,
-    top: Vec4,
-    bottom: Vec4,
-}
+use glam::{UVec2, Vec3};
 
 #[derive(Pod, Clone, Copy, Zeroable)]
 #[repr(C)]
 struct GBufferConstants {
-    prev_camera_frustum: Frustum,
-    resolution: UVec2,
+    camera_position: Vec3,
     _padding0: u32,
+    prev_camera_position: Vec3,
     _padding1: u32,
+    resolution: UVec2,
+    _padding2: u32,
+    _padding3: u32,
 }
 
 #[repr(C)]
@@ -34,9 +28,9 @@ pub struct PackedGBufferTexel {
 
 pub struct GBuffer {
     gbuffer: [wgpu::Buffer; 2],
+    constants: wgpu::Buffer,
     resolution: UVec2,
     frame_idx: u32,
-    prev_camera_frustum: Frustum,
     bind_group_layout: wgpu::BindGroupLayout,
 }
 
@@ -51,6 +45,20 @@ impl GBuffer {
                 mapped_at_creation: false,
                 usage: wgpu::BufferUsages::STORAGE,
             })
+        });
+
+        let constants = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("appearance-path-tracer-gpu::gbuffer constants"),
+            contents: bytemuck::bytes_of(&GBufferConstants {
+                camera_position: Vec3::ZERO,
+                _padding0: 0,
+                prev_camera_position: Vec3::ZERO,
+                _padding1: 0,
+                resolution,
+                _padding2: 0,
+                _padding3: 0,
+            }),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -91,11 +99,34 @@ impl GBuffer {
 
         Self {
             gbuffer,
+            constants,
             resolution,
             frame_idx: 0,
-            prev_camera_frustum: Frustum::default(),
             bind_group_layout,
         }
+    }
+
+    pub fn write_constants(&mut self, camera: &Camera, queue: &wgpu::Queue) {
+        let camera_position = camera.transform.get_translation();
+        let (_, _, prev_camera_position) = camera
+            .transform
+            .get_prev_matrix()
+            .inverse()
+            .to_scale_rotation_translation();
+
+        queue.write_buffer(
+            &self.constants,
+            0,
+            bytemuck::bytes_of(&GBufferConstants {
+                camera_position,
+                _padding0: 0,
+                prev_camera_position,
+                _padding1: 0,
+                resolution: self.resolution,
+                _padding2: 0,
+                _padding3: 0,
+            }),
+        );
     }
 
     pub fn bind_group_layout(&self) -> &wgpu::BindGroupLayout {
@@ -103,17 +134,6 @@ impl GBuffer {
     }
 
     pub fn bind_group(&self, device: &wgpu::Device) -> wgpu::BindGroup {
-        let constants = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("appearance-path-tracer-gpu::gbuffer constants"),
-            contents: bytemuck::bytes_of(&GBufferConstants {
-                prev_camera_frustum: self.prev_camera_frustum,
-                resolution: self.resolution,
-                _padding0: 0,
-                _padding1: 0,
-            }),
-            usage: wgpu::BufferUsages::UNIFORM,
-        });
-
         let gbuffer = &self.gbuffer[(self.frame_idx as usize) % 2];
         let prev_gbuffer = &self.gbuffer[(self.frame_idx as usize + 1) % 2];
 
@@ -123,7 +143,7 @@ impl GBuffer {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: constants.as_entire_binding(),
+                    resource: self.constants.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -137,15 +157,7 @@ impl GBuffer {
         })
     }
 
-    pub fn end_frame(&mut self, camera: &Camera) {
+    pub fn end_frame(&mut self) {
         self.frame_idx += 1;
-
-        let prev_camera_frustum = camera.build_prev_frustum();
-        self.prev_camera_frustum = Frustum {
-            left: prev_camera_frustum.get_plane(FrustumSide::Left).into(),
-            right: prev_camera_frustum.get_plane(FrustumSide::Right).into(),
-            top: prev_camera_frustum.get_plane(FrustumSide::Top).into(),
-            bottom: prev_camera_frustum.get_plane(FrustumSide::Bottom).into(),
-        };
     }
 }

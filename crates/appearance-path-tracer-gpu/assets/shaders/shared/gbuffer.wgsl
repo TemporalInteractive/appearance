@@ -62,18 +62,3 @@ fn GBufferTexel::depth_cs(_self: GBufferTexel, z_near: f32, z_far: f32) -> f32 {
 fn GBufferTexel::is_sky(_self: GBufferTexel) -> bool {
     return _self.depth_ws == 0.0;
 }
-
-struct Plane {
-    p: vec4<f32>,
-}
-
-fn Plane::distance(_self: Plane, point: vec3<f32>) -> f32 {
-    return dot(_self.p.xyz, point) - _self.p.w;
-}
-
-struct Frustum {
-    left: Plane,
-    right: Plane,
-    top: Plane,
-    bottom: Plane,
-}

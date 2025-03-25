@@ -5,7 +5,7 @@ use appearance_wgpu::{
     ComputePipelineDescriptorExtensions,
 };
 use bytemuck::{Pod, Zeroable};
-use glam::{UVec2, Vec2, Vec3};
+use glam::{UVec2, Vec2};
 
 use crate::{gbuffer::GBuffer, scene_resources::SceneResources};
 

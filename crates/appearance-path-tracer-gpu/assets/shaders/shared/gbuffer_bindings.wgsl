@@ -1,8 +1,13 @@
 @include appearance-path-tracer-gpu::shared/gbuffer
 
 struct GBufferConstants {
-    prev_camera_frustum: Frustum,
+    camera_position: vec3<f32>,
+    _padding0: u32,
+    prev_camera_position: vec3<f32>,
+    _padding1: u32,
     resolution: vec2<u32>,
+    _padding2: u32,
+    _padding3: u32,
 }
 
 @group(4)
@@ -54,4 +59,11 @@ fn GBufferTexel::is_disoccluded(_self: GBufferTexel, prev_bilinear: GBufferTexel
     let depth_similar: bool = abs(_self.depth_ws - prev_bilinear.depth_ws) <= 0.1 * prev_bilinear.depth_ws;
     let normal_similar: bool = dot(_self.normal_ws, prev_bilinear.normal_ws) > 0.906; // 25 degrees
     return depth_similar && normal_similar;
+}
+
+fn GBufferTexel::parallax(_self: GBufferTexel, prev_bilinear: GBufferTexel) -> f32 {
+    let v: vec3<f32> = normalize(_self.position_ws - gbuffer_constants.camera_position);
+    let prev_v: vec3<f32> = normalize(_self.position_ws - gbuffer_constants.prev_camera_position);
+    let cosa: f32 = clamp(dot(v, prev_v), 0.0, 1.0);
+    return sqrt(1.0 - sqr(cosa)) / max(cosa, 1e-6) * 60.0;
 }
