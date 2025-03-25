@@ -19,7 +19,7 @@ fn _texture(id: u32, tex_coord: vec2<f32>) -> vec4<f32> {
 
 fn MaterialDescriptor::color(_self: MaterialDescriptor, tex_coord: vec2<f32>) -> vec4<f32> {
     var color = vec4<f32>(_self.color, 1.0);
-    if (_self.color_texture != INVALID_TEXTURE) {
+    if (_self.color_texture != INVALID_TEXTURE && dot(color, color) > 0.0) {
         color *= srgb_to_linear(_texture(_self.color_texture, tex_coord));
     }
     return color;
@@ -27,7 +27,7 @@ fn MaterialDescriptor::color(_self: MaterialDescriptor, tex_coord: vec2<f32>) ->
 
 fn MaterialDescriptor::emission(_self: MaterialDescriptor, tex_coord: vec2<f32>) -> vec3<f32> {
     var emission: vec3<f32> = _self.emission;
-    if (_self.emission_texture != INVALID_TEXTURE) {
+    if (_self.emission_texture != INVALID_TEXTURE && dot(emission, emission) > 0.0) {
         emission *= _texture(_self.emission_texture, tex_coord).rgb;
     }
     return emission;
@@ -36,7 +36,7 @@ fn MaterialDescriptor::emission(_self: MaterialDescriptor, tex_coord: vec2<f32>)
 fn MaterialDescriptor::metallic_roughness(_self: MaterialDescriptor, tex_coord: vec2<f32>) -> vec2<f32> {
     var metallic: f32 = _self.metallic;
     var roughness: f32 = _self.roughness;
-    if (_self.metallic_roughness_texture != INVALID_TEXTURE) {
+    if (_self.metallic_roughness_texture != INVALID_TEXTURE && (metallic > 0.0 || roughness > 0.0)) {
         var mr: vec3<f32> = _texture(_self.metallic_roughness_texture, tex_coord).rgb;
         metallic *= mr.b;
         roughness *= mr.g;
@@ -46,7 +46,7 @@ fn MaterialDescriptor::metallic_roughness(_self: MaterialDescriptor, tex_coord: 
 
 fn MaterialDescriptor::clearcoat(_self: MaterialDescriptor, tex_coord: vec2<f32>) -> f32 {
     var clearcoat: f32 = _self.clearcoat;
-    if (_self.clearcoat_texture != INVALID_TEXTURE) {
+    if (_self.clearcoat_texture != INVALID_TEXTURE && clearcoat > 0.0) {
         clearcoat *= _texture(_self.clearcoat_texture, tex_coord).r;
     }
     return clearcoat;
@@ -54,7 +54,7 @@ fn MaterialDescriptor::clearcoat(_self: MaterialDescriptor, tex_coord: vec2<f32>
 
 fn MaterialDescriptor::clearcoat_roughness(_self: MaterialDescriptor, tex_coord: vec2<f32>) -> f32 {
     var clearcoat_roughness: f32 = _self.clearcoat_roughness;
-    if (_self.clearcoat_roughness_texture != INVALID_TEXTURE) {
+    if (_self.clearcoat_roughness_texture != INVALID_TEXTURE && clearcoat_roughness > 0.0) {
         clearcoat_roughness *= _texture(_self.clearcoat_roughness_texture, tex_coord).g;
     }
     return clearcoat_roughness;
@@ -62,7 +62,7 @@ fn MaterialDescriptor::clearcoat_roughness(_self: MaterialDescriptor, tex_coord:
 
 fn MaterialDescriptor::transmission(_self: MaterialDescriptor, tex_coord: vec2<f32>) -> f32 {
     var transmission: f32 = _self.transmission;
-    if (_self.transmission_texture != INVALID_TEXTURE) {
+    if (_self.transmission_texture != INVALID_TEXTURE && transmission > 0.0) {
         transmission *= _texture(_self.transmission_texture, tex_coord).r;
     }
     return transmission;
@@ -70,7 +70,7 @@ fn MaterialDescriptor::transmission(_self: MaterialDescriptor, tex_coord: vec2<f
 
 fn MaterialDescriptor::sheen(_self: MaterialDescriptor, tex_coord: vec2<f32>) -> f32 {
     var sheen: f32 = _self.sheen;
-    if (_self.sheen_texture != INVALID_TEXTURE) {
+    if (_self.sheen_texture != INVALID_TEXTURE && sheen > 0.0) {
         sheen *= _texture(_self.sheen_texture, tex_coord).r;
     }
     return sheen;
@@ -78,7 +78,7 @@ fn MaterialDescriptor::sheen(_self: MaterialDescriptor, tex_coord: vec2<f32>) ->
 
 fn MaterialDescriptor::sheen_tint(_self: MaterialDescriptor, tex_coord: vec2<f32>) -> vec3<f32> {
     var sheen_tint: vec3<f32> = _self.sheen_tint;
-    if (_self.sheen_tint_texture != INVALID_TEXTURE) {
+    if (_self.sheen_tint_texture != INVALID_TEXTURE && dot(sheen_tint, sheen_tint) > 0.0) {
         sheen_tint *= srgb_to_linear(_texture(_self.sheen_tint_texture, tex_coord)).rgb;
     }
     return sheen_tint;
