@@ -237,8 +237,8 @@ impl Default for PathTracerGpuConfig {
             accum_frames: false,
             restir_di: true,
             restir_gi: true,
-            svgf: false,
-            firefly_filter: false,
+            svgf: true,
+            firefly_filter: true,
             taa: false,
         }
     }
@@ -502,15 +502,12 @@ impl PathTracerGpu {
             pipeline_database,
         );
 
-        if self.config.svgf {
-            self.sized_resources.svgf_pass.encode(
-                &SvgfPassParameters {
+        if self.config.firefly_filter {
+            firefly_filter_pass::encode(
+                &FireflyFilterPassParameters {
                     resolution: self.local_resolution,
-                    max_history_frames: 4,
-                    atrous_pass_count: 5,
                     demodulated_radiance,
                     gbuffer: &self.sized_resources.gbuffer,
-                    velocity_texture_view: &self.sized_resources.velocity_texture_view,
                 },
                 &ctx.device,
                 &mut command_encoder,
@@ -518,12 +515,15 @@ impl PathTracerGpu {
             );
         }
 
-        if self.config.firefly_filter {
-            firefly_filter_pass::encode(
-                &FireflyFilterPassParameters {
+        if self.config.svgf {
+            self.sized_resources.svgf_pass.encode(
+                &SvgfPassParameters {
                     resolution: self.local_resolution,
+                    max_history_frames: 24,
+                    atrous_pass_count: 5,
                     demodulated_radiance,
                     gbuffer: &self.sized_resources.gbuffer,
+                    velocity_texture_view: &self.sized_resources.velocity_texture_view,
                 },
                 &ctx.device,
                 &mut command_encoder,
